@@ -105,6 +105,7 @@ db.stock_price.aggregate([{$group:{_id:{$type:"$close"},n:{$sum:1}}}])   # doubl
 - [x] ~~新增**量價×籌碼雙訊號共振**（`dual_signal_scan.py`：雙多/假突破陷阱/量升籌退/雙空/底部潛伏）~~
 - [x] ~~加**法人連續買賣超天數**（連續性加權）+ **投信**標記~~
 - [x] ~~**接 TDCC 集保股權分散**填 `shareholding` 空表（`tdcc_shareholding_sync.py`，免費、每週；千張大戶佔比整合進 chip）~~
+- [x] ~~**接 TWSE 全市場外資持股比例**（`twse_foreign_holding_sync.py` → `foreign_holding`，免費每日；FinMind 免費版全市場被鎖，改走 TWSE MI_QFIIS `selectType=ALLBUT0999`；近5日變化整合進 chip）~~
 
 ### P0（影響正確性/安全）
 - [ ] **接遠端 repo**（內網 GitLab / GitHub private）+ push；本機 bundle 改 `git clone`（徹底消除人工 md5 同步）— 需決定 host

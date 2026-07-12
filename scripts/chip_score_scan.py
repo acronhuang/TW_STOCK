@@ -140,6 +140,25 @@ def read_holder_conc(db):
     return out
 
 
+def read_foreign_holding(db):
+    """外資及陸資持股比例 + 近 ~5 交易日變化（TWSE MI_QFIIS，每日）：{symbol: (ratio, chg)}。
+    外資持股比例上升 = 外資持續吸籌（累積持股水位，與每日 foreign_net 流量互補、獨立驗證）。"""
+    dates = sorted(db.foreign_holding.distinct('date'))[-6:]
+    if not dates:
+        return {}
+    cur = {d['stock_id']: d.get('foreign_ratio') for d in
+           db.foreign_holding.find({'date': dates[-1]}, {'stock_id': 1, 'foreign_ratio': 1})}
+    pv = {}
+    if len(dates) > 1:
+        pv = {d['stock_id']: d.get('foreign_ratio') for d in
+              db.foreign_holding.find({'date': dates[0]}, {'stock_id': 1, 'foreign_ratio': 1})}
+    out = {}
+    for sym, fr in cur.items():
+        p = pv.get(sym)
+        out[sym] = (fr, round(fr - p, 2) if (fr is not None and p is not None) else None)
+    return out
+
+
 def _is_etf(sym: str) -> bool:
     """台股 ETF 代碼以 00 開頭（0050/0056/00xxx/009xxx）。其法人流量為申贖/再平衡機械性
     流動，非『主力』情緒，主力散戶研判預設排除。"""
@@ -155,6 +174,7 @@ def load(db, min_volume_lots, min_price, include_etf=False):
     inst = read_institutional(db, ref)
     streak = read_inst_streak(db, ref)
     holders = read_holder_conc(db)
+    fholding = read_foreign_holding(db)
 
     # 融資：優先同日；若當日尚未更新則退回融資自己的最新日（並記錄落後）
     mdoc = db.margin_purchase_short_sale.find_one({'date': ref})
@@ -199,6 +219,8 @@ def load(db, min_volume_lots, min_price, include_etf=False):
             'streak': streak.get(sym, 0),
             'big_pct': holders.get(sym, (None, None))[0],
             'big_chg': holders.get(sym, (None, None))[1],
+            'fh_ratio': fholding.get(sym, (None, None))[0],
+            'fh_chg': fholding.get(sym, (None, None))[1],
             'margin_chg': mg['margin_chg'], 'short_chg': mg['short_chg'],
             'obv_slope': f.get('obv_slope'), 'volume_ratio': f.get('volume_ratio'),
         })
@@ -251,10 +273,10 @@ def write_csv(ref, rows, out_dir):
     path = out_dir / f"chip_scan_{ref.strftime('%Y%m%d')}.csv"
     cols = ['symbol', 'name', 'close', 'change_pct', 'vol_lots', 'inst_net',
             'foreign', 'trust', 'dealer', 'streak', 'big_pct', 'big_chg',
-            'margin_chg', 'short_chg', 'score', 'tag', 'reson']
+            'fh_ratio', 'fh_chg', 'margin_chg', 'short_chg', 'score', 'tag', 'reson']
     header = ['代碼', '名稱', '收盤', '漲跌%', '量(張)', '法人淨(張)', '外資', '投信', '自營',
-              '法人連續(+買/-賣)', '千張大戶%', '大戶週變化', '融資增減(張)', '融券增減',
-              '籌碼分數', '研判', '量價共振']
+              '法人連續(+買/-賣)', '千張大戶%', '大戶週變化', '外資持股%', '外資近5日變化',
+              '融資增減(張)', '融券增減', '籌碼分數', '研判', '量價共振']
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.writer(f)
         w.writerow(header)
@@ -275,8 +297,10 @@ def line_msg(ref, m_date, rows, accum, distr, reson, top):
         bc = r.get('big_chg')
         big = f" 大戶{bc:+.1f}%" if bc is not None else (
             f" 大戶{r['big_pct']:.0f}%" if r.get('big_pct') is not None else "")
+        fc = r.get('fh_chg')
+        fh = f" 外資{fc:+.1f}%" if (fc is not None and abs(fc) >= 0.2) else ""
         return (f"  {r['symbol']} {r['name']} {r['close']:.1f} {chg} "
-                f"法人{r['inst_net']:+d} 融資{r['margin_chg']:+d}{streak}{trust}{big}")
+                f"法人{r['inst_net']:+d} 融資{r['margin_chg']:+d}{streak}{trust}{big}{fh}")
 
     L = [f"🎯 主力/散戶籌碼研判 ({d}){lag}", f"  共 {len(rows)} 檔（法人×融資交叉）\n"]
     L.append(f"🔥 主力吸籌×量價共振 ({len(reson)})")
