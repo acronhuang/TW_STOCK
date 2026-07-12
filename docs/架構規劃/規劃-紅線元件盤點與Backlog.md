@@ -82,6 +82,7 @@ db.stock_price.aggregate([{$group:{_id:{$type:"$close"},n:{$sum:1}}}])   # doubl
 | S2 | Dashboard 綁 0.0.0.0 + streamlit External URL 顯示公網 IP | 若對外未擋 → 網際網路暴露 |
 | S3 | `.env` 明文密鑰 | 密鑰外洩面 |
 | S4 | 無 TLS | 明文傳輸 |
+| S5 | ~~FinMind token 寫死在 12 個檔案~~ ✅已清（推 GitHub 前掃出並清除、歷史重建）| ⚠️ **建議至 FinMind 後台輪替該 token**（曾明文存在磁碟/舊歷史）|
 
 ---
 
