@@ -101,6 +101,7 @@ db.stock_price.aggregate([{$group:{_id:{$type:"$close"},n:{$sum:1}}}])   # doubl
 - [x] ~~**config-as-code**：cron + systemd units 匯出進 `deploy/`（+ 災難復原 README）~~
 - [x] ~~**修 runaway log**：`unified_downloader` pymongo DEBUG 灌爆日誌（1.1GB/時、35GB）→ 靜音 pymongo + 清 35GB，磁碟 44G→79G~~
 - [x] ~~裝 pytest，測試套件（116 tests）可執行~~
+- [x] ~~新增**主力/散戶籌碼研判**指標（`chip_score_scan.py`：法人×融資交叉，排除 ETF，量價共振）~~
 
 ### P0（影響正確性/安全）
 - [ ] **接遠端 repo**（內網 GitLab / GitHub private）+ push；本機 bundle 改 `git clone`（徹底消除人工 md5 同步）— 需決定 host
@@ -111,6 +112,7 @@ db.stock_price.aggregate([{$group:{_id:{$type:"$close"},n:{$sum:1}}}])   # doubl
 
 ### P1（技術債/一致性）
 - [ ] 值檢可延伸：把 OHLC 不變量擴到 stock_factors（如 RSI∈[0,100]）、加「單日漲跌逾 ±10% 且非除權息/新股」的可疑跳動計數（軟性、需排除例外）
+- [ ] **統一 `margin_purchase_short_sale` 雙 schema**：舊(FinMind：`stock_id`/`MarginPurchaseTodayBalance`，16497 筆歷史) vs 新(TWSE：`code`/`margin_balance`，90121 筆、2026-04 起)。現由 `chip_score_scan` 的 normalizer 相容讀取，但屬「隱性 schema 契約」破裂，宜遷移統一欄位。
 - [ ] **清理 stock_price 4,470 筆 2021 舊格式**（float close/字串 date/缺 stock_id）→ 之後 schema 可升 error（一之舊格式殘留）
 - [ ] 統一 RSI 公式（P3）
 - [ ] 移除死碼 `router.py`（P1）、修正 docstring（P2）
