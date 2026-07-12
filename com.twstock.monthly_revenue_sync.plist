@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.twstock.monthly_revenue_sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ming/Stock/.venv/bin/python3</string>
+        <string>/Users/ming/Stock/tw-stock-analysis/scripts/sync_monthly_revenue.py</string>
+        <string>--limit</string>
+        <string>550</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/ming/Stock/tw-stock-analysis</string>
+
+    <!-- 每月 12、15、18 日凌晨 2:00 執行（確保資料公布後多次補齊） -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Day</key><integer>12</integer>
+            <key>Hour</key><integer>2</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Day</key><integer>15</integer>
+            <key>Hour</key><integer>2</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Day</key><integer>18</integer>
+            <key>Hour</key><integer>2</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_monthly_revenue_sync.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_monthly_revenue_sync_err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/ming/Stock/.venv/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/ming</string>
+    </dict>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

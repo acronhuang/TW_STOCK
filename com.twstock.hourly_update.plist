@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 服務標識符 -->
+    <key>Label</key>
+    <string>com.twstock.hourly_update</string>
+    
+    <!-- 程式路徑 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ming/Stock/tw-stock-analysis/scripts/hourly_data_update.sh</string>
+    </array>
+    
+    <!-- 工作目錄 -->
+    <key>WorkingDirectory</key>
+    <string>/Users/ming/Stock/tw-stock-analysis</string>
+    
+    <!-- 執行時間：每小時第 5 分鐘 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Minute</key>
+        <integer>5</integer>
+    </dict>
+    
+    <!-- 標準輸出日誌 -->
+    <key>StandardOutPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_hourly_stdout.log</string>
+    
+    <!-- 錯誤輸出日誌 -->
+    <key>StandardErrorPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_hourly_stderr.log</string>
+    
+    <!-- 環境變數 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    
+    <!-- 失敗後自動重啟 -->
+    <key>KeepAlive</key>
+    <false/>
+    
+    <!-- 執行成功退出後不重啟 -->
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <!-- 使用者權限執行 -->
+    <key>UserName</key>
+    <string>ming</string>
+</dict>
+</plist>

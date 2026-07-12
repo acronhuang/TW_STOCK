@@ -1,0 +1,3 @@
+#!/bin/bash
+cd /Users/ming/Stock/tw-stock-analysis
+/Users/ming/Stock/.venv/bin/python3 /Users/ming/Stock/tw-stock-analysis/src/cli/query.py "$@"

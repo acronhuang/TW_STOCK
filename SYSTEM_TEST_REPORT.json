@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-02-17T10:06:32.240848",
+  "test_results": {
+    "download_status": "PASS",
+    "background_process": "RUNNING",
+    "mongodb": "PASS",
+    "db_collections": 15,
+    "stock_count": 0,
+    "technical_indicators": "NO_DATA",
+    "pattern_recognition": "PASS",
+    "market_scanner": "NEED_DATA"
+  },
+  "passed": 4,
+  "total": 6
+}

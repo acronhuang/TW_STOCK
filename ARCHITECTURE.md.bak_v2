@@ -1,0 +1,138 @@
+# 系統架構文件 (Architecture Document)
+
+## 版本 2.2.0
+
+## 領域模型 (Domain Model)
+
+### Bounded Contexts
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    台股智能分析系統                            │
+├─────────────┬──────────────┬──────────────┬─────────────────┤
+│  資料取得     │  分析引擎      │  決策輸出      │  基礎設施        │
+│ (Acquisition)│ (Analysis)   │ (Decision)   │ (Infrastructure)│
+├─────────────┼──────────────┼──────────────┼─────────────────┤
+│ downloaders  │ factors      │ strategy     │ api/server      │
+│ finmind      │ indicators   │ portfolio    │ alerts/LINE     │
+│ twse_daily   │ analysis     │ live_advisor │ cli/query       │
+│              │ morphology   │ trading_rules│ moe/router      │
+│              │ senvision    │ backtesting  │ launchd plist   │
+│              │ ml           │              │ MongoDB         │
+│              │ sentiment    │              │                 │
+└─────────────┴──────────────┴──────────────┴─────────────────┘
+```
+
+### 資料流
+
+```
+TWSE/TPEX API → downloaders → MongoDB
+                                 ↓
+              factors/indicators → stock_factors
+                                 ↓
+              analysis (health/valuation/risk/peer)
+                                 ↓
+              strategy (ranker + filter + trading_rules)
+                                 ↓
+              ┌──────────────────┼──────────────────┐
+              ↓                  ↓                  ↓
+         API Server         LINE 通知           Hermes Agent
+        (:8888)            (daily_alert)       (hermes-stock)
+```
+
+## 分層架構 (DDD)
+
+### Domain Layer（領域層）
+```
+src/domain/
+├── models/           # 實體 & 值物件
+│   ├── stock.py      # Stock, StockPrice, StockFactor
+│   ├── portfolio.py  # Position, Trade
+│   └── valuation.py  # ValuationResult
+├── repositories/     # 抽象介面（不含實作）
+│   └── stock_repository.py  # StockRepository ABC
+└── services/         # 跨實體業務邏輯
+```
+
+### Application Layer（應用層）
+```
+src/analysis/         # 分析用例
+├── financial_health.py   # 財報健診
+├── valuation_models.py   # 估值（DCF/DDM/PE Band）
+├── risk_manager.py       # 風險分析
+├── stock_ranker.py       # 綜合排行
+├── peer_comparison.py    # 同業比較
+└── financial_filter.py   # 財報篩檢
+
+src/strategy/         # 策略用例
+├── trading_rules.py      # 北大四大法則
+├── live_advisor.py       # 即時建議
+└── multi_factor_strategy.py
+
+scripts/              # 編排腳本
+├── daily_recommendations.py
+├── daily_alert_check.py
+└── team_analyze.py
+```
+
+### Infrastructure Layer（基礎設施層）
+```
+src/downloaders/      # 外部資料源整合
+src/api/server.py     # FastAPI REST Server
+src/alerts/           # LINE Messaging API
+src/ml/               # ML 模型（XGBoost）
+src/moe/              # MoE 多模型路由
+```
+
+### Interface Layer（介面層）
+```
+src/cli/query.py      # CLI 查詢工具
+hermes-stock          # Hermes Agent CLI wrapper
+dashboard/            # Streamlit UI
+```
+
+### 依賴方向
+```
+Interface → Application → Domain ← Infrastructure
+    ↓           ↓           ↑          ↑
+   CLI      scripts/    models/    MongoDB
+   API      analysis/   repos/     TWSE API
+  Hermes    strategy/              LINE API
+```
+**Domain 層不依賴任何外部（純 Python dataclass）**
+
+## 技術棧
+
+| 層級 | 技術 |
+|------|------|
+| 語言 | Python 3.11+ |
+| 資料庫 | MongoDB 7.0 |
+| API | FastAPI + Uvicorn |
+| 排程 | macOS launchd |
+| LLM | Ollama (qwen3.6:27b, deepseek-r1:14b) |
+| Agent | Hermes Agent v0.9.0 |
+| 通知 | LINE Messaging API |
+| 容器 | Docker + docker-compose |
+
+## MongoDB Collections
+
+| Collection | 用途 | 筆數 | Key |
+|-----------|------|------|-----|
+| stock_price | 股價 OHLCV | 460 萬 | symbol+date |
+| stock_factors | 因子（PE/PB/RSI） | 355 萬 | symbol+date |
+| quarterly_earnings | 季報 | 2.9 萬 | symbol+year+season |
+| dividend_detail | 股利 | 1.6 萬 | stock_id+date |
+| monthly_revenue | 月營收 | 2,500 | symbol+year_month |
+| institutional_flow | 法人買賣超 | 2.8 萬 | stock_id+date |
+
+## 排程系統
+
+| 時間 | 排程 | 用途 |
+|------|------|------|
+| 每小時 :05 | hourly_update | 盤中股價 |
+| 週一~五 17:00 | daily_senvision | 收盤後更新 |
+| 週一~五 17:30 | daily_alert_check | 警報+北大法則 |
+| 週一~五 17:30 | daily_recommendations | 每日推薦 |
+| 每日 01:00 | daily_dividend_sync | 股利同步 |
+| 週六 08:00 | weekly_team_verify | 7人團隊驗證 |
+| 週日 01:00 | weekly_mongodb_backup | 備份 |

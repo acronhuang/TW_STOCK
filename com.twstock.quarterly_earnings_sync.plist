@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.twstock.quarterly_earnings_sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/ming/Stock/tw-stock-analysis/scripts/quarterly_earnings_sync.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/ming/Stock/tw-stock-analysis</string>
+
+    <!--
+        季報公告截止日後執行，凌晨 3:00：
+        Q4 年報：3/31 截止 → 4/1 同步
+        Q1 季報：5/15 截止 → 5/16 同步
+        Q2 季報：8/14 截止 → 8/15 同步
+        Q3 季報：11/14 截止 → 11/15 同步
+        額外：各截止日後 +7 天再跑一次（補齊遲交公司）
+    -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <!-- Q4 年報：4/1, 4/8 -->
+        <dict>
+            <key>Month</key><integer>4</integer>
+            <key>Day</key><integer>1</integer>
+            <key>Hour</key><integer>3</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Month</key><integer>4</integer>
+            <key>Day</key><integer>8</integer>
+            <key>Hour</key><integer>3</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <!-- Q1 季報：5/16, 5/23 -->
+        <dict>
+            <key>Month</key><integer>5</integer>
+            <key>Day</key><integer>16</integer>
+            <key>Hour</key><integer>3</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Month</key><integer>5</integer>
+            <key>Day</key><integer>23</integer>
+            <key>Hour</key><integer>3</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <!-- Q2 季報：8/15, 8/22 -->
+        <dict>
+            <key>Month</key><integer>8</integer>
+            <key>Day</key><integer>15</integer>
+            <key>Hour</key><integer>3</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Month</key><integer>8</integer>
+            <key>Day</key><integer>22</integer>
+            <key>Hour</key><integer>3</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <!-- Q3 季報：11/15, 11/22 -->
+        <dict>
+            <key>Month</key><integer>11</integer>
+            <key>Day</key><integer>15</integer>
+            <key>Hour</key><integer>3</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Month</key><integer>11</integer>
+            <key>Day</key><integer>22</integer>
+            <key>Hour</key><integer>3</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_quarterly_earnings_sync.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_quarterly_earnings_sync_err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/ming/Stock/.venv/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/ming</string>
+    </dict>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

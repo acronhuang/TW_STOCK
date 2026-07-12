@@ -1,0 +1,82 @@
+services:
+  # MongoDB 專用實例 (避免衝突)
+  mongodb_stock:
+    image: mongo:7.0
+    container_name: mongodb_stock
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: tw_stock_analysis
+      # 如需認證，取消註解以下兩行
+      # MONGO_INITDB_ROOT_USERNAME: admin
+      # MONGO_INITDB_ROOT_PASSWORD: your_password
+    volumes:
+      - mongodb_stock_data:/data/db
+      - mongodb_stock_config:/data/configdb
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - stock_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 專用實例
+  redis_stock:
+    image: redis:7-alpine
+    container_name: redis_stock
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_stock_data:/data
+    networks:
+      - stock_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # NestJS 應用 (可選，用於容器化部署)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tw_stock_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongodb_stock:27017/tw_stock_analysis
+      REDIS_HOST: redis_stock
+      REDIS_PORT: 6379
+    depends_on:
+      mongodb_stock:
+        condition: service_healthy
+      redis_stock:
+        condition: service_healthy
+    networks:
+      - stock_network
+    profiles:
+      - full  # 僅在需要時啟動: docker-compose --profile full up
+
+networks:
+  stock_network:
+    driver: bridge
+
+volumes:
+  mongodb_stock_data:
+    name: mongodb_stock_data
+  mongodb_stock_config:
+    name: mongodb_stock_config
+  redis_stock_data:
+    name: redis_stock_data

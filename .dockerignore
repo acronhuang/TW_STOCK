@@ -1,0 +1,10 @@
+logs/
+node_modules/
+.git/
+__pycache__/
+*.pyc
+.venv/
+results/
+mongodb_backups/
+*.tar.gz
+.env

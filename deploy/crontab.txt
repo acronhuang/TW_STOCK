@@ -1,0 +1,36 @@
+# ── tw-stock crontab (.166) 格式: 分 時 日 月 週 ──
+SHELL=/bin/bash
+TZ=Asia/Taipei
+PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
+
+# api_server: 週期常駐(api_server) → 用 systemd service, 不進 cron
+30 17 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/daily_alert_check.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_alert_check.log 2>&1  # daily_alert_check
+0 1 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/sync_dividend_detail.py --limit 600 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_dividend_sync.log 2>&1  # daily_dividend_sync
+0 21 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/twse_openapi_sync.py --heal >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_integrity_check.log 2>&1  # daily_integrity_check
+10 17 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/macro_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_macro_sync.log 2>&1  # daily_macro_sync
+5 18 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/obv_bottom_divergence_scan.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_obv_divergence.log 2>&1  # daily_obv_divergence
+30 17 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/twse_openapi_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_openapi_sync.log 2>&1  # daily_openapi_sync
+30 17 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/daily_recommendations.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_recommendations.log 2>&1  # daily_recommendations
+0 17 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/daily_senvision.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_senvision.log 2>&1  # daily_senvision
+30 18 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/team_daily_50.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_team_verified.log 2>&1  # daily_team_verified
+0 18 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/volume_price_scan.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_volume_price.log 2>&1  # daily_volume_price
+5 * * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/hourly_data_update.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_hourly_update.log 2>&1  # hourly_update
+0 18 27 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/macro_signal_reminder.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_macro_signal_reminder.log 2>&1  # macro_signal_reminder
+0 2 12 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/sync_revenue_openapi.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_monthly_revenue_sync.log 2>&1  # monthly_revenue_sync
+0 2 15 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/sync_revenue_openapi.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_monthly_revenue_sync.log 2>&1  # monthly_revenue_sync
+0 2 18 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/sync_revenue_openapi.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_monthly_revenue_sync.log 2>&1  # monthly_revenue_sync
+0 3 1 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/quarterly_earnings_sync.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quarterly_earnings_sync.log 2>&1  # quarterly_earnings_sync
+0 3 15 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/quarterly_earnings_sync.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quarterly_earnings_sync.log 2>&1  # quarterly_earnings_sync
+0 3 16 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/quarterly_earnings_sync.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quarterly_earnings_sync.log 2>&1  # quarterly_earnings_sync
+0 3 22 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/quarterly_earnings_sync.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quarterly_earnings_sync.log 2>&1  # quarterly_earnings_sync
+0 3 23 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/quarterly_earnings_sync.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quarterly_earnings_sync.log 2>&1  # quarterly_earnings_sync
+0 3 8 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/quarterly_earnings_sync.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quarterly_earnings_sync.log 2>&1  # quarterly_earnings_sync
+0 3 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/log_rotation.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_log_cleanup.log 2>&1  # weekly_log_cleanup
+0 1 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash backup_mongodb.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_mongodb_backup.log 2>&1  # weekly_mongodb_backup
+0 2 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/sync_shares_openapi.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_outstanding_shares.log 2>&1  # weekly_outstanding_shares
+0 8 * * 6  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/weekly_team_verify.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_team_verify.log 2>&1  # weekly_team_verify
+0 21 * * 5  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/weekly_team_full.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_team_full.log 2>&1  # weekly_team_full
+0 22 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/data_health.py --snapshot --trend >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_data_health.log 2>&1  # data_health_daily
+0 9 * * 6  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/data_health.py --finmind 30 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_data_health.log 2>&1  # data_health_weekly_finmind
+0 4 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/verify_backup.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_verify_backup.log 2>&1  # verify_backup_weekly
+0 8,14 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/watchdog.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_watchdog.log 2>&1  # watchdog

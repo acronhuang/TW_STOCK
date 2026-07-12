@@ -1,0 +1,425 @@
+{
+  "timestamp": "2026-02-17T17:01:58.389501",
+  "summary": {
+    "total_collections": 11,
+    "total_records": 1631595,
+    "total_size_mb": 278.37
+  },
+  "collections": {
+    "dividends": {
+      "count": 1056,
+      "size_mb": 0.39,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "publish_date",
+        "symbol",
+        "data_source",
+        "name",
+        "raw_data",
+        "updated_at",
+        "公司治理之相關規程規則"
+      ],
+      "sources": {
+        "TWSE_OpenAPI": 1000
+      },
+      "duplication": []
+    },
+    "financial_statements": {
+      "count": 6,
+      "size_mb": 0.0,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "symbol",
+        "year",
+        "season",
+        "source",
+        "data",
+        "updateTime"
+      ],
+      "sources": {
+        "finmind": 3,
+        "yahoo": 3
+      },
+      "duplication": []
+    },
+    "institutional_investors": {
+      "count": 532945,
+      "size_mb": 108.14,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "date",
+        "symbol",
+        "dealer_buy",
+        "dealer_diff",
+        "dealer_sell",
+        "foreign_buy",
+        "foreign_diff",
+        "foreign_sell",
+        "trust_buy",
+        "trust_diff",
+        "trust_sell",
+        "updated_at"
+      ],
+      "sources": {
+        "unknown": 1000
+      },
+      "duplication": []
+    },
+    "margin_trading": {
+      "count": 1251,
+      "size_mb": 0.5,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "symbol",
+        "date",
+        "data_source",
+        "margin_buy",
+        "margin_cash_repayment",
+        "margin_limit",
+        "margin_sell",
+        "margin_today_balance",
+        "margin_yesterday_balance",
+        "name",
+        "note",
+        "offset",
+        "short_buy",
+        "short_limit",
+        "short_sell",
+        "short_stock_repayment",
+        "short_today_balance",
+        "short_yesterday_balance",
+        "updated_at"
+      ],
+      "sources": {
+        "TWSE_OpenAPI": 1000
+      },
+      "duplication": []
+    },
+    "market_statistics": {
+      "count": 8,
+      "size_mb": 0.0,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "date",
+        "Change",
+        "TAIEX",
+        "TradeValue",
+        "TradeVolume",
+        "Transaction",
+        "data_source",
+        "raw_data",
+        "updated_at"
+      ],
+      "sources": {
+        "TWSE_OpenAPI": 8
+      },
+      "duplication": []
+    },
+    "monthly_revenue": {
+      "count": 1065,
+      "size_mb": 0.43,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "symbol",
+        "year_month",
+        "cumulative_growth",
+        "cumulative_revenue",
+        "data_source",
+        "industry",
+        "last_month_revenue",
+        "last_year_cumulative_revenue",
+        "last_year_revenue",
+        "mom_growth",
+        "name",
+        "note",
+        "publish_date",
+        "revenue",
+        "updated_at",
+        "yoy_growth"
+      ],
+      "sources": {
+        "TWSE_OpenAPI": 1000
+      },
+      "duplication": []
+    },
+    "pe_pb_yield": {
+      "count": 1068,
+      "size_mb": 0.19,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "symbol",
+        "date",
+        "data_source",
+        "dividend_yield",
+        "name",
+        "pb_ratio",
+        "pe_ratio",
+        "updated_at"
+      ],
+      "sources": {
+        "TWSE_OpenAPI": 1000
+      },
+      "duplication": []
+    },
+    "stock_price": {
+      "count": 1054244,
+      "size_mb": 156.54,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "symbol",
+        "date",
+        "close",
+        "high",
+        "low",
+        "open",
+        "source",
+        "updateTime",
+        "volume"
+      ],
+      "sources": {
+        "twse_openapi": 1000
+      },
+      "duplication": []
+    },
+    "stocks": {
+      "count": 2336,
+      "size_mb": 0.24,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "Code",
+        "symbol",
+        "Name",
+        "name",
+        "market"
+      ],
+      "sources": {
+        "unknown": 1000
+      },
+      "duplication": []
+    },
+    "technical_indicators": {
+      "count": 36271,
+      "size_mb": 11.56,
+      "indexes": [],
+      "fields": [
+        "_id",
+        "symbol",
+        "date",
+        "bb_lower",
+        "bb_middle",
+        "bb_upper",
+        "d",
+        "k",
+        "ma10",
+        "ma20",
+        "ma5",
+        "ma60",
+        "macd",
+        "macd_hist",
+        "macd_signal",
+        "rsi",
+        "updated_at",
+        "volume_ma10",
+        "volume_ma20",
+        "volume_ma5"
+      ],
+      "sources": {
+        "unknown": 1000
+      },
+      "duplication": []
+    },
+    "tickers": {
+      "count": 1345,
+      "size_mb": 0.38,
+      "indexes": [
+        {
+          "name": "date_1",
+          "keys": {
+            "date": 1
+          }
+        },
+        {
+          "name": "symbol_1",
+          "keys": {
+            "symbol": 1
+          }
+        },
+        {
+          "name": "date_-1_symbol_1",
+          "keys": {
+            "date": -1,
+            "symbol": 1
+          }
+        },
+        {
+          "name": "symbol_1_date_-1",
+          "keys": {
+            "symbol": 1,
+            "date": -1
+          }
+        },
+        {
+          "name": "date_-1",
+          "keys": {
+            "date": -1
+          }
+        },
+        {
+          "name": "changePercent_-1",
+          "keys": {
+            "changePercent": -1
+          }
+        },
+        {
+          "name": "volume_-1",
+          "keys": {
+            "volume": -1
+          }
+        }
+      ],
+      "fields": [
+        "_id",
+        "symbol",
+        "date",
+        "__v",
+        "change",
+        "changePercent",
+        "close",
+        "createdAt",
+        "dealersNetBuySell",
+        "finiNetBuySell",
+        "name",
+        "sitcNetBuySell",
+        "updatedAt",
+        "volume"
+      ],
+      "sources": {
+        "unknown": 1000
+      },
+      "duplication": [
+        "包含價格數據 (與 stock_price 重複)",
+        "包含法人數據 (與 institutional_investors 重複)"
+      ]
+    }
+  },
+  "suggestions": [
+    {
+      "type": "review",
+      "collection": "financial_statements",
+      "reason": "僅 6 筆數據，可能是測試數據"
+    },
+    {
+      "type": "keep",
+      "collection": "tickers",
+      "reason": "NestJS API 專用集合，與 Python 腳本使用的集合分離"
+    },
+    {
+      "type": "create_index",
+      "collection": "dividends",
+      "reason": "1,056 筆數據但無索引"
+    },
+    {
+      "type": "create_index",
+      "collection": "institutional_investors",
+      "reason": "532,945 筆數據但無索引"
+    },
+    {
+      "type": "create_index",
+      "collection": "margin_trading",
+      "reason": "1,251 筆數據但無索引"
+    },
+    {
+      "type": "create_index",
+      "collection": "monthly_revenue",
+      "reason": "1,065 筆數據但無索引"
+    },
+    {
+      "type": "create_index",
+      "collection": "pe_pb_yield",
+      "reason": "1,068 筆數據但無索引"
+    },
+    {
+      "type": "create_index",
+      "collection": "stock_price",
+      "reason": "1,054,244 筆數據但無索引"
+    },
+    {
+      "type": "create_index",
+      "collection": "stocks",
+      "reason": "2,336 筆數據但無索引"
+    },
+    {
+      "type": "create_index",
+      "collection": "technical_indicators",
+      "reason": "36,271 筆數據但無索引"
+    }
+  ],
+  "execution_plan": {
+    "delete": [],
+    "review": [
+      {
+        "type": "review",
+        "collection": "financial_statements",
+        "reason": "僅 6 筆數據，可能是測試數據"
+      }
+    ],
+    "index": [
+      {
+        "type": "create_index",
+        "collection": "dividends",
+        "reason": "1,056 筆數據但無索引"
+      },
+      {
+        "type": "create_index",
+        "collection": "institutional_investors",
+        "reason": "532,945 筆數據但無索引"
+      },
+      {
+        "type": "create_index",
+        "collection": "margin_trading",
+        "reason": "1,251 筆數據但無索引"
+      },
+      {
+        "type": "create_index",
+        "collection": "monthly_revenue",
+        "reason": "1,065 筆數據但無索引"
+      },
+      {
+        "type": "create_index",
+        "collection": "pe_pb_yield",
+        "reason": "1,068 筆數據但無索引"
+      },
+      {
+        "type": "create_index",
+        "collection": "stock_price",
+        "reason": "1,054,244 筆數據但無索引"
+      },
+      {
+        "type": "create_index",
+        "collection": "stocks",
+        "reason": "2,336 筆數據但無索引"
+      },
+      {
+        "type": "create_index",
+        "collection": "technical_indicators",
+        "reason": "36,271 筆數據但無索引"
+      }
+    ],
+    "keep": [
+      {
+        "type": "keep",
+        "collection": "tickers",
+        "reason": "NestJS API 專用集合，與 Python 腳本使用的集合分離"
+      }
+    ]
+  }
+}

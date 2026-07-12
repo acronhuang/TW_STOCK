@@ -1,0 +1,511 @@
+#!/usr/bin/env python3
+"""
+實時數據監控
+"""
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+from pymongo import MongoClient
+from datetime import datetime, timedelta
+from pathlib import Path
+import subprocess
+
+
+def format_datetime(dt_value):
+    """
+    安全地格式化日期時間
+    """
+    if dt_value is None:
+        return "未知"
+    
+    if isinstance(dt_value, str):
+        return dt_value
+    
+    if isinstance(dt_value, datetime):
+        return dt_value.strftime('%Y-%m-%d %H:%M:%S')
+    
+    try:
+        return str(dt_value)
+    except:
+        return "未知"
+
+
+def get_service_status():
+    """獲取 launchd 服務狀態"""
+    try:
+        result = subprocess.run(
+            ['launchctl', 'list', 'com.twstock.hourly-update'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            return {'status': '運行中', 'enabled': True}
+        else:
+            return {'status': '未運行', 'enabled': False}
+    except Exception as e:
+        return {'status': '無法檢測', 'enabled': None, 'error': str(e)}
+
+def get_latest_logs(log_dir, n=10):
+    """獲取最新的日誌文件"""
+    log_path = Path(log_dir)
+    if not log_path.exists():
+        return []
+    
+    log_files = sorted(log_path.glob('*.log'), key=lambda x: x.stat().st_mtime, reverse=True)
+    return log_files[:n]
+
+def read_log_tail(log_file, n_lines=50):
+    """讀取日誌文件的最後 n 行"""
+    try:
+        with open(log_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            return ''.join(lines[-n_lines:])
+    except Exception as e:
+        return f"無法讀取日誌: {str(e)}"
+
+def show():
+    st.title("🔔 實時數據監控")
+    st.markdown("監控數據更新狀態和系統健康度")
+    
+    # 連接資料庫
+    client = MongoClient('mongodb://localhost:27017/')
+    db = client['tw_stock_analysis']
+    
+    # 自動刷新選項
+    auto_refresh = st.checkbox("自動刷新（每 30 秒）", value=False)
+    
+    if auto_refresh:
+        st.rerun()
+    
+    # Tab 分頁
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 數據概覽",
+        "⏰ 更新狀態",
+        "📝 日誌查看",
+        "🔧 系統控制"
+    ])
+    
+    # Tab 1: 數據概覽
+    with tab1:
+        st.subheader("資料庫數據統計")
+        
+        # 統計各集合的記錄數
+        collections = {
+            'stock_price': '股價數據',
+            'taiwan_stock_info': '股票基本資訊',
+            'financial_reports': '財務報表',
+            'stock_factors': '量化因子',
+            'dividend_results': '股利資料'
+        }
+        
+        col1, col2, col3 = st.columns(3)
+        
+        stats = []
+        for i, (coll_name, display_name) in enumerate(collections.items()):
+            count = db[coll_name].count_documents({})
+            stats.append({
+                'collection': display_name,
+                'count': count
+            })
+            
+            # 顯示 metric
+            with [col1, col2, col3][i % 3]:
+                st.metric(display_name, f"{count:,}")
+        
+        # 數據完整度檢查
+        st.markdown("### 數據完整度")
+        
+        # 檢查最新日期
+        latest_dates = {}
+        
+        # 股價最新日期
+        latest_price = db.stock_price.find_one(
+            {},
+            sort=[('date', -1)],
+            projection={'date': 1}
+        )
+        if latest_price:
+            latest_dates['股價數據'] = latest_price['date']
+        
+        # 財報最新日期
+        latest_financial = db.financial_reports.find_one(
+            {},
+            sort=[('fiscalYear', -1), ('fiscalPeriod', -1)],
+            projection={'fiscalYear': 1, 'fiscalPeriod': 1}
+        )
+        if latest_financial:
+            latest_dates['財報數據'] = f"{latest_financial.get('fiscalYear')} {latest_financial.get('fiscalPeriod')}"
+        
+        # 因子最新日期
+        latest_factor = db.stock_factors.find_one(
+            {},
+            sort=[('date', -1)],
+            projection={'date': 1}
+        )
+        if latest_factor:
+            latest_dates['因子數據'] = latest_factor['date']
+        
+        # 基本資訊最新日期
+        latest_info = db.taiwan_stock_info.find_one(
+            {},
+            sort=[('date', -1)],
+            projection={'date': 1}
+        )
+        if latest_info:
+            latest_dates['基本資訊'] = latest_info['date']
+        
+        # 顯示最新日期
+        date_df = pd.DataFrame([
+            {'數據類型': k, '最新更新': str(v)} 
+            for k, v in latest_dates.items()
+        ])
+        
+        st.dataframe(date_df, width="stretch", hide_index=True)
+        
+        # 數據新鮮度檢查
+        st.markdown("### 數據新鮮度")
+        
+        now = datetime.now()
+        freshness_status = []
+        
+        for data_type, latest_date in latest_dates.items():
+            if isinstance(latest_date, datetime):
+                age_days = (now - latest_date).days
+                
+                if age_days == 0:
+                    status = "✅ 最新"
+                    color = "green"
+                elif age_days <= 3:
+                    status = "⚠️ 較舊"
+                    color = "orange"
+                else:
+                    status = "❌ 過期"
+                    color = "red"
+                
+                freshness_status.append({
+                    '數據類型': data_type,
+                    '距今天數': f"{age_days} 天",
+                    '狀態': status
+                })
+        
+        if freshness_status:
+            fresh_df = pd.DataFrame(freshness_status)
+            st.dataframe(fresh_df, width="stretch", hide_index=True)
+        
+        # 股票覆蓋率
+        st.markdown("### 股票覆蓋率")
+        
+        # 覆蓋率 = 上市櫃股票池(taiwan_stock_info) 中有資料的檔數 / 池大小。
+        # 取交集：stock_price 等含權證/ETF 等非個股代碼，直接 distinct 會超過池而 >100%。
+        listed = set(db.taiwan_stock_info.distinct('stock_id'))
+
+        # 財報以 quarterly_earnings 為準（實際分析所用；financial_reports 為只剩 ~200 檔的棄用舊表）
+        coverage = {}
+        coverage['總股票數'] = len(listed)
+        coverage['有股價數據'] = len(listed & set(db.stock_price.distinct('symbol')))
+        coverage['有財報數據'] = len(listed & set(db.quarterly_earnings.distinct('symbol')))
+        coverage['有因子數據'] = len(listed & set(db.stock_factors.distinct('symbol')))
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("總股票數", coverage['總股票數'])
+        with col2:
+            pct = coverage['有股價數據'] / coverage['總股票數'] * 100 if coverage['總股票數'] > 0 else 0
+            st.metric("股價覆蓋率", f"{pct:.1f}%", f"{coverage['有股價數據']} 支")
+        with col3:
+            pct = coverage['有財報數據'] / coverage['總股票數'] * 100 if coverage['總股票數'] > 0 else 0
+            st.metric("財報覆蓋率", f"{pct:.1f}%", f"{coverage['有財報數據']} 支")
+        with col4:
+            pct = coverage['有因子數據'] / coverage['總股票數'] * 100 if coverage['總股票數'] > 0 else 0
+            st.metric("因子覆蓋率", f"{pct:.1f}%", f"{coverage['有因子數據']} 支")
+    
+    # Tab 2: 更新狀態
+    with tab2:
+        st.subheader("自動更新服務狀態")
+        
+        # 檢查 launchd 服務
+        service_status = get_service_status()
+        
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            if service_status['enabled']:
+                st.success("🟢 服務運行中")
+            elif service_status['enabled'] is False:
+                st.error("🔴 服務未運行")
+            else:
+                st.warning("⚠️ 無法檢測服務狀態")
+        
+        with col2:
+            st.write(f"**狀態:** {service_status['status']}")
+            if 'error' in service_status:
+                st.write(f"**錯誤:** {service_status['error']}")
+        
+        # 更新歷史
+        st.markdown("### 更新歷史")
+        
+        log_dir = Path.home() / 'Desktop' / 'Stock' / 'tw-stock-analysis' / 'logs' / 'hourly_updates'
+        
+        if log_dir.exists():
+            log_files = get_latest_logs(log_dir, n=20)
+            
+            if log_files:
+                # 解析日誌文件名獲取更新時間
+                update_history = []
+                
+                for log_file in log_files:
+                    # 文件名格式: update_YYYYMMDD_HHMMSS.log
+                    try:
+                        parts = log_file.stem.split('_')
+                        if len(parts) >= 3:
+                            date_str = parts[1]
+                            time_str = parts[2]
+                            update_time = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+                            
+                            # 讀取日誌判斷狀態
+                            log_content = read_log_tail(log_file, n_lines=10)
+                            
+                            if '完成' in log_content or 'completed' in log_content.lower():
+                                status = '✅ 成功'
+                            elif '錯誤' in log_content or 'error' in log_content.lower():
+                                status = '❌ 失敗'
+                            else:
+                                status = '⚠️ 未知'
+                            
+                            update_history.append({
+                                '更新時間': format_datetime(update_time),
+                                '狀態': status,
+                                '日誌文件': log_file.name
+                            })
+                    except Exception as e:
+                        continue
+                
+                if update_history:
+                    history_df = pd.DataFrame(update_history)
+                    st.dataframe(history_df, width="stretch", hide_index=True)
+                    
+                    # 更新頻率統計
+                    st.markdown("### 更新頻率")
+                    
+                    if len(update_history) >= 2:
+                        first_time = datetime.strptime(update_history[-1]['更新時間'], '%Y-%m-%d %H:%M:%S')
+                        last_time = datetime.strptime(update_history[0]['更新時間'], '%Y-%m-%d %H:%M:%S')
+                        
+                        time_span = last_time - first_time
+                        avg_interval = time_span.total_seconds() / (len(update_history) - 1) / 3600
+                        
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric("最近更新", update_history[0]['更新時間'])
+                        with col2:
+                            st.metric("更新次數", len(update_history))
+                        with col3:
+                            st.metric("平均間隔", f"{avg_interval:.1f} 小時")
+                else:
+                    st.info("沒有找到更新歷史記錄")
+            else:
+                st.warning("沒有找到日誌文件")
+        else:
+            st.warning(f"日誌目錄不存在: {log_dir}")
+        
+        # 手動觸發更新
+        st.markdown("### 手動更新")
+        
+        st.warning("⚠️ 手動更新可能需要數分鐘，請耐心等待")
+        
+        if st.button("🔄 立即更新股價數據"):
+            with st.spinner("正在更新股價數據..."):
+                try:
+                    result = subprocess.run(
+                        ['python3', 'scripts/hourly_update.py'],
+                        capture_output=True,
+                        text=True,
+                        timeout=300,
+                        cwd=Path.home() / 'Desktop' / 'Stock' / 'tw-stock-analysis'
+                    )
+                    
+                    if result.returncode == 0:
+                        st.success("✅ 更新成功！")
+                        st.code(result.stdout[-500:] if len(result.stdout) > 500 else result.stdout)
+                    else:
+                        st.error("❌ 更新失敗")
+                        st.code(result.stderr)
+                except subprocess.TimeoutExpired:
+                    st.error("❌ 更新超時（超過 5 分鐘）")
+                except Exception as e:
+                    st.error(f"❌ 執行錯誤: {str(e)}")
+    
+    # Tab 3: 日誌查看
+    with tab3:
+        st.subheader("系統日誌查看")
+        
+        # 選擇日誌類型
+        log_types = {
+            '每小時更新': 'hourly_updates',
+            '數據下載': '',
+            'Adj Close 計算': '',
+            '因子計算': ''
+        }
+        
+        log_type = st.selectbox("選擇日誌類型", list(log_types.keys()))
+        
+        base_log_dir = Path.home() / 'Desktop' / 'Stock' / 'tw-stock-analysis' / 'logs'
+        
+        if log_type == '每小時更新':
+            log_dir = base_log_dir / 'hourly_updates'
+        else:
+            log_dir = base_log_dir
+        
+        if log_dir.exists():
+            log_files = get_latest_logs(log_dir, n=30)
+            
+            if log_files:
+                selected_log = st.selectbox(
+                    "選擇日誌文件",
+                    [f.name for f in log_files]
+                )
+                
+                if selected_log:
+                    log_file_path = log_dir / selected_log
+                    
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        st.write(f"**文件:** {selected_log}")
+                    
+                    with col2:
+                        file_size = log_file_path.stat().st_size / 1024
+                        st.write(f"**大小:** {file_size:.2f} KB")
+                    
+                    # 選擇顯示行數
+                    n_lines = st.slider("顯示行數", 10, 500, 100)
+                    
+                    # 讀取並顯示日誌
+                    log_content = read_log_tail(log_file_path, n_lines=n_lines)
+                    
+                    st.code(log_content, language='log')
+                    
+                    # 下載日誌
+                    with open(log_file_path, 'rb') as f:
+                        st.download_button(
+                            label="📥 下載完整日誌",
+                            data=f,
+                            file_name=selected_log,
+                            mime="text/plain"
+                        )
+            else:
+                st.info("沒有找到日誌文件")
+        else:
+            st.warning(f"日誌目錄不存在: {log_dir}")
+    
+    # Tab 4: 系統控制
+    with tab4:
+        st.subheader("系統控制面板")
+        
+        st.warning("⚠️ 以下操作會影響系統運行，請謹慎使用")
+        
+        # 服務控制
+        st.markdown("### 自動更新服務")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("▶️ 啟動服務"):
+                try:
+                    result = subprocess.run(
+                        ['launchctl', 'load', '-w', 
+                         str(Path.home() / 'Library' / 'LaunchAgents' / 'com.twstock.hourly-update.plist')],
+                        capture_output=True,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        st.success("✅ 服務已啟動")
+                    else:
+                        st.error(f"❌ 啟動失敗: {result.stderr}")
+                except Exception as e:
+                    st.error(f"❌ 執行錯誤: {str(e)}")
+        
+        with col2:
+            if st.button("⏸️ 停止服務"):
+                try:
+                    result = subprocess.run(
+                        ['launchctl', 'unload', 
+                         str(Path.home() / 'Library' / 'LaunchAgents' / 'com.twstock.hourly-update.plist')],
+                        capture_output=True,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        st.success("✅ 服務已停止")
+                    else:
+                        st.error(f"❌ 停止失敗: {result.stderr}")
+                except Exception as e:
+                    st.error(f"❌ 執行錯誤: {str(e)}")
+        
+        with col3:
+            if st.button("🔄 重啟服務"):
+                try:
+                    plist_path = str(Path.home() / 'Library' / 'LaunchAgents' / 'com.twstock.hourly-update.plist')
+                    subprocess.run(['launchctl', 'unload', plist_path], capture_output=True)
+                    result = subprocess.run(
+                        ['launchctl', 'load', '-w', plist_path],
+                        capture_output=True,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        st.success("✅ 服務已重啟")
+                    else:
+                        st.error(f"❌ 重啟失敗: {result.stderr}")
+                except Exception as e:
+                    st.error(f"❌ 執行錯誤: {str(e)}")
+        
+        # 數據庫維護
+        st.markdown("### 數據庫維護")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🗑️ 清理過期數據"):
+                st.info("此功能尚未實作")
+        
+        with col2:
+            if st.button("📊 重建索引"):
+                with st.spinner("正在重建索引..."):
+                    try:
+                        # 重建所有集合的索引
+                        collections = ['stock_price', 'financial_reports', 'stock_factors']
+                        for coll in collections:
+                            db[coll].reindex()
+                        st.success("✅ 索引重建完成")
+                    except Exception as e:
+                        st.error(f"❌ 重建失敗: {str(e)}")
+        
+        # 系統資訊
+        st.markdown("### 系統資訊")
+        
+        import platform
+        import psutil
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("作業系統", platform.system())
+            st.metric("Python 版本", platform.python_version())
+        
+        with col2:
+            cpu_percent = psutil.cpu_percent(interval=1)
+            st.metric("CPU 使用率", f"{cpu_percent}%")
+            
+            memory = psutil.virtual_memory()
+            st.metric("記憶體使用率", f"{memory.percent}%")
+        
+        with col3:
+            disk = psutil.disk_usage('/')
+            st.metric("磁碟使用率", f"{disk.percent}%")
+            st.metric("可用空間", f"{disk.free / (1024**3):.1f} GB")
+
+if __name__ == '__main__':
+    show()

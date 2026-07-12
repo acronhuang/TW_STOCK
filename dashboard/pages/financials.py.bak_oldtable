@@ -1,0 +1,528 @@
+#!/usr/bin/env python3
+"""
+財報摘要儀表板
+"""
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+from pymongo import MongoClient
+from datetime import datetime
+from bson.decimal128 import Decimal128
+
+def to_float(value):
+    """轉換 Decimal128 為 float"""
+    if value is None:
+        return None
+    if isinstance(value, Decimal128):
+        return float(value.to_decimal())
+    return float(value)
+
+def format_amount(amount, unit='億'):
+    """轉換金額單位（返回數值）"""
+    if amount is None:
+        return None
+    if unit == '億':
+        return amount / 1e8
+    elif unit == '千萬':
+        return amount / 1e7
+    return amount
+
+def format_amount_str(amount, unit='億'):
+    """格式化金額為字符串（用於表格顯示）"""
+    if amount is None:
+        return 'N/A'
+    if unit == '億':
+        return f"{amount/1e8:.2f}"
+    elif unit == '千萬':
+        return f"{amount/1e7:.2f}"
+    return f"{amount:.2f}"
+
+def show():
+    st.title("📑 財報摘要儀表")
+    st.markdown("查看公司財務報表和關鍵指標")
+    
+    # 連接資料庫
+    client = MongoClient('mongodb://localhost:27017/')
+    db = client['tw_stock_analysis']
+    
+    # 選擇股票（過濾 None）
+    symbols = [s for s in db.stock_price.distinct('symbol') if s is not None]
+    symbols = sorted(symbols)
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        selected_symbol = st.selectbox(
+            "選擇股票",
+            symbols,
+            index=symbols.index('2330') if '2330' in symbols else 0
+        )
+    
+    with col2:
+        # 獲取股票資訊
+        stock_info = db.taiwan_stock_info.find_one(
+            {'stock_id': selected_symbol},
+            sort=[('date', -1)]
+        )
+        if stock_info:
+            st.metric("公司名稱", stock_info.get('stock_name', ''))
+            st.metric("產業類別", stock_info.get('industry_category', ''))
+    
+    # 獲取財報數據
+    financial_reports = list(db.financial_reports.find(
+        {
+            'symbol': selected_symbol,
+            'incomeStatement.netIncome': {'$gt': 0}
+        }
+    ).sort([('fiscalYear', -1), ('fiscalPeriod', -1)]).limit(12))
+    
+    if not financial_reports:
+        st.warning(f"沒有找到 {selected_symbol} 的財報數據")
+        return
+    
+    st.success(f"找到 {len(financial_reports)} 期財報數據")
+    
+    # 創建財報摘要表
+    report_data = []
+    for report in financial_reports:
+        fiscal_year = report.get('fiscalYear', '')
+        fiscal_period = report.get('fiscalPeriod', '')
+        income = report.get('incomeStatement', {})
+        balance = report.get('balanceSheet', {})
+        cash_flow = report.get('cashFlow', {})
+        
+        report_data.append({
+            '期間': f"{fiscal_year} {fiscal_period}",
+            '營收': to_float(income.get('revenue')),
+            '毛利': to_float(income.get('grossProfit')),
+            '營業利益': to_float(income.get('operatingIncome')),
+            '淨利': to_float(income.get('netIncome')),
+            '總資產': to_float(balance.get('totalAssets')),
+            '股東權益': to_float(balance.get('equity')),
+            '總負債': to_float(balance.get('totalLiabilities')),
+            '營業現金流': to_float(cash_flow.get('operatingCashFlow')) if cash_flow else None
+        })
+    
+    df = pd.DataFrame(report_data)
+    
+    # Tab 分頁
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 關鍵指標",
+        "💰 損益表",
+        "📈 資產負債表",
+        "💵 現金流量表",
+        "📋 財務比率"
+    ])
+    
+    # Tab 1: 關鍵指標
+    with tab1:
+        st.subheader("關鍵財務指標趨勢")
+        
+        # 最新一期數據
+        latest = df.iloc[0]
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "營收（億）",
+                format_amount(latest['營收']),
+                f"{((df.iloc[0]['營收'] / df.iloc[1]['營收'] - 1) * 100):.1f}%" if len(df) > 1 and df.iloc[1]['營收'] else None
+            )
+        
+        with col2:
+            st.metric(
+                "淨利（億）",
+                format_amount(latest['淨利']),
+                f"{((df.iloc[0]['淨利'] / df.iloc[1]['淨利'] - 1) * 100):.1f}%" if len(df) > 1 and df.iloc[1]['淨利'] else None
+            )
+        
+        with col3:
+            net_margin = (latest['淨利'] / latest['營收'] * 100) if latest['營收'] else 0
+            st.metric(
+                "淨利率",
+                f"{net_margin:.2f}%"
+            )
+        
+        with col4:
+            # ROE
+            financial_report = financial_reports[0]
+            roe = None
+            if 'financialRatios' in financial_report:
+                roe = to_float(financial_report['financialRatios'].get('roe'))
+            if roe is None and latest['淨利'] and latest['股東權益']:
+                roe = (latest['淨利'] / latest['股東權益']) * 100
+            
+            st.metric(
+                "ROE",
+                f"{roe:.2f}%" if roe else "N/A"
+            )
+        
+        # 營收與淨利趨勢圖
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=('營收趨勢（億元）', '淨利趨勢（億元）'),
+            vertical_spacing=0.15
+        )
+        
+        # 營收
+        fig.add_trace(
+            go.Bar(
+                x=df['期間'][::-1],
+                y=[to_float(x) / 1e8 if pd.notna(x) else 0 for x in df['營收'][::-1]],
+                name='營收',
+                marker_color='lightblue'
+            ),
+            row=1, col=1
+        )
+        
+        # 淨利
+        fig.add_trace(
+            go.Bar(
+                x=df['期間'][::-1],
+                y=[to_float(x) / 1e8 if pd.notna(x) else 0 for x in df['淨利'][::-1]],
+                name='淨利',
+                marker_color='lightgreen'
+            ),
+            row=2, col=1
+        )
+        
+        fig.update_layout(
+            height=600,
+            showlegend=False,
+            hovermode='x unified'
+        )
+        
+        fig.update_yaxes(title_text="金額（億元）", row=1, col=1)
+        fig.update_yaxes(title_text="金額（億元）", row=2, col=1)
+        
+        st.plotly_chart(fig, width="stretch")
+    
+    # Tab 2: 損益表
+    with tab2:
+        st.subheader("損益表（單位：億元）")
+        
+        income_df = df[['期間', '營收', '毛利', '營業利益', '淨利']].copy()
+        
+        # 計算利潤率（用於繪圖）
+        profit_margins = pd.DataFrame({
+            '期間': income_df['期間'],
+            '毛利率%': (income_df['毛利'] / income_df['營收'] * 100).round(2),
+            '營業利益率%': (income_df['營業利益'] / income_df['營收'] * 100).round(2),
+            '淨利率%': (income_df['淨利'] / income_df['營收'] * 100).round(2)
+        })
+        
+        # 添加利潤率到顯示表格
+        income_df['毛利率%'] = profit_margins['毛利率%']
+        income_df['營業利益率%'] = profit_margins['營業利益率%']
+        income_df['淨利率%'] = profit_margins['淨利率%']
+        
+        # 轉換為億元（格式化為字符串顯示）
+        for col in ['營收', '毛利', '營業利益', '淨利']:
+            income_df[col] = income_df[col].apply(lambda x: format_amount_str(x, '億') if pd.notna(x) else 'N/A')
+        
+        st.dataframe(income_df, width="stretch", hide_index=True)
+        
+        # 利潤率趨勢圖
+        st.markdown("### 利潤率趨勢")
+        
+        fig = go.Figure()
+        
+        colors = ['blue', 'green', 'orange']
+        for i, col in enumerate(['毛利率%', '營業利益率%', '淨利率%']):
+            fig.add_trace(go.Scatter(
+                x=profit_margins['期間'][::-1],
+                y=profit_margins[col][::-1],
+                mode='lines+markers',
+                name=col,
+                line=dict(width=2, color=colors[i])
+            ))
+        
+        fig.update_layout(
+            title='利潤率趨勢',
+            xaxis_title='期間',
+            yaxis_title='利潤率 (%)',
+            height=400,
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig, width="stretch")
+        
+        # 下載按鈕
+        csv = income_df.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 下載損益表 CSV",
+            data=csv,
+            file_name=f"income_statement_{selected_symbol}_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+    
+    # Tab 3: 資產負債表
+    with tab3:
+        st.subheader("資產負債表（單位：億元）")
+        
+        balance_df = df[['期間', '總資產', '股東權益', '總負債']].copy()
+        
+        # 計算負債比率
+        balance_df['負債比率%'] = (balance_df['總負債'] / balance_df['總資產'] * 100).round(2)
+        balance_df['股東權益比率%'] = (balance_df['股東權益'] / balance_df['總資產'] * 100).round(2)
+        
+        # 轉換為億元（格式化為字符串）
+        for col in ['總資產', '股東權益', '總負債']:
+            balance_df[col] = balance_df[col].apply(lambda x: format_amount_str(x, '億') if pd.notna(x) else 'N/A')
+        
+        st.dataframe(balance_df, width="stretch", hide_index=True)
+        
+        # 資產負債結構圖
+        st.markdown("### 資產負債結構")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 最新一期的資產負債結構
+            latest_balance = df.iloc[0]
+            
+            fig = go.Figure(data=[go.Pie(
+                labels=['股東權益', '總負債'],
+                values=[
+                    to_float(latest_balance['股東權益']),
+                    to_float(latest_balance['總負債'])
+                ],
+                hole=.4
+            )])
+            
+            fig.update_layout(
+                title=f"資產結構 - {latest['期間']}",
+                height=400
+            )
+            
+            st.plotly_chart(fig, width="stretch")
+        
+        with col2:
+            # 資產趨勢
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                x=df['期間'][::-1],
+                y=[to_float(x) / 1e8 if pd.notna(x) else 0 for x in df['股東權益'][::-1]],
+                name='股東權益',
+                marker_color='lightgreen'
+            ))
+            
+            fig.add_trace(go.Bar(
+                x=df['期間'][::-1],
+                y=[to_float(x) / 1e8 if pd.notna(x) else 0 for x in df['總負債'][::-1]],
+                name='總負債',
+                marker_color='lightcoral'
+            ))
+            
+            fig.update_layout(
+                title='資產負債趨勢',
+                barmode='stack',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig, width="stretch")
+    
+    # Tab 4: 現金流量表
+    with tab4:
+        st.subheader("現金流量表（單位：億元）")
+        
+        if df['營業現金流'].notna().any():
+            # 準備現金流量數據
+            cash_df = df[['期間', '營業現金流', '淨利']].copy()
+            
+            # 創建用於繪圖的數值型數據（避免格式化後無法繪圖）
+            cash_flow_data = pd.DataFrame({
+                '期間': cash_df['期間'],
+                '營業現金流': cash_df['營業現金流'],
+                '淨利': cash_df['淨利']
+            })
+            
+            # 計算現金流量比率（處理除以0或負數的情況）
+            def calc_cash_flow_ratio(ocf, ni):
+                """計算現金流量比率，處理異常情況"""
+                if pd.isna(ocf) or pd.isna(ni):
+                    return None
+                if ni == 0:
+                    return None  # 淨利為0不計算
+                if ni < 0:
+                    return None  # 淨利為負不計算（異常情況）
+                return round(ocf / ni * 100, 2)
+            
+            cash_flow_data['現金流量比率%'] = cash_flow_data.apply(
+                lambda row: calc_cash_flow_ratio(row['營業現金流'], row['淨利']), 
+                axis=1
+            )
+            
+            # 添加現金流量比率到顯示表格
+            cash_df['現金流量比率%'] = cash_flow_data['現金流量比率%']
+            
+            # 轉換為億元（格式化為字符串顯示）
+            for col in ['營業現金流', '淨利']:
+                cash_df[col] = cash_df[col].apply(lambda x: format_amount_str(x, '億') if pd.notna(x) else 'N/A')
+            
+            st.dataframe(cash_df, width="stretch", hide_index=True)
+            
+            # 現金流量趨勢圖
+            st.markdown("### 營業現金流 vs 淨利")
+            
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                x=cash_flow_data['期間'][::-1],
+                y=[to_float(x) / 1e8 if pd.notna(x) else 0 for x in cash_flow_data['營業現金流'][::-1]],
+                name='營業現金流',
+                marker_color='lightblue'
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=cash_flow_data['期間'][::-1],
+                y=[to_float(x) / 1e8 if pd.notna(x) else 0 for x in cash_flow_data['淨利'][::-1]],
+                name='淨利',
+                mode='lines+markers',
+                line=dict(color='red', width=2)
+            ))
+            
+            fig.update_layout(
+                title='營業現金流 vs 淨利',
+                xaxis_title='期間',
+                yaxis_title='金額（億元）',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig, width="stretch")
+            
+            # 解讀
+            st.info("""
+            **現金流量解讀：**
+            - 現金流量比率 > 100%：公司賺的錢都有現金進帳，財務品質佳
+            - 現金流量比率 < 100%：盈餘品質較差，應收帳款或存貨增加
+            - 持續負現金流：可能面臨資金壓力
+            """)
+        else:
+            st.warning("此股票沒有現金流量數據")
+    
+    # Tab 5: 財務比率
+    with tab5:
+        st.subheader("財務比率分析")
+        
+        # 計算各種財務比率
+        ratios_data = []
+        
+        for i, report in enumerate(financial_reports):
+            fiscal_year = report.get('fiscalYear', '')
+            fiscal_period = report.get('fiscalPeriod', '')
+            
+            # 從財報中獲取比率
+            ratios = report.get('financialRatios', {})
+            income = report.get('incomeStatement', {})
+            balance = report.get('balanceSheet', {})
+            
+            # 計算基本比率
+            revenue = to_float(income.get('revenue'))
+            net_income = to_float(income.get('netIncome'))
+            total_assets = to_float(balance.get('totalAssets'))
+            equity = to_float(balance.get('equity'))
+            total_liabilities = to_float(balance.get('totalLiabilities'))
+            current_assets = to_float(balance.get('currentAssets'))
+            current_liabilities = to_float(balance.get('currentLiabilities'))
+            
+            ratios_data.append({
+                '期間': f"{fiscal_year} {fiscal_period}",
+                'ROE (%)': to_float(ratios.get('roe')) if ratios.get('roe') else 
+                          ((net_income / equity * 100) if equity and net_income else None),
+                'ROA (%)': to_float(ratios.get('roa')) if ratios.get('roa') else
+                          ((net_income / total_assets * 100) if total_assets and net_income else None),
+                '淨利率 (%)': (net_income / revenue * 100) if revenue and net_income else None,
+                '負債比率 (%)': (total_liabilities / total_assets * 100) if total_assets and total_liabilities else None,
+                '流動比率 (%)': (current_assets / current_liabilities * 100) if current_liabilities and current_assets else None
+            })
+        
+        ratios_df = pd.DataFrame(ratios_data)
+        
+        # 格式化數值
+        for col in ratios_df.columns:
+            if col != '期間':
+                ratios_df[col] = ratios_df[col].apply(lambda x: f"{x:.2f}" if pd.notna(x) else 'N/A')
+        
+        st.dataframe(ratios_df, width="stretch", hide_index=True)
+        
+        # 財務比率趨勢圖
+        st.markdown("### 財務比率趨勢")
+        
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=('ROE 趨勢', 'ROA 趨勢', '淨利率趨勢', '負債比率趨勢'),
+            vertical_spacing=0.15,
+            horizontal_spacing=0.1
+        )
+        
+        # ROE
+        roe_values = [float(x) if x != 'N/A' else None for x in ratios_df['ROE (%)']]
+        fig.add_trace(
+            go.Scatter(x=ratios_df['期間'][::-1], y=roe_values[::-1], mode='lines+markers', name='ROE'),
+            row=1, col=1
+        )
+        
+        # ROA
+        roa_values = [float(x) if x != 'N/A' else None for x in ratios_df['ROA (%)']]
+        fig.add_trace(
+            go.Scatter(x=ratios_df['期間'][::-1], y=roa_values[::-1], mode='lines+markers', name='ROA'),
+            row=1, col=2
+        )
+        
+        # 淨利率
+        npm_values = [float(x) if x != 'N/A' else None for x in ratios_df['淨利率 (%)']]
+        fig.add_trace(
+            go.Scatter(x=ratios_df['期間'][::-1], y=npm_values[::-1], mode='lines+markers', name='淨利率'),
+            row=2, col=1
+        )
+        
+        # 負債比率
+        debt_values = [float(x) if x != 'N/A' else None for x in ratios_df['負債比率 (%)']]
+        fig.add_trace(
+            go.Scatter(x=ratios_df['期間'][::-1], y=debt_values[::-1], mode='lines+markers', name='負債比率'),
+            row=2, col=2
+        )
+        
+        fig.update_layout(
+            height=700,
+            showlegend=False,
+            hovermode='x unified'
+        )
+        
+        fig.update_yaxes(title_text="%", row=1, col=1)
+        fig.update_yaxes(title_text="%", row=1, col=2)
+        fig.update_yaxes(title_text="%", row=2, col=1)
+        fig.update_yaxes(title_text="%", row=2, col=2)
+        
+        st.plotly_chart(fig, width="stretch")
+        
+        # 財務比率解讀
+        st.markdown("### 財務比率參考標準")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **獲利能力指標：**
+            - ROE > 15%：獲利能力佳
+            - ROA > 5%：資產運用效率好
+            - 淨利率 > 10%：營運效率高
+            """)
+        
+        with col2:
+            st.markdown("""
+            **財務結構指標：**
+            - 負債比率 < 50%：財務結構健全
+            - 流動比率 > 200%：短期償債能力強
+            - 流動比率 < 100%：可能有週轉壓力
+            """)
+
+if __name__ == '__main__':
+    show()

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.twstock.api_server</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ming/Stock/.venv/bin/python3</string>
+        <string>/Users/ming/Stock/tw-stock-analysis/src/api/server.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/ming/Stock/tw-stock-analysis</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/api_server.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/api_server_err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/ming/Stock/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>/Users/ming</string>
+    </dict>
+</dict>
+</plist>

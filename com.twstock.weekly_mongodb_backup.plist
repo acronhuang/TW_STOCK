@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 服務標識符 -->
+    <key>Label</key>
+    <string>com.twstock.weekly_mongodb_backup</string>
+    
+    <!-- 程式路徑和參數 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/ming/Stock/tw-stock-analysis/backup_mongodb.sh</string>
+    </array>
+    
+    <!-- 工作目錄 -->
+    <key>WorkingDirectory</key>
+    <string>/Users/ming/Stock/tw-stock-analysis</string>
+    
+    <!-- 執行時間：每週日凌晨 1:00 (在其他任務之前) -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>1</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    
+    <!-- 標準輸出日誌 -->
+    <key>StandardOutPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/mongodb_backup.log</string>
+    
+    <!-- 錯誤輸出日誌 -->
+    <key>StandardErrorPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/mongodb_backup_error.log</string>
+    
+    <!-- 環境變數 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
+    </dict>
+    
+    <!-- 如果失敗，不要自動重啟 -->
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <!-- 保持服務活躍 -->
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>

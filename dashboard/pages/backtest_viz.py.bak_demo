@@ -1,0 +1,322 @@
+"""
+回測結果視覺化頁面
+"""
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from pathlib import Path
+import sys
+
+# 添加專案根目錄到路徑
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+
+def show():
+    st.title("📈 回測結果視覺化")
+    
+    # 檢查結果文件
+    charts_dir = project_root / 'charts'
+    
+    # 可用的回測結果
+    available_results = {
+        '均線交叉策略': {
+            'equity': charts_dir / 'backtest_results.csv',
+            'trades': None,
+            'metrics': {
+                '年化報酬': '8.06%',
+                '夏普比率': '1.282',
+                '最大回撤': '-3.99%',
+                '勝率': '77.78%',
+                '獲利因子': '7.014',
+                '總交易次數': '9',
+                '評級': '⭐⭐⭐⭐ 穩健'
+            }
+        },
+        '動能選股策略': {
+            'equity': charts_dir / 'momentum_equity.csv',
+            'trades': charts_dir / 'momentum_trades.csv',
+            'metrics': {
+                '年化報酬': '27.34%',
+                '夏普比率': '1.657',
+                '最大回撤': '-13.82%',
+                '勝率': '50.00%',
+                '獲利因子': '100.667',
+                '總交易次數': '9',
+                '評級': '⭐⭐⭐⭐⭐ 優秀'
+            }
+        }
+    }
+    
+    # 策略選擇
+    selected_strategy = st.selectbox(
+        "選擇策略",
+        options=list(available_results.keys())
+    )
+    
+    strategy_data = available_results[selected_strategy]
+    
+    # 顯示績效指標卡片
+    st.markdown("### 🎯 績效指標")
+    
+    metrics = strategy_data['metrics']
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("年化報酬", metrics['年化報酬'])
+        st.metric("夏普比率", metrics['夏普比率'])
+    
+    with col2:
+        st.metric("最大回撤", metrics['最大回撤'])
+        st.metric("勝率", metrics['勝率'])
+    
+    with col3:
+        st.metric("獲利因子", metrics['獲利因子'])
+        st.metric("總交易次數", metrics['總交易次數'])
+    
+    with col4:
+        st.markdown("**策略評級**")
+        st.markdown(f"# {metrics['評級']}")
+    
+    # 載入權益曲線數據
+    if strategy_data['equity'].exists():
+        equity_df = pd.read_csv(strategy_data['equity'])
+        
+        # 轉換日期
+        if 'date' in equity_df.columns:
+            equity_df['date'] = pd.to_datetime(equity_df['date'])
+        
+        # 權益曲線圖
+        st.markdown("### 📊 權益曲線")
+        
+        fig = go.Figure()
+        
+        # 權益曲線
+        fig.add_trace(go.Scatter(
+            x=equity_df['date'],
+            y=equity_df['equity'],
+            mode='lines',
+            name='策略權益',
+            line=dict(color='blue', width=2)
+        ))
+        
+        # 初始資金線
+        initial_cash = equity_df['equity'].iloc[0]
+        fig.add_hline(
+            y=initial_cash,
+            line_dash="dash",
+            line_color="gray",
+            annotation_text=f"初始資金: ${initial_cash:,.0f}",
+            annotation_position="right"
+        )
+        
+        # 計算回撤
+        cummax = equity_df['equity'].cummax()
+        drawdown = (equity_df['equity'] - cummax) / cummax * 100
+        
+        fig.update_layout(
+            title=f'{selected_strategy} - 權益曲線',
+            xaxis_title='日期',
+            yaxis_title='權益 ($)',
+            height=500,
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig, width="stretch")
+        
+        # 回撤圖
+        st.markdown("### 📉 回撤分析")
+        
+        fig_dd = go.Figure()
+        
+        fig_dd.add_trace(go.Scatter(
+            x=equity_df['date'],
+            y=drawdown,
+            mode='lines',
+            fill='tozeroy',
+            name='回撤',
+            line=dict(color='red', width=2),
+            fillcolor='rgba(255, 0, 0, 0.2)'
+        ))
+        
+        fig_dd.add_hline(
+            y=float(metrics['最大回撤'].replace('%', '')),
+            line_dash="dash",
+            line_color="darkred",
+            annotation_text=f"最大回撤: {metrics['最大回撤']}",
+            annotation_position="right"
+        )
+        
+        fig_dd.update_layout(
+            title='回撤走勢',
+            xaxis_title='日期',
+            yaxis_title='回撤 (%)',
+            height=400,
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig_dd, width="stretch")
+        
+        # 報酬分佈
+        st.markdown("### 📊 報酬分佈")
+        
+        # 計算日報酬
+        equity_df['daily_return'] = equity_df['equity'].pct_change() * 100
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 日報酬直方圖
+            fig_hist = go.Figure()
+            
+            fig_hist.add_trace(go.Histogram(
+                x=equity_df['daily_return'].dropna(),
+                nbinsx=50,
+                name='日報酬',
+                marker_color='lightblue'
+            ))
+            
+            fig_hist.update_layout(
+                title='日報酬分佈',
+                xaxis_title='日報酬 (%)',
+                yaxis_title='頻率',
+                height=400
+            )
+            
+            st.plotly_chart(fig_hist, width="stretch")
+        
+        with col2:
+            # 報酬統計
+            st.markdown("#### 報酬統計")
+            
+            returns_stats = {
+                '平均日報酬': f"{equity_df['daily_return'].mean():.3f}%",
+                '標準差': f"{equity_df['daily_return'].std():.3f}%",
+                '最大單日漲幅': f"{equity_df['daily_return'].max():.3f}%",
+                '最大單日跌幅': f"{equity_df['daily_return'].min():.3f}%",
+                '正報酬天數': f"{(equity_df['daily_return'] > 0).sum()}",
+                '負報酬天數': f"{(equity_df['daily_return'] < 0).sum()}"
+            }
+            
+            for key, value in returns_stats.items():
+                st.metric(key, value)
+    
+    # 交易記錄
+    if strategy_data['trades'] and strategy_data['trades'].exists():
+        st.markdown("### 📝 交易記錄")
+        
+        trades_df = pd.read_csv(strategy_data['trades'])
+        
+        # 轉換日期
+        if 'date' in trades_df.columns:
+            trades_df['date'] = pd.to_datetime(trades_df['date'])
+            trades_df['date'] = trades_df['date'].dt.strftime('%Y-%m-%d')
+        
+        # 格式化數字
+        if 'price' in trades_df.columns:
+            trades_df['price'] = trades_df['price'].apply(lambda x: f"${x:.2f}")
+        if 'commission' in trades_df.columns:
+            trades_df['commission'] = trades_df['commission'].apply(lambda x: f"${x:.2f}")
+        
+        # 顯示表格
+        st.dataframe(trades_df, width="stretch")
+        
+        # 下載按鈕
+        csv = trades_df.to_csv(index=False)
+        st.download_button(
+            label="📥 下載交易記錄",
+            data=csv,
+            file_name=f"{selected_strategy}_trades.csv",
+            mime="text/csv"
+        )
+    
+    # 策略比較
+    st.markdown("### ⚖️ 策略對比")
+    
+    comparison_df = pd.DataFrame([
+        {
+            '策略': '均線交叉',
+            '年化報酬': '8.06%',
+            '夏普比率': 1.282,
+            '最大回撤': '-3.99%',
+            '勝率': '77.78%',
+            '波動率': '5.50%',
+            '風險等級': '低',
+            '適合': '穩健型'
+        },
+        {
+            '策略': '動能選股',
+            '年化報酬': '27.34%',
+            '夏普比率': 1.657,
+            '最大回撤': '-13.82%',
+            '勝率': '50.00%',
+            '波動率': '15.90%',
+            '風險等級': '中',
+            '適合': '積極型'
+        }
+    ])
+    
+    st.dataframe(comparison_df, width="stretch")
+    
+    # 績效解讀
+    st.markdown("### 💡 指標解讀")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        **夏普比率 (Sharpe Ratio)**
+        - > 2.0: 卓越
+        - 1.5 - 2.0: 優秀 ✅ (動能策略)
+        - 1.0 - 1.5: 良好 ✅ (均線策略)
+        - 0.5 - 1.0: 尚可
+        - < 0.5: 不佳
+        
+        **最大回撤 (Max Drawdown)**
+        - < 10%: 優秀 ✅ (均線策略)
+        - 10-20%: 良好 ✅ (動能策略)
+        - 20-30%: 尚可
+        - > 30%: 高風險
+        """)
+    
+    with col2:
+        st.markdown("""
+        **勝率 (Win Rate)**
+        - > 60%: 優秀 ✅ (均線策略)
+        - 50-60%: 良好
+        - 40-50%: 尚可 ⚠️ (動能策略)
+        - < 40%: 不佳
+        
+        **獲利因子 (Profit Factor)**
+        - > 2.0: 優秀 ✅ (兩策略皆達標)
+        - 1.5 - 2.0: 良好
+        - 1.0 - 1.5: 勉強可行
+        - < 1.0: 虧損策略
+        """)
+    
+    # 建議
+    st.markdown("### 🎯 投資建議")
+    
+    if selected_strategy == '均線交叉策略':
+        st.success("""
+        **均線交叉策略** 適合穩健型投資者：
+        - ✅ 風險控制優秀（最大回撤僅 3.99%）
+        - ✅ 勝率高（77.78%），交易成功率佳
+        - ✅ 波動率低（5.50%），適合長期持有
+        - ⚠️ 報酬率相對保守（8.06%）
+        
+        **建議**: 適合退休人士、保守型投資者，追求穩定報酬。
+        """)
+    else:
+        st.success("""
+        **動能選股策略** 適合積極型投資者：
+        - ✅ 高報酬潛力（年化 27.34%）
+        - ✅ 優秀的風險調整報酬（夏普比率 1.657）
+        - ✅ 能捕捉強勢股爆發行情
+        - ⚠️ 回撤較大（-13.82%），需承受波動
+        - ⚠️ 勝率 50%，需要耐心
+        
+        **建議**: 適合年輕投資者、能承受波動的積極型投資者。
+        """)

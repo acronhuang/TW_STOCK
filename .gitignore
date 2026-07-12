@@ -1,0 +1,53 @@
+# 不要提交的檔案
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+
+# 日誌
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 作業系統
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 測試覆蓋率
+coverage/
+.nyc_output/
+.pytest_cache/
+htmlcov/
+
+# 暫存檔
+*.tmp
+*.temp
+.cache/
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# ── Python（Mac→Linux 遷移後補齊）──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ── 生成產物（可重算，不入版控）──
+results/
+charts/
+reports/
+*.pid
+server.pid

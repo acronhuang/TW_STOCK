@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <link rel="stylesheet" href="/public/css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/view" class="logo">📊 台股智能分析系統</a>
+        <nav class="nav">
+          <a href="/view">首頁</a>
+          <a href="/view/financial/{{symbol}}">財報分析</a>
+          <a href="/view/dupont/{{symbol}}">杜邦分析</a>
+          <a href="/view/chart/{{symbol}}">股價走勢</a>
+          <a href="/view/dashboard/{{symbol}}">綜合儀表板</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    {{#if error}}
+    <!-- Error Message -->
+    <div class="alert alert-error" style="margin-top: 2rem;">
+      <strong>❌ 錯誤：</strong> {{error}}
+    </div>
+    <p style="margin-top: 1rem;">
+      <a href="/view" class="btn btn-primary">返回首頁</a>
+    </p>
+    {{else}}
+    
+    <!-- Company Info -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <h1 style="color: #1e293b; margin-bottom: 0.5rem;">
+          📈 {{companyName}} ({{symbol}}) - 股價走勢
+        </h1>
+        <p style="color: #64748b;">
+          顯示最近 {{days}} 個交易日 | 
+          資料來源：TWSE | 
+          更新時間：{{latest.date}}
+        </p>
+      </div>
+    </section>
+
+    <!-- 最新股價資訊 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">💹 最新股價資訊</h2>
+          <span class="badge {{#if (gt latest.change 0)}}badge-success{{else if (lt latest.change 0)}}badge-danger{{else}}badge-info{{/if}}">
+            {{latest.date}}
+          </span>
+        </div>
+        <div class="grid grid-3" style="grid-template-columns: repeat(5, 1fr);">
+          <div class="stat-box">
+            <div class="stat-value {{#if (gt latest.change 0)}}positive{{else if (lt latest.change 0)}}negative{{/if}}" style="font-size: 2.5rem;">
+              {{latest.closePrice}}
+            </div>
+            <div class="stat-label">收盤價</div>
+            <div style="margin-top: 0.5rem; font-size: 0.875rem; font-weight: 600; color: {{#if (gt latest.change 0)}}#10b981{{else if (lt latest.change 0)}}#ef4444{{else}}#64748b{{/if}};">
+              {{#if (gt latest.change 0)}}▲{{else if (lt latest.change 0)}}▼{{/if}} 
+              {{latest.change}} ({{latest.changePercent}}%)
+            </div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-value">{{latest.openPrice}}</div>
+            <div class="stat-label">開盤價</div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-value positive">{{latest.highPrice}}</div>
+            <div class="stat-label">最高價</div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-value negative">{{latest.lowPrice}}</div>
+            <div class="stat-label">最低價</div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-value">{{formatNumber latest.volume}}</div>
+            <div class="stat-label">成交量（張）</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- K 線圖 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📊 股價 K 線圖（{{days}} 日）</h2>
+          <div style="display: flex; gap: 0.5rem;">
+            <a href="/view/chart/{{symbol}}?days=30" class="btn {{#if (eq days 30)}}btn-primary{{else}}badge badge-info{{/if}}" style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">
+              30日
+            </a>
+            <a href="/view/chart/{{symbol}}?days=60" class="btn {{#if (eq days 60)}}btn-primary{{else}}badge badge-info{{/if}}" style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">
+              60日
+            </a>
+            <a href="/view/chart/{{symbol}}?days=90" class="btn {{#if (eq days 90)}}btn-primary{{else}}badge badge-info{{/if}}" style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">
+              90日
+            </a>
+            <a href="/view/chart/{{symbol}}?days=180" class="btn {{#if (eq days 180)}}btn-primary{{else}}badge badge-info{{/if}}" style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">
+              180日
+            </a>
+          </div>
+        </div>
+        <div class="chart-container" style="height: 500px;">
+          <canvas id="candlestickChart"></canvas>
+        </div>
+        <div style="margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 0.5rem; display: flex; gap: 2rem; font-size: 0.875rem;">
+          <div><span style="color: #10b981;">▮</span> <strong>綠色</strong>：上漲（收盤 > 開盤）</div>
+          <div><span style="color: #ef4444;">▮</span> <strong>紅色</strong>：下跌（收盤 < 開盤）</div>
+          <div><span style="color: #64748b;">▮</span> <strong>灰色</strong>：平盤（收盤 = 開盤）</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 成交量圖 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📊 成交量趨勢</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="volumeChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- 價格區間統計 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📊 價格區間統計（{{days}} 日）</h2>
+        </div>
+        <div class="grid grid-3" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="stat-box">
+            <div class="stat-value positive" id="periodHigh">-</div>
+            <div class="stat-label">區間最高</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value negative" id="periodLow">-</div>
+            <div class="stat-label">區間最低</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="avgPrice">-</div>
+            <div class="stat-label">平均收盤</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="avgVolume">-</div>
+            <div class="stat-label">平均量（張）</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 歷史數據表格 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📋 歷史數據明細（最近 20 日）</h2>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th class="text-right">開盤</th>
+                <th class="text-right">最高</th>
+                <th class="text-right">最低</th>
+                <th class="text-right">收盤</th>
+                <th class="text-right">漲跌</th>
+                <th class="text-right">成交量（張）</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each history}}
+                {{#if (lt @index 20)}}
+                <tr>
+                  <td>{{this.date}}</td>
+                  <td class="text-right">{{this.openPrice}}</td>
+                  <td class="text-right positive">{{this.highPrice}}</td>
+                  <td class="text-right negative">{{this.lowPrice}}</td>
+                  <td class="text-right fw-bold">{{this.closePrice}}</td>
+                  <td class="text-right {{#if (gt this.change 0)}}positive{{else if (lt this.change 0)}}negative{{/if}}">
+                    {{#if (gt this.change 0)}}▲{{else if (lt this.change 0)}}▼{{/if}} 
+                    {{this.change}} ({{this.changePercent}}%)
+                  </td>
+                  <td class="text-right">{{formatNumber this.volume}}</td>
+                </tr>
+                {{/if}}
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    {{/if}}
+  </main>
+
+  <!-- Footer -->
+  <footer style="background: white; border-top: 1px solid #e2e8f0; padding: 2rem 0; margin-top: 4rem; text-align: center; color: #64748b; font-size: 0.875rem;">
+    <div class="container">
+      <p>台股智能分析系統 v2.1.0 | ⚠️ 本系統僅供學習研究使用</p>
+    </div>
+  </footer>
+
+  <script>
+    {{#unless error}}
+    // 準備數據
+    const historyData = {{{json history}}};
+    const dates = historyData.map(d => d.date).reverse();
+    const volumes = historyData.map(d => d.volume).reverse();
+    const closePrices = historyData.map(d => d.closePrice).reverse();
+    const openPrices = historyData.map(d => d.openPrice).reverse();
+    const highPrices = historyData.map(d => d.highPrice).reverse();
+    const lowPrices = historyData.map(d => d.lowPrice).reverse();
+
+    // 計算統計數據
+    const periodHigh = Math.max(...highPrices);
+    const periodLow = Math.min(...lowPrices);
+    const avgPrice = (closePrices.reduce((a, b) => a + b, 0) / closePrices.length).toFixed(2);
+    const avgVolume = Math.round(volumes.reduce((a, b) => a + b, 0) / volumes.length);
+
+    document.getElementById('periodHigh').textContent = periodHigh.toFixed(2);
+    document.getElementById('periodLow').textContent = periodLow.toFixed(2);
+    document.getElementById('avgPrice').textContent = avgPrice;
+    document.getElementById('avgVolume').textContent = avgVolume.toLocaleString();
+
+    // K 線圖（使用柱狀圖模擬）
+    const candleData = dates.map((date, i) => {
+      const open = openPrices[i];
+      const close = closePrices[i];
+      const high = highPrices[i];
+      const low = lowPrices[i];
+      const isUp = close >= open;
+      
+      return {
+        x: date,
+        y: [low, open, close, high],
+        color: isUp ? '#10b981' : '#ef4444'
+      };
+    });
+
+    // 簡化版 K 線圖（使用折線圖加上高低點標記）
+    new Chart(document.getElementById('candlestickChart'), {
+      type: 'line',
+      data: {
+        labels: dates,
+        datasets: [
+          {
+            label: '收盤價',
+            data: closePrices,
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+            borderWidth: 2,
+            tension: 0.1,
+            fill: true,
+            pointRadius: 3,
+            pointHoverRadius: 5
+          },
+          {
+            label: '最高價',
+            data: highPrices,
+            borderColor: '#10b981',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 0
+          },
+          {
+            label: '最低價',
+            data: lowPrices,
+            borderColor: '#ef4444',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          },
+          tooltip: {
+            callbacks: {
+              title: (items) => items[0].label,
+              label: (context) => {
+                const i = context.dataIndex;
+                return [
+                  `開盤: ${openPrices[i]}`,
+                  `最高: ${highPrices[i]}`,
+                  `最低: ${lowPrices[i]}`,
+                  `收盤: ${closePrices[i]}`,
+                  `量: ${volumes[i].toLocaleString()} 張`
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            title: { display: true, text: '價格 (元)' }
+          }
+        }
+      }
+    });
+
+    // 成交量圖
+    new Chart(document.getElementById('volumeChart'), {
+      type: 'bar',
+      data: {
+        labels: dates,
+        datasets: [{
+          label: '成交量（張）',
+          data: volumes,
+          backgroundColor: volumes.map((v, i) => {
+            if (i === 0) return 'rgba(100, 116, 139, 0.6)';
+            return closePrices[i] >= closePrices[i-1] ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)';
+          }),
+          borderColor: volumes.map((v, i) => {
+            if (i === 0) return 'rgb(100, 116, 139)';
+            return closePrices[i] >= closePrices[i-1] ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
+          }),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => `成交量: ${context.parsed.y.toLocaleString()} 張`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: '成交量（張）' }
+          }
+        }
+      }
+    });
+    {{/unless}}
+  </script>
+</body>
+</html>

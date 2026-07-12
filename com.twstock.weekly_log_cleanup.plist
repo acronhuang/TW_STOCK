@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 服務標識符 -->
+    <key>Label</key>
+    <string>com.twstock.weekly_log_cleanup</string>
+    
+    <!-- 程式路徑和參數 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/find</string>
+        <string>/Users/ming/Stock/tw-stock-analysis/logs</string>
+        <string>-name</string>
+        <string>*.log</string>
+        <string>-mtime</string>
+        <string>+30</string>
+        <string>-delete</string>
+    </array>
+    
+    <!-- 工作目錄 -->
+    <key>WorkingDirectory</key>
+    <string>/Users/ming/Stock/tw-stock-analysis</string>
+    
+    <!-- 執行時間：每週日凌晨 3:00 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    
+    <!-- 標準輸出日誌 -->
+    <key>StandardOutPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_log_cleanup.log</string>
+    
+    <!-- 錯誤輸出日誌 -->
+    <key>StandardErrorPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_log_cleanup_err.log</string>
+    
+    <!-- 失敗後自動重啟 -->
+    <key>KeepAlive</key>
+    <false/>
+    
+    <!-- 執行成功退出後不重啟 -->
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <!-- 使用者權限執行 -->
+    <key>UserName</key>
+    <string>ming</string>
+</dict>
+</plist>

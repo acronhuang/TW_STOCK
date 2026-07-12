@@ -1,0 +1,139 @@
+# ============================================================================
+# 台股資料自動更新 - Crontab 設定範例
+# ============================================================================
+#
+# 使用說明：
+# 1. 編輯 crontab：crontab -e
+# 2. 複製以下設定貼上
+# 3. 修改路徑為您的實際路徑
+# 4. 儲存並退出
+#
+# Crontab 格式說明：
+# ┌─────── 分鐘 (0 - 59)
+# │ ┌───── 小時 (0 - 23)
+# │ │ ┌─── 日期 (1 - 31)
+# │ │ │ ┌─ 月份 (1 - 12)
+# │ │ │ │ ┌ 星期 (0 - 7) (週日=0 或 7)
+# │ │ │ │ │
+# * * * * * 要執行的命令
+#
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# 方案一：每小時自動更新所有資料（推薦）
+# - 時間：每天每小時的第 5 分鐘執行
+# - 下載：技術面、基本面、籌碼面、衍生性商品
+# - 日誌：自動記錄到 logs/hourly_updates/
+# ----------------------------------------------------------------------------
+
+5 * * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /Users/ming/Desktop/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
+
+# ----------------------------------------------------------------------------
+# 方案二：分時段更新（節省 API 配額）
+# - 適合：API 配額有限時使用
+# - 策略：交易時段更頻繁，非交易時段較少
+# ----------------------------------------------------------------------------
+
+# 交易日盤中：每 30 分鐘更新技術面（股價、成交量等即時數據）
+0,30 9-13 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 技術面 --verbose >> logs/intraday_tech.log 2>&1
+
+# 交易日收盤後：更新籌碼面（三大法人、融資融券等）
+0 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 籌碼面 --verbose >> logs/daily_chips.log 2>&1
+
+# 每天晚上：更新基本面（財報、股利等較少變動的數據）
+0 21 * * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 基本面 --verbose >> logs/daily_fundamental.log 2>&1
+
+# 每週一更新衍生性商品（期貨、選擇權）
+0 22 * * 1 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 衍生性商品 --verbose >> logs/weekly_derivatives.log 2>&1
+
+# ----------------------------------------------------------------------------
+# 方案三：流通股數定期更新（配合 P2-B 任務）
+# - 時間：每週日凌晨 2:00
+# - 用途：增量更新缺失的流通股數
+# - 限制：最多執行 3 小時
+# ----------------------------------------------------------------------------
+
+0 2 * * 0 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
+
+# ----------------------------------------------------------------------------
+# 監控與維護
+# ----------------------------------------------------------------------------
+
+# 每天早上 9:00 檢查資料新鮮度
+0 9 * * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 scripts/monitor_data_freshness.py >> logs/monitor.log 2>&1
+
+# 每週日凌晨 3:00 清理超過 30 天的日誌檔
+0 3 * * 0 find /Users/ming/Desktop/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
+
+# 每月 1 號凌晨 4:00 備份 MongoDB 資料庫
+0 4 1 * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && ./backup_mongodb.sh >> logs/backup.log 2>&1
+
+# ============================================================================
+# 查看 Crontab 狀態
+# ============================================================================
+#
+# 列出當前 crontab：
+#   crontab -l
+#
+# 編輯 crontab：
+#   crontab -e
+#
+# 刪除所有 crontab：
+#   crontab -r
+#
+# 查看 cron 日誌（macOS）：
+#   log show --predicate 'process == "cron"' --last 1h
+#
+# 查看 cron 日誌（Linux）：
+#   grep CRON /var/log/syslog
+#
+# ============================================================================
+# 故障排除
+# ============================================================================
+#
+# 問題 1：Crontab 沒有執行
+# 解決：
+#   1. 確認 cron 服務運行中：sudo service cron status (Linux)
+#   2. 檢查權限：chmod +x scripts/*.sh
+#   3. 使用絕對路徑，避免相對路徑問題
+#   4. 確認 PATH 環境變數包含 python3
+#
+# 問題 2：Python 找不到
+# 解決：在 crontab 開頭加上：
+#   PATH=/usr/local/bin:/usr/bin:/bin
+#   或使用完整路徑：/usr/local/bin/python3
+#
+# 問題 3：環境變數未載入
+# 解決：
+#   1. 在腳本內明確設定環境變數
+#   2. 或在 crontab 開頭加上：
+#      SHELL=/bin/bash
+#      FINMIND_API_TOKEN=your_token_here
+#
+# 問題 4：日誌檔案沒有產生
+# 解決：
+#   1. 確認日誌目錄存在：mkdir -p logs/hourly_updates
+#   2. 確認寫入權限：chmod 755 logs/
+#   3. 手動執行測試：./scripts/hourly_data_update.sh
+#
+# ============================================================================
+# 效能調校建議
+# ============================================================================
+#
+# 1. API 配額管理（免費版每小時 600 次）：
+#    - 技術面資料表：約 10-15 個 (每個表約 3000 筆 = 10-15 次 API)
+#    - 基本面資料表：約 10 個
+#    - 籌碼面資料表：約 10 個
+#    - 衍生性商品：約 8 個
+#    總計：約 40-50 次 API 調用 / 次完整更新
+#
+# 2. 建議執行頻率：
+#    - 高頻資料（股價）：每 30 分鐘
+#    - 中頻資料（籌碼）：每天 1 次
+#    - 低頻資料（基本面）：每週 1-2 次
+#
+# 3. 尖峰時段避開：
+#    - 避免在 9:00-13:30（交易時段）進行大量更新
+#    - 建議在 14:00-次日 8:00 執行完整更新
+#
+# ============================================================================

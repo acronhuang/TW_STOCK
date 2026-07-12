@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-02-17T17:04:48.598816",
+  "background_download": "running",
+  "analysis": {
+    "empty_collections": 0,
+    "test_collections": 1,
+    "missing_indexes": 8
+  },
+  "actions": {
+    "indexes_created": 8,
+    "errors": 0
+  },
+  "recommendations": [
+    {
+      "type": "review_test_data",
+      "collections": [
+        "financial_statements"
+      ],
+      "action": "需人工審查，建議保留"
+    },
+    {
+      "type": "keep_tickers",
+      "reason": "NestJS API 專用，與 Python 腳本分離",
+      "action": "保持現狀"
+    },
+    {
+      "type": "unify_sources",
+      "reason": "避免多數據源各自建立集合",
+      "action": "未來新數據源統一使用現有集合結構"
+    }
+  ]
+}

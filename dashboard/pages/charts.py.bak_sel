@@ -1,0 +1,440 @@
+"""
+K線圖與技術指標頁面
+"""
+import streamlit as st
+from pymongo import MongoClient
+from datetime import datetime, timedelta
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import numpy as np
+
+
+def calculate_ma(df, window):
+    """計算移動平均線"""
+    return df['close'].rolling(window=window).mean()
+
+
+def calculate_rsi(df, period=14):
+    """計算 RSI"""
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+
+def calculate_macd(df, fast=12, slow=26, signal=9):
+    """計算 MACD"""
+    ema_fast = df['close'].ewm(span=fast, adjust=False).mean()
+    ema_slow = df['close'].ewm(span=slow, adjust=False).mean()
+    
+    macd = ema_fast - ema_slow
+    macd_signal = macd.ewm(span=signal, adjust=False).mean()
+    macd_hist = macd - macd_signal
+    
+    return macd, macd_signal, macd_hist
+
+
+def calculate_bollinger_bands(df, window=20, num_std=2):
+    """計算布林通道"""
+    ma = df['close'].rolling(window=window).mean()
+    std = df['close'].rolling(window=window).std()
+    
+    upper = ma + (std * num_std)
+    lower = ma - (std * num_std)
+    
+    return upper, ma, lower
+
+
+def show():
+    st.title("📊 K線圖與技術指標")
+    
+    # 連接 MongoDB
+    try:
+        client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=2000)
+        db = client['tw_stock_analysis']
+        
+        # 獲取可用股票列表（過濾 None）
+        symbols = [s for s in db.stock_price.distinct('symbol') if s is not None]
+        symbols = sorted(symbols)
+        
+        if not symbols:
+            st.warning("⚠️ 沒有股票數據")
+            return
+        
+        # 側邊欄參數設置
+        st.sidebar.markdown("### 📊 圖表參數")
+        
+        # 股票選擇
+        selected_symbol = st.sidebar.selectbox(
+            "選擇股票代碼",
+            options=symbols,
+            index=symbols.index('2330') if '2330' in symbols else 0
+        )
+        
+        # 日期範圍選擇
+        date_range = st.sidebar.selectbox(
+            "時間範圍",
+            options=['1個月', '3個月', '6個月', '1年', '3年', '5年', '自定義'],
+            index=3  # 默認 1 年
+        )
+        
+        # 計算日期範圍
+        end_date = datetime.now()
+        if date_range == '1個月':
+            start_date = end_date - timedelta(days=30)
+        elif date_range == '3個月':
+            start_date = end_date - timedelta(days=90)
+        elif date_range == '6個月':
+            start_date = end_date - timedelta(days=180)
+        elif date_range == '1年':
+            start_date = end_date - timedelta(days=365)
+        elif date_range == '3年':
+            start_date = end_date - timedelta(days=1095)
+        elif date_range == '5年':
+            start_date = end_date - timedelta(days=1825)
+        else:  # 自定義
+            col1, col2 = st.sidebar.columns(2)
+            with col1:
+                start_date = st.date_input("開始日期", value=end_date - timedelta(days=365))
+            with col2:
+                end_date = st.date_input("結束日期", value=end_date)
+            start_date = datetime.combine(start_date, datetime.min.time())
+            end_date = datetime.combine(end_date, datetime.min.time())
+        
+        # 技術指標選擇
+        st.sidebar.markdown("### 📈 技術指標")
+        show_ma = st.sidebar.checkbox("移動平均線 (MA)", value=True)
+        if show_ma:
+            ma_windows = st.sidebar.multiselect(
+                "MA 週期",
+                options=[5, 10, 20, 30, 60, 120, 240],
+                default=[5, 20, 60]
+            )
+        
+        show_bb = st.sidebar.checkbox("布林通道 (Bollinger Bands)", value=False)
+        show_volume = st.sidebar.checkbox("成交量", value=True)
+        show_rsi = st.sidebar.checkbox("相對強弱指標 (RSI)", value=True)
+        show_macd = st.sidebar.checkbox("MACD", value=False)
+        
+        # 查詢數據
+        st.info(f"📊 載入 **{selected_symbol}** 數據中...")
+        
+        query = {
+            'symbol': selected_symbol,
+            'date': {'$gte': start_date, '$lte': end_date}
+        }
+        
+        cursor = db.stock_price.find(query).sort('date', 1)
+        data = list(cursor)
+        
+        if not data:
+            st.warning(f"⚠️ 沒有 {selected_symbol} 在指定時間範圍的數據")
+            return
+        
+        # 轉換為 DataFrame
+        df = pd.DataFrame(data)
+        
+        # 確保 date 欄位是 datetime 類型
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'])
+        
+        # 轉換 Decimal128 為 float
+        from bson import Decimal128
+        
+        def safe_float(x):
+            """安全地轉換為 float"""
+            if x is None:
+                return None
+            if isinstance(x, Decimal128):
+                return float(x.to_decimal())
+            try:
+                return float(x)
+            except (ValueError, TypeError):
+                return None
+        
+        numeric_cols = ['open', 'high', 'low', 'close', 'volume']
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = df[col].apply(safe_float)
+        
+        # 顯示基本資訊
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        latest = df.iloc[-1]
+        previous = df.iloc[-2] if len(df) > 1 else latest
+        
+        price_change = latest['close'] - previous['close']
+        price_change_pct = (price_change / previous['close']) * 100
+        
+        with col1:
+            st.metric(
+                "最新收盤價",
+                f"${latest['close']:.2f}",
+                f"{price_change:+.2f} ({price_change_pct:+.2f}%)"
+            )
+        
+        with col2:
+            st.metric("最高價", f"${latest['high']:.2f}")
+        
+        with col3:
+            st.metric("最低價", f"${latest['low']:.2f}")
+        
+        with col4:
+            st.metric("成交量", f"{int(latest['volume']):,}")
+        
+        with col5:
+            if 'pe_ratio' in latest and latest['pe_ratio']:
+                st.metric("本益比", f"{float(latest['pe_ratio']):.2f}")
+            else:
+                st.metric("本益比", "-")
+        
+        # 創建圖表
+        num_subplots = 1  # K線圖
+        if show_volume:
+            num_subplots += 1
+        if show_rsi:
+            num_subplots += 1
+        if show_macd:
+            num_subplots += 1
+        
+        # 設置子圖高度比例
+        row_heights = [0.5]  # K線圖占 50%
+        remaining_height = 0.5
+        additional_plots = num_subplots - 1
+        if additional_plots > 0:
+            subplot_height = remaining_height / additional_plots
+            row_heights.extend([subplot_height] * additional_plots)
+        
+        # 創建子圖
+        subplot_titles = ['價格走勢']
+        if show_volume:
+            subplot_titles.append('成交量')
+        if show_rsi:
+            subplot_titles.append('RSI')
+        if show_macd:
+            subplot_titles.append('MACD')
+        
+        fig = make_subplots(
+            rows=num_subplots,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.03,
+            row_heights=row_heights,
+            subplot_titles=subplot_titles
+        )
+        
+        # K線圖
+        fig.add_trace(
+            go.Candlestick(
+                x=df['date'],
+                open=df['open'],
+                high=df['high'],
+                low=df['low'],
+                close=df['close'],
+                name='K線',
+                increasing_line_color='red',
+                decreasing_line_color='green'
+            ),
+            row=1, col=1
+        )
+        
+        # 移動平均線
+        if show_ma and ma_windows:
+            colors = ['blue', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive']
+            for i, window in enumerate(ma_windows):
+                ma = calculate_ma(df, window)
+                fig.add_trace(
+                    go.Scatter(
+                        x=df['date'],
+                        y=ma,
+                        name=f'MA{window}',
+                        line=dict(color=colors[i % len(colors)], width=1)
+                    ),
+                    row=1, col=1
+                )
+        
+        # 布林通道
+        if show_bb:
+            upper, middle, lower = calculate_bollinger_bands(df)
+            fig.add_trace(
+                go.Scatter(
+                    x=df['date'],
+                    y=upper,
+                    name='BB Upper',
+                    line=dict(color='rgba(250, 128, 114, 0.5)', width=1)
+                ),
+                row=1, col=1
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=df['date'],
+                    y=middle,
+                    name='BB Middle',
+                    line=dict(color='rgba(128, 128, 128, 0.5)', width=1, dash='dash')
+                ),
+                row=1, col=1
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=df['date'],
+                    y=lower,
+                    name='BB Lower',
+                    line=dict(color='rgba(250, 128, 114, 0.5)', width=1),
+                    fill='tonexty',
+                    fillcolor='rgba(250, 128, 114, 0.1)'
+                ),
+                row=1, col=1
+            )
+        
+        current_row = 2
+        
+        # 成交量
+        if show_volume:
+            colors = ['red' if row['close'] >= row['open'] else 'green' 
+                     for _, row in df.iterrows()]
+            fig.add_trace(
+                go.Bar(
+                    x=df['date'],
+                    y=df['volume'],
+                    name='成交量',
+                    marker_color=colors
+                ),
+                row=current_row, col=1
+            )
+            current_row += 1
+        
+        # RSI
+        if show_rsi:
+            rsi = calculate_rsi(df)
+            fig.add_trace(
+                go.Scatter(
+                    x=df['date'],
+                    y=rsi,
+                    name='RSI',
+                    line=dict(color='purple', width=2)
+                ),
+                row=current_row, col=1
+            )
+            # RSI 超買超賣線
+            fig.add_hline(y=70, line_dash="dash", line_color="red", 
+                         opacity=0.5, row=current_row, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="green", 
+                         opacity=0.5, row=current_row, col=1)
+            current_row += 1
+        
+        # MACD
+        if show_macd:
+            macd, signal, hist = calculate_macd(df)
+            
+            # MACD 柱狀圖
+            colors = ['red' if val >= 0 else 'green' for val in hist]
+            fig.add_trace(
+                go.Bar(
+                    x=df['date'],
+                    y=hist,
+                    name='MACD Histogram',
+                    marker_color=colors
+                ),
+                row=current_row, col=1
+            )
+            
+            # MACD 線
+            fig.add_trace(
+                go.Scatter(
+                    x=df['date'],
+                    y=macd,
+                    name='MACD',
+                    line=dict(color='blue', width=2)
+                ),
+                row=current_row, col=1
+            )
+            
+            # Signal 線
+            fig.add_trace(
+                go.Scatter(
+                    x=df['date'],
+                    y=signal,
+                    name='Signal',
+                    line=dict(color='orange', width=2)
+                ),
+                row=current_row, col=1
+            )
+            current_row += 1
+        
+        # 更新圖表佈局
+        fig.update_layout(
+            title=f'{selected_symbol} 技術分析圖表',
+            height=800,
+            showlegend=True,
+            xaxis_rangeslider_visible=False,
+            hovermode='x unified'
+        )
+        
+        # 更新 x 軸
+        fig.update_xaxes(title_text="日期", row=num_subplots, col=1)
+        
+        # 更新 y 軸
+        fig.update_yaxes(title_text="價格 ($)", row=1, col=1)
+        if show_volume:
+            fig.update_yaxes(title_text="成交量", row=2, col=1)
+        
+        # 顯示圖表
+        st.plotly_chart(fig, width="stretch")
+        
+        # 技術指標數值表格
+        st.markdown("### 📊 技術指標數值")
+        
+        indicators_data = {
+            '日期': df['date'].iloc[-1].strftime('%Y-%m-%d'),
+            '收盤價': f"${latest['close']:.2f}",
+            '漲跌': f"{price_change:+.2f} ({price_change_pct:+.2f}%)"
+        }
+        
+        if show_ma and ma_windows:
+            for window in ma_windows:
+                ma_val = calculate_ma(df, window).iloc[-1]
+                indicators_data[f'MA{window}'] = f"${ma_val:.2f}" if not pd.isna(ma_val) else "-"
+        
+        if show_rsi:
+            rsi_val = calculate_rsi(df).iloc[-1]
+            indicators_data['RSI'] = f"{rsi_val:.2f}" if not pd.isna(rsi_val) else "-"
+            
+            # RSI 解讀
+            if not pd.isna(rsi_val):
+                if rsi_val > 70:
+                    indicators_data['RSI 狀態'] = "🔴 超買"
+                elif rsi_val < 30:
+                    indicators_data['RSI 狀態'] = "🟢 超賣"
+                else:
+                    indicators_data['RSI 狀態'] = "⚪ 中性"
+        
+        if show_macd:
+            macd_val, signal_val, hist_val = calculate_macd(df)
+            indicators_data['MACD'] = f"{macd_val.iloc[-1]:.2f}" if not pd.isna(macd_val.iloc[-1]) else "-"
+            indicators_data['Signal'] = f"{signal_val.iloc[-1]:.2f}" if not pd.isna(signal_val.iloc[-1]) else "-"
+            indicators_data['Histogram'] = f"{hist_val.iloc[-1]:.2f}" if not pd.isna(hist_val.iloc[-1]) else "-"
+        
+        # 轉換為 DataFrame 並顯示
+        indicators_df = pd.DataFrame([indicators_data])
+        st.dataframe(indicators_df, width="stretch")
+        
+        # 數據下載
+        st.markdown("### 💾 數據下載")
+        csv = df.to_csv(index=False)
+        st.download_button(
+            label="📥 下載 CSV",
+            data=csv,
+            file_name=f"{selected_symbol}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+        
+        client.close()
+        
+    except Exception as e:
+        st.error(f"❌ 發生錯誤: {e}")
+        import traceback
+        st.code(traceback.format_exc())

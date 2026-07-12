@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.twstock.daily_dividend_sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ming/Stock/.venv/bin/python3</string>
+        <string>/Users/ming/Stock/tw-stock-analysis/scripts/sync_dividend_detail.py</string>
+        <string>--limit</string>
+        <string>600</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/ming/Stock/tw-stock-analysis</string>
+
+    <!-- 每天凌晨 01:00 執行 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>1</integer>
+        <key>Minute</key><integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_dividend_sync.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_dividend_sync_err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/ming/Stock/.venv/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/ming</string>
+    </dict>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

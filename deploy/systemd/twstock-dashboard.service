@@ -1,0 +1,16 @@
+# /etc/systemd/system/twstock-dashboard.service
+[Unit]
+Description=TW Stock Dashboard (Streamlit :8501)
+After=network.target mongod.service
+
+[Service]
+Type=simple
+User=mdsadmin
+WorkingDirectory=/home/mdsadmin/Stock/tw-stock-analysis/dashboard
+Environment=PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
+ExecStart=/home/mdsadmin/Stock/.venv/bin/streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

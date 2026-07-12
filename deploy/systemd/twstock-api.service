@@ -1,0 +1,16 @@
+# /etc/systemd/system/twstock-api.service
+[Unit]
+Description=TW Stock API Server (FastAPI :8888)
+After=network.target mongod.service
+
+[Service]
+Type=simple
+User=mdsadmin
+WorkingDirectory=/home/mdsadmin/Stock/tw-stock-analysis
+Environment=PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
+ExecStart=/home/mdsadmin/Stock/.venv/bin/python3 /home/mdsadmin/Stock/tw-stock-analysis/src/api/server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

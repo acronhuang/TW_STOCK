@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 服務標識符 -->
+    <key>Label</key>
+    <string>com.twstock.weekly_outstanding_shares</string>
+    
+    <!-- 程式路徑和參數 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>cd /Users/ming/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && /usr/local/bin/python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3</string>
+    </array>
+    
+    <!-- 工作目錄 -->
+    <key>WorkingDirectory</key>
+    <string>/Users/ming/Stock/tw-stock-analysis</string>
+    
+    <!-- 執行時間：每週日凌晨 2:00 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>2</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    
+    <!-- 標準輸出日誌 -->
+    <key>StandardOutPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_weekly_outstanding_shares.log</string>
+    
+    <!-- 錯誤輸出日誌 -->
+    <key>StandardErrorPath</key>
+    <string>/Users/ming/Stock/tw-stock-analysis/logs/launchd_weekly_outstanding_shares_err.log</string>
+    
+    <!-- 環境變數 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    
+    <!-- 失敗後自動重啟 -->
+    <key>KeepAlive</key>
+    <false/>
+    
+    <!-- 執行成功退出後不重啟 -->
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <!-- 使用者權限執行 -->
+    <key>UserName</key>
+    <string>ming</string>
+</dict>
+</plist>

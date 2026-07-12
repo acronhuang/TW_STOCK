@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <link rel="stylesheet" href="/public/css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/view" class="logo">📊 台股智能分析系統</a>
+        <nav class="nav">
+          <a href="/view">首頁</a>
+          <a href="/view/financial/{{symbol}}">財報分析</a>
+          <a href="/view/dupont/{{symbol}}">杜邦分析</a>
+          <a href="/view/chart/{{symbol}}">股價走勢</a>
+          <a href="/view/dashboard/{{symbol}}">綜合儀表板</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    {{#if error}}
+    <!-- Error Message -->
+    <div class="alert alert-error" style="margin-top: 2rem;">
+      <strong>❌ 錯誤：</strong> {{error}}
+    </div>
+    <p style="margin-top: 1rem;">
+      <a href="/view" class="btn btn-primary">返回首頁</a>
+    </p>
+    {{else}}
+    
+    <!-- Company Info -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <h1 style="color: #1e293b; margin-bottom: 0.5rem;">
+          🔬 {{companyName}} ({{symbol}}) - 杜邦分析
+        </h1>
+        <p style="color: #64748b;">
+          會計期間：{{analysis.fiscalYear}} 年 {{analysis.fiscalPeriod}} | 
+          資料來源：{{analysis.dataSource}} | 
+          分析時間：{{analysis.calculatedAt}}
+          {{#if analysis.analysis.industryType}}
+          <br>
+          <span style="display: inline-block; margin-top: 0.5rem; padding: 0.25rem 0.75rem; background: #dbeafe; color: #1e40af; border-radius: 0.375rem; font-size: 0.875rem;">
+            🏭 產業類型：{{analysis.analysis.industryType}}
+          </span>
+          {{/if}}
+        </p>
+      </div>
+    </section>
+
+    <!-- ROE 總覽 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📊 ROE 總覽</h2>
+        </div>
+        <div class="stat-box" style="text-align: center; padding: 2rem;">
+          <div style="font-size: 3rem; font-weight: 700; color: {{#if (gt analysis.roe 15)}}#10b981{{else if (gt analysis.roe 10)}}#f59e0b{{else}}#ef4444{{/if}}">
+            {{analysis.roe}}%
+          </div>
+          <div style="font-size: 1.25rem; color: #64748b; margin-top: 0.5rem;">
+            股東權益報酬率 (ROE)
+          </div>
+          <div style="margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
+            <p style="font-size: 0.875rem; color: #64748b; margin-bottom: 0.5rem;">
+              <strong>ROE 評級：</strong>
+            </p>
+            <p style="font-size: 1rem; color: #1e293b;">
+              {{#if (gt analysis.roe 20)}}
+                <span class="badge badge-success">優異 (>20%)</span> - 獲利能力極佳
+              {{else if (gt analysis.roe 15)}}
+                <span class="badge badge-info">良好 (15-20%)</span> - 獲利能力不錯
+              {{else if (gt analysis.roe 10)}}
+                <span class="badge badge-warning">一般 (10-15%)</span> - 獲利能力普通
+              {{else}}
+                <span class="badge badge-danger">偏低 (<10%)</span> - 獲利能力不佳
+              {{/if}}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 三步驟拆解 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">🔍 三步驟拆解分析</h2>
+          <span class="badge badge-info">ROE = 淨利率 × 資產週轉率 × 權益乘數</span>
+        </div>
+        <div class="grid grid-3">
+          <!-- 淨利率 -->
+          <div class="stat-box">
+            <div style="font-size: 0.875rem; color: #64748b; margin-bottom: 0.5rem;">
+              ① 淨利率
+            </div>
+            <div class="stat-value {{#if (gt analysis.netMargin 20)}}positive{{else if (gt analysis.netMargin 10)}}neutral{{else}}negative{{/if}}">
+              {{analysis.netMargin}}%
+            </div>
+            <div class="stat-label">獲利能力</div>
+            <div style="margin-top: 1rem; font-size: 0.75rem; color: #64748b;">
+              淨利 ÷ 營收<br>
+              {{#if (gt analysis.netMargin 20)}}
+                ✅ 優異：定價權強
+              {{else if (gt analysis.netMargin 10)}}
+                ⚠️ 一般：可再提升
+              {{else}}
+                ❌ 偏低：成本控制不佳
+              {{/if}}
+            </div>
+          </div>
+
+          <!-- 資產週轉率 -->
+          <div class="stat-box">
+            <div style="font-size: 0.875rem; color: #64748b; margin-bottom: 0.5rem;">
+              ② 資產週轉率
+            </div>
+            <div class="stat-value {{#if (gt analysis.assetTurnover 1.0)}}positive{{else if (gt analysis.assetTurnover 0.3)}}neutral{{else}}negative{{/if}}">
+              {{analysis.assetTurnover}}
+            </div>
+            <div class="stat-label">經營效率</div>
+            <div style="margin-top: 1rem; font-size: 0.75rem; color: #64748b;">
+              營收 ÷ 總資產<br>
+              {{#if (eq analysis.analysis.industryType "半導體製造")}}
+                {{#if (gt analysis.assetTurnover 0.6)}}
+                  ✅ 優異：資產運用效率高
+                {{else if (gt analysis.assetTurnover 0.4)}}
+                  ⚠️ 良好：符合產業常態
+                {{else if (gt analysis.assetTurnover 0.3)}}
+                  ⚠️ 偏低：可再提升
+                {{else}}
+                  ❌ 過低：低於產業水平
+                {{/if}}
+              {{else if (eq analysis.analysis.industryType "零售服務")}}
+                {{#if (gt analysis.assetTurnover 3.0)}}
+                  ✅ 優異：週轉效率極佳
+                {{else if (gt analysis.assetTurnover 2.0)}}
+                  ⚠️ 良好：符合產業常態
+                {{else if (gt analysis.assetTurnover 1.5)}}
+                  ⚠️ 偏低：可再加速
+                {{else}}
+                  ❌ 過低：週轉緩慢
+                {{/if}}
+              {{else}}
+                {{#if (gt analysis.assetTurnover 1.5)}}
+                  ✅ 優異：資產運用佳
+                {{else if (gt analysis.assetTurnover 0.8)}}
+                  ⚠️ 良好：尚可接受
+                {{else if (gt analysis.assetTurnover 0.5)}}
+                  ⚠️ 偏低：可再提升
+                {{else}}
+                  ❌ 過低：效率待改善
+                {{/if}}
+              {{/if}}
+              {{#if analysis.analysis.industryType}}
+                <br><span style="font-size: 0.7rem; opacity: 0.8;">({{analysis.analysis.industryType}}標準)</span>
+              {{/if}}
+            </div>
+          </div>
+
+          <!-- 權益乘數 -->
+          <div class="stat-box">
+            <div style="font-size: 0.875rem; color: #64748b; margin-bottom: 0.5rem;">
+              ③ 權益乘數
+            </div>
+            <div class="stat-value {{#if (lt analysis.equityMultiplier 2.0)}}positive{{else if (lt analysis.equityMultiplier 3.0)}}neutral{{else}}negative{{/if}}">
+              {{analysis.equityMultiplier}}
+            </div>
+            <div class="stat-label">財務槓桿</div>
+            <div style="margin-top: 1rem; font-size: 0.75rem; color: #64748b;">
+              總資產 ÷ 股東權益<br>
+              {{#if (lt analysis.equityMultiplier 2.0)}}
+                ✅ 穩健：財務風險低
+              {{else if (lt analysis.equityMultiplier 3.0)}}
+                ⚠️ 一般：槓桿適中
+              {{else}}
+                ❌ 偏高：財務風險大
+              {{/if}}
+            </div>
+          </div>
+        </div>
+
+        <!-- 計算公式展示 -->
+        <div style="margin-top: 2rem; padding: 1.5rem; background: #dbeafe; border-radius: 0.5rem; border-left: 4px solid #2563eb;">
+          <p style="font-size: 1.125rem; font-weight: 600; color: #1e40af; margin-bottom: 1rem;">
+            📐 ROE 計算驗證
+          </p>
+          <div style="font-family: 'Courier New', monospace; font-size: 1rem; color: #1e293b; line-height: 2;">
+            <p>ROE = 淨利率 × 資產週轉率 × 權益乘數</p>
+            <p style="margin-top: 0.5rem;">
+              = {{analysis.netMargin}}% × {{analysis.assetTurnover}} × {{analysis.equityMultiplier}}
+            </p>
+            <p style="margin-top: 0.5rem; font-weight: 700; color: #1e40af; font-size: 1.25rem;">
+              = {{analysis.roe}}%
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 杜邦分析瀑布圖 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📊 ROE 拆解瀑布圖</h2>
+          <span class="badge badge-info">視覺化 ROE 組成</span>
+        </div>
+        <div class="chart-container" style="height: 500px;">
+          <canvas id="dupontWaterfallChart"></canvas>
+        </div>
+        <div style="margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
+          <p style="font-size: 0.875rem; color: #64748b;">
+            <strong>瀑布圖說明：</strong>從左到右展示 ROE 的三大組成如何相乘得出最終的 ROE 數值。
+            每個階段的貢獻度清楚可見，幫助投資者理解公司獲利的來源。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROE 趨勢比較 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📈 ROE 歷史趨勢（近 8 季）</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="roeTrendChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- 五步驟進階拆解 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">🎯 五步驟進階拆解</h2>
+          <span class="badge badge-warning">深入分析</span>
+        </div>
+        <div class="grid grid-3" style="grid-template-columns: repeat(5, 1fr);">
+          <div class="stat-box">
+            <div class="stat-value">{{analysis.fiveStepDecomposition.grossMargin}}%</div>
+            <div class="stat-label">毛利率</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">{{analysis.fiveStepDecomposition.operatingMargin}}%</div>
+            <div class="stat-label">營業利益率</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">{{analysis.fiveStepDecomposition.netMargin}}%</div>
+            <div class="stat-label">淨利率</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">{{analysis.fiveStepDecomposition.assetTurnover}}</div>
+            <div class="stat-label">資產週轉率</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">{{analysis.fiveStepDecomposition.equityMultiplier}}</div>
+            <div class="stat-label">權益乘數</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 分析與建議 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">💡 智能分析與建議</h2>
+        </div>
+        <div class="grid grid-2">
+          <!-- 優勢 -->
+          <div>
+            <h3 style="color: #10b981; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.5rem;">✅</span> 優勢分析
+            </h3>
+            {{#if analysis.analysis.strengths}}
+              <ul class="analysis-list">
+                {{#each analysis.analysis.strengths}}
+                  <li style="color: #065f46; background: #d1fae5; padding: 0.75rem; border-radius: 0.25rem; margin-bottom: 0.5rem;">
+                    {{this}}
+                  </li>
+                {{/each}}
+              </ul>
+            {{else}}
+              <p style="color: #64748b;">目前無明顯優勢。</p>
+            {{/if}}
+          </div>
+
+          <!-- 劣勢 -->
+          <div>
+            <h3 style="color: #ef4444; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.5rem;">⚠️</span> 劣勢分析
+            </h3>
+            {{#if analysis.analysis.weaknesses}}
+              <ul class="analysis-list">
+                {{#each analysis.analysis.weaknesses}}
+                  <li style="color: #991b1b; background: #fee2e2; padding: 0.75rem; border-radius: 0.25rem; margin-bottom: 0.5rem;">
+                    {{this}}
+                  </li>
+                {{/each}}
+              </ul>
+            {{else}}
+              <p style="color: #64748b;">目前無明顯劣勢。</p>
+            {{/if}}
+          </div>
+        </div>
+
+        <!-- 改善建議 -->
+        <div style="margin-top: 2rem;">
+          <h3 style="color: #2563eb; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.5rem;">💼</span> 改善建議
+          </h3>
+          {{#if analysis.analysis.recommendations}}
+            <ul class="analysis-list">
+              {{#each analysis.analysis.recommendations}}
+                <li style="color: #1e40af; background: #dbeafe; padding: 0.75rem; border-radius: 0.25rem; margin-bottom: 0.5rem;">
+                  {{this}}
+                </li>
+              {{/each}}
+            </ul>
+          {{else}}
+            <p style="color: #64748b;">目前營運狀況良好，持續保持。</p>
+          {{/if}}
+        </div>
+      </div>
+    </section>
+
+    <!-- 財務數據明細 -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📋 財務數據明細</h2>
+          <span class="badge badge-info">單位：千元</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>項目</th>
+                <th class="text-right">金額</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>營業收入</td>
+                <td class="text-right">{{formatNumber analysis.financialData.revenue}}</td>
+              </tr>
+              <tr>
+                <td>毛利</td>
+                <td class="text-right">{{formatNumber analysis.financialData.grossProfit}}</td>
+              </tr>
+              <tr>
+                <td>營業利益</td>
+                <td class="text-right">{{formatNumber analysis.financialData.operatingIncome}}</td>
+              </tr>
+              <tr>
+                <td>本期淨利</td>
+                <td class="text-right fw-bold positive">{{formatNumber analysis.financialData.netIncome}}</td>
+              </tr>
+              <tr style="background: #f8fafc;">
+                <td class="fw-bold">總資產</td>
+                <td class="text-right fw-bold">{{formatNumber analysis.financialData.totalAssets}}</td>
+              </tr>
+              <tr style="background: #d1fae5;">
+                <td class="fw-bold">股東權益</td>
+                <td class="text-right fw-bold">{{formatNumber analysis.financialData.equity}}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    {{/if}}
+  </main>
+
+  <!-- Footer -->
+  <footer style="background: white; border-top: 1px solid #e2e8f0; padding: 2rem 0; margin-top: 4rem; text-align: center; color: #64748b; font-size: 0.875rem;">
+    <div class="container">
+      <p>台股智能分析系統 v2.1.0 | ⚠️ 本系統僅供學習研究使用</p>
+    </div>
+  </footer>
+
+  <script>
+    {{#unless error}}
+    // 杜邦分析瀑布圖
+    const ctx = document.getElementById('dupontWaterfallChart');
+    const netMargin = {{analysis.netMargin}};
+    const assetTurnover = {{analysis.assetTurnover}};
+    const equityMultiplier = {{analysis.equityMultiplier}};
+    const roe = {{analysis.roe}};
+
+    // 計算累積值用於瀑布圖
+    const step1 = netMargin; // 淨利率
+    const step2 = (netMargin / 100) * assetTurnover * 100; // 淨利率 × 資產週轉率
+    const step3 = roe; // 最終 ROE
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['淨利率', '× 資產週轉率', '× 權益乘數', '= ROE'],
+        datasets: [{
+          label: 'ROE 組成 (%)',
+          data: [netMargin, step2 - netMargin, roe - step2, roe],
+          backgroundColor: [
+            'rgba(59, 130, 246, 0.8)',  // 藍色
+            'rgba(16, 185, 129, 0.8)',  // 綠色
+            'rgba(245, 158, 11, 0.8)',  // 橙色
+            'rgba(239, 68, 68, 0.8)'    // 紅色
+          ],
+          borderColor: [
+            'rgb(59, 130, 246)',
+            'rgb(16, 185, 129)',
+            'rgb(245, 158, 11)',
+            'rgb(239, 68, 68)'
+          ],
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: {
+            display: true,
+            text: `ROE 拆解：${netMargin}% × ${assetTurnover} × ${equityMultiplier} = ${roe}%`,
+            font: { size: 16, weight: 'bold' }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const labels = [
+                  `淨利率: ${netMargin}%`,
+                  `累積 (淨利率 × 週轉率): ${step2.toFixed(2)}%`,
+                  `累積 (× 權益乘數): ${roe}%`,
+                  `最終 ROE: ${roe}%`
+                ];
+                return labels[context.dataIndex];
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: '百分比 (%)' }
+          }
+        }
+      }
+    });
+
+    // ROE 趨勢圖
+    const roeData = {{{json roeTrend}}};
+    const roeLabels = roeData.map(d => `${d.fiscalYear} ${d.fiscalPeriod}`);
+    const roeValues = roeData.map(d => d.roe);
+
+    new Chart(document.getElementById('roeTrendChart'), {
+      type: 'line',
+      data: {
+        labels: roeLabels.reverse(),
+        datasets: [{
+          label: 'ROE (%)',
+          data: roeValues.reverse(),
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          borderWidth: 3,
+          tension: 0.4,
+          fill: true,
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => `ROE: ${context.parsed.y.toFixed(2)}%`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'ROE (%)' }
+          }
+        }
+      }
+    });
+    {{/unless}}
+  </script>
+</body>
+</html>

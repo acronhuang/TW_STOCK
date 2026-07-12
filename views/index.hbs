@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}} | 台股智能分析系統</title>
+  <link rel="stylesheet" href="/public/css/styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo">📊 台股智能分析系統</a>
+        <nav class="nav">
+          <a href="/">首頁</a>
+          <a href="/api-docs" target="_blank">API 文檔</a>
+          <a href="/api/v1/health">系統狀態</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    <!-- Search Section -->
+    <section class="search-section">
+      <h1 style="margin-bottom: 1rem; color: #1e293b;">🔍 查詢台股資料</h1>
+      <p style="margin-bottom: 1.5rem; color: #64748b;">
+        輸入股票代碼查詢財報、股價、技術分析等完整資訊
+      </p>
+      
+      <form class="search-box" id="searchForm">
+        <input 
+          type="text" 
+          class="search-input" 
+          id="symbolInput"
+          placeholder="請輸入股票代碼（例如：2330）" 
+          pattern="[0-9]{4,6}"
+          required
+        />
+        <button type="submit" class="btn btn-primary">查詢</button>
+      </form>
+
+      <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <span style="color: #64748b; font-size: 0.875rem;">熱門股票：</span>
+        <a href="#" class="quick-search" data-symbol="2330" style="color: #2563eb; font-size: 0.875rem; text-decoration: none;">2330 台積電</a>
+        <span style="color: #e2e8f0;">|</span>
+        <a href="#" class="quick-search" data-symbol="2317" style="color: #2563eb; font-size: 0.875rem; text-decoration: none;">2317 鴻海</a>
+        <span style="color: #e2e8f0;">|</span>
+        <a href="#" class="quick-search" data-symbol="2454" style="color: #2563eb; font-size: 0.875rem; text-decoration: none;">2454 聯發科</a>
+        <span style="color: #e2e8f0;">|</span>
+        <a href="#" class="quick-search" data-symbol="2881" style="color: #2563eb; font-size: 0.875rem; text-decoration: none;">2881 富邦金</a>
+        <span style="color: #e2e8f0;">|</span>
+        <a href="#" class="quick-search" data-symbol="2882" style="color: #2563eb; font-size: 0.875rem; text-decoration: none;">2882 國泰金</a>
+      </div>
+    </section>
+
+    <!-- Analysis Types -->
+    <section style="margin: 3rem 0;">
+      <h2 style="margin-bottom: 1.5rem; color: #1e293b;">📈 分析功能</h2>
+      <div class="grid grid-3">
+        <!-- 財報分析 -->
+        <div class="card" style="cursor: pointer;" onclick="showSample('financial')">
+          <h3 style="color: #2563eb; margin-bottom: 0.5rem;">💰 財報分析</h3>
+          <p style="color: #64748b; font-size: 0.875rem; margin-bottom: 1rem;">
+            完整的財務三表、財務比率、獲利能力分析
+          </p>
+          <ul style="list-style: none; padding: 0; font-size: 0.875rem;">
+            <li style="padding: 0.25rem 0; color: #475569;">✓ 損益表、資產負債表、現金流量表</li>
+            <li style="padding: 0.25rem 0; color: #475569;">✓ EPS / ROE / 毛利率趨勢</li>
+            <li style="padding: 0.25rem 0; color: #475569;">✓ 財務健康評分</li>
+          </ul>
+        </div>
+
+        <!-- 杜邦分析 -->
+        <div class="card" style="cursor: pointer;" onclick="showSample('dupont')">
+          <h3 style="color: #10b981; margin-bottom: 0.5rem;">🔬 杜邦分析</h3>
+          <p style="color: #64748b; font-size: 0.875rem; margin-bottom: 1rem;">
+            深入拆解 ROE 組成，找出獲利來源
+          </p>
+          <ul style="list-style: none; padding: 0; font-size: 0.875rem;">
+            <li style="padding: 0.25rem 0; color: #475569;">✓ 淨利率（獲利能力）</li>
+            <li style="padding: 0.25rem 0; color: #475569;">✓ 資產週轉率（經營效率）</li>
+            <li style="padding: 0.25rem 0; color: #475569;">✓ 權益乘數（財務槓桿）</li>
+          </ul>
+        </div>
+
+        <!-- 股價走勢 -->
+        <div class="card" style="cursor: pointer;" onclick="showSample('chart')">
+          <h3 style="color: #f59e0b; margin-bottom: 0.5rem;">📊 股價走勢</h3>
+          <p style="color: #64748b; font-size: 0.875rem; margin-bottom: 1rem;">
+            K 線圖、成交量、技術指標
+          </p>
+          <ul style="list-style: none; padding: 0; font-size: 0.875rem;">
+            <li style="padding: 0.25rem 0; color: #475569;">✓ 開高低收 K 線圖</li>
+            <li style="padding: 0.25rem 0; color: #475569;">✓ 成交量趨勢</li>
+            <li style="padding: 0.25rem 0; color: #475569;">✓ 均線系統</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sample Data -->
+    <section id="sampleData" style="display: none; margin: 3rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📝 範例查詢</h3>
+          <button onclick="hideSample()" style="background: none; border: none; cursor: pointer; color: #64748b;">✕</button>
+        </div>
+        <div id="sampleContent"></div>
+      </div>
+    </section>
+
+    <!-- API Endpoints -->
+    <section style="margin: 3rem 0;">
+      <h2 style="margin-bottom: 1.5rem; color: #1e293b;">🔌 API 端點</h2>
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>功能</th>
+              <th>端點</th>
+              <th>範例</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>財報分析頁面</td>
+              <td><code>/view/financial/:symbol</code></td>
+              <td><a href="/view/financial/2330" style="color: #2563eb;">/view/financial/2330</a></td>
+            </tr>
+            <tr>
+              <td>杜邦分析頁面</td>
+              <td><code>/view/dupont/:symbol</code></td>
+              <td><a href="/view/dupont/2330" style="color: #2563eb;">/view/dupont/2330</a></td>
+            </tr>
+            <tr>
+              <td>股價走勢頁面</td>
+              <td><code>/view/chart/:symbol</code></td>
+              <td><a href="/view/chart/2330" style="color: #2563eb;">/view/chart/2330</a></td>
+            </tr>
+            <tr>
+              <td>綜合儀表板</td>
+              <td><code>/view/dashboard/:symbol</code></td>
+              <td><a href="/view/dashboard/2330" style="color: #2563eb;">/view/dashboard/2330</a></td>
+            </tr>
+            <tr>
+              <td>API 文檔</td>
+              <td><code>/api-docs</code></td>
+              <td><a href="/api-docs" target="_blank" style="color: #2563eb;">/api-docs</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer style="background: white; border-top: 1px solid #e2e8f0; padding: 2rem 0; margin-top: 4rem; text-align: center; color: #64748b; font-size: 0.875rem;">
+    <div class="container">
+      <p>台股智能分析系統 v2.1.0 | 資料來源：TWSE, MOPS, Goodinfo, Yahoo Finance</p>
+      <p style="margin-top: 0.5rem;">⚠️ 本系統僅供學習研究使用，投資有風險，請謹慎評估</p>
+    </div>
+  </footer>
+
+  <script>
+    // 查詢表單處理
+    document.getElementById('searchForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const symbol = document.getElementById('symbolInput').value.trim();
+      if (symbol) {
+        window.location.href = `/view/dashboard/${symbol}`;
+      }
+    });
+
+    // 快速查詢
+    document.querySelectorAll('.quick-search').forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const symbol = this.dataset.symbol;
+        window.location.href = `/view/dashboard/${symbol}`;
+      });
+    });
+
+    // 顯示範例
+    function showSample(type) {
+      const sampleSection = document.getElementById('sampleData');
+      const sampleContent = document.getElementById('sampleContent');
+      
+      const samples = {
+        financial: `
+          <h4 style="margin-bottom: 1rem;">財報分析範例</h4>
+          <p style="color: #64748b; margin-bottom: 1rem;">查看台積電的完整財報分析：</p>
+          <a href="/view/financial/2330" class="btn btn-primary">查看台積電財報</a>
+          <div style="margin-top: 1rem;">
+            <p style="font-size: 0.875rem; color: #64748b;">或使用 API：</p>
+            <code style="display: block; background: #f1f5f9; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem;">
+              GET /api/v1/financial/2330
+            </code>
+          </div>
+        `,
+        dupont: `
+          <h4 style="margin-bottom: 1rem;">杜邦分析範例</h4>
+          <p style="color: #64748b; margin-bottom: 1rem;">分析台積電的 ROE 組成：</p>
+          <a href="/view/dupont/2330" class="btn btn-primary">查看杜邦分析</a>
+          <div style="margin-top: 1rem;">
+            <p style="font-size: 0.875rem; color: #64748b;">或使用 API：</p>
+            <code style="display: block; background: #f1f5f9; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem;">
+              GET /api/v1/financial/2330/dupont
+            </code>
+          </div>
+        `,
+        chart: `
+          <h4 style="margin-bottom: 1rem;">股價走勢範例</h4>
+          <p style="color: #64748b; margin-bottom: 1rem;">查看台積電的股價 K 線圖：</p>
+          <a href="/view/chart/2330" class="btn btn-primary">查看股價走勢</a>
+          <div style="margin-top: 1rem;">
+            <p style="font-size: 0.875rem; color: #64748b;">或使用 API：</p>
+            <code style="display: block; background: #f1f5f9; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem;">
+              GET /api/v1/tickers/2330/history
+            </code>
+          </div>
+        `
+      };
+      
+      sampleContent.innerHTML = samples[type];
+      sampleSection.style.display = 'block';
+      sampleSection.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function hideSample() {
+      document.getElementById('sampleData').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

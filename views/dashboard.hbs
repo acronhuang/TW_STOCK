@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <link rel="stylesheet" href="/public/css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/view" class="logo">📊 台股智能分析系統</a>
+        <nav class="nav">
+          <a href="/view">首頁</a>
+          <a href="/view/financial/{{symbol}}">財報分析</a>
+          <a href="/view/dupont/{{symbol}}">杜邦分析</a>
+          <a href="/view/chart/{{symbol}}">股價走勢</a>
+          <a href="/view/dashboard/{{symbol}}">綜合儀表板</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    {{#if error}}
+    <div class="alert alert-error" style="margin-top: 2rem;">
+      <strong>❌ 錯誤：</strong> {{error}}
+    </div>
+    {{else}}
+    
+    <!-- Company Header -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <h1 style="color: #1e293b; margin-bottom: 0.5rem;">
+          📊 {{companyName}} ({{symbol}}) - 綜合儀表板
+        </h1>
+        <p style="color: #64748b;">
+          財報期間：{{latestReport.fiscalYear}} {{latestReport.fiscalPeriod}} | 
+          股價日期：{{latestStock.date}}
+        </p>
+      </div>
+    </section>
+
+    <!-- Quick Stats -->
+    <section style="margin: 2rem 0;">
+      <div class="grid grid-3" style="grid-template-columns: repeat(6, 1fr);">
+        <div class="stat-box">
+          <div class="stat-value {{#if (gt latestStock.change 0)}}positive{{else if (lt latestStock.change 0)}}negative{{/if}}">
+            {{latestStock.closePrice}}
+          </div>
+          <div class="stat-label">股價</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">{{latestReport.ratios.eps}}</div>
+          <div class="stat-label">EPS</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value {{#if (gt latestReport.ratios.roe 15)}}positive{{/if}}">
+            {{latestReport.ratios.roe}}%
+          </div>
+          <div class="stat-label">ROE</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">{{latestReport.incomeStatement.netMargin}}%</div>
+          <div class="stat-label">淨利率</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">{{latestReport.ratios.debtRatio}}%</div>
+          <div class="stat-label">負債比</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">{{formatNumber latestStock.volume}}</div>
+          <div class="stat-label">成交量</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Charts Grid -->
+    <section style="margin: 2rem 0;">
+      <div class="grid grid-2">
+        <!-- EPS Trend -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">📊 EPS 趨勢</h3>
+            <a href="/view/financial/{{symbol}}" class="badge badge-info">詳細財報</a>
+          </div>
+          <div class="chart-container" style="height: 300px;">
+            <canvas id="epsChart"></canvas>
+          </div>
+        </div>
+
+        <!-- ROE Trend -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">📊 ROE 趨勢</h3>
+            <a href="/view/dupont/{{symbol}}" class="badge badge-info">杜邦分析</a>
+          </div>
+          <div class="chart-container" style="height: 300px;">
+            <canvas id="roeChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Stock Price -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">📈 股價走勢（60日）</h3>
+            <a href="/view/chart/{{symbol}}" class="badge badge-info">完整走勢</a>
+          </div>
+          <div class="chart-container" style="height: 300px;">
+            <canvas id="priceChart"></canvas>
+          </div>
+        </div>
+
+        <!-- DuPont Analysis -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">🔬 杜邦分析 (ROE 拆解)</h3>
+            <a href="/view/dupont/{{symbol}}" class="badge badge-info">詳細分析</a>
+          </div>
+          <div class="grid grid-3" style="padding: 1rem 0;">
+            <div class="stat-box">
+              <div class="stat-value" style="font-size: 1.5rem;">{{dupontAnalysis.netMargin}}%</div>
+              <div class="stat-label">淨利率</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" style="font-size: 1.5rem;">{{dupontAnalysis.assetTurnover}}</div>
+              <div class="stat-label">週轉率</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" style="font-size: 1.5rem;">{{dupontAnalysis.equityMultiplier}}</div>
+              <div class="stat-label">乘數</div>
+            </div>
+          </div>
+          <div style="text-align: center; padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
+            <div style="font-size: 0.875rem; color: #64748b;">ROE = 淨利率 × 週轉率 × 乘數</div>
+            <div style="font-size: 1.25rem; font-weight: 700; color: #2563eb; margin-top: 0.5rem;">
+              = {{dupontAnalysis.roe}}%
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Links -->
+    <section style="margin: 2rem 0;">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">🔗 快速連結</h2>
+        </div>
+        <div class="grid grid-3">
+          <a href="/view/financial/{{symbol}}" class="btn btn-primary" style="text-decoration: none; text-align: center; padding: 1.5rem;">
+            📈 完整財報分析
+          </a>
+          <a href="/view/dupont/{{symbol}}" class="btn btn-primary" style="text-decoration: none; text-align: center; padding: 1.5rem;">
+            🔬 深入杜邦分析
+          </a>
+          <a href="/view/chart/{{symbol}}" class="btn btn-primary" style="text-decoration: none; text-align: center; padding: 1.5rem;">
+            📊 股價技術分析
+          </a>
+        </div>
+      </div>
+    </section>
+
+    {{/if}}
+  </main>
+
+  <!-- Footer -->
+  <footer style="background: white; border-top: 1px solid #e2e8f0; padding: 2rem 0; margin-top: 4rem; text-align: center; color: #64748b; font-size: 0.875rem;">
+    <div class="container">
+      <p>台股智能分析系統 v2.1.0 | ⚠️ 本系統僅供學習研究使用</p>
+    </div>
+  </footer>
+
+  <script>
+    {{#unless error}}
+    // EPS Trend
+    const epsData = {{{json epsTrend}}};
+    const epsLabels = epsData.map(d => `${d.fiscalYear} ${d.fiscalPeriod}`);
+    const epsValues = epsData.map(d => d.eps);
+
+    new Chart(document.getElementById('epsChart'), {
+      type: 'line',
+      data: {
+        labels: epsLabels.reverse(),
+        datasets: [{
+          label: 'EPS',
+          data: epsValues.reverse(),
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37, 99, 235, 0.1)',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+
+    // ROE Trend
+    const roeData = {{{json roeTrend}}};
+    const roeLabels = roeData.map(d => `${d.fiscalYear} ${d.fiscalPeriod}`);
+    const roeValues = roeData.map(d => d.roe);
+
+    new Chart(document.getElementById('roeChart'), {
+      type: 'line',
+      data: {
+        labels: roeLabels.reverse(),
+        datasets: [{
+          label: 'ROE',
+          data: roeValues.reverse(),
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+
+    // Stock Price
+    const stockData = {{{json stockHistory}}};
+    const stockLabels = stockData.map(d => d.date);
+    const stockValues = stockData.map(d => d.closePrice);
+
+    new Chart(document.getElementById('priceChart'), {
+      type: 'line',
+      data: {
+        labels: stockLabels.reverse(),
+        datasets: [{
+          label: '股價',
+          data: stockValues.reverse(),
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          borderWidth: 2,
+          tension: 0.1,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: false } }
+      }
+    });
+    {{/unless}}
+  </script>
+</body>
+</html>
