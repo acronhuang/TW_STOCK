@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 from bson import Decimal128
@@ -90,6 +91,34 @@ def read_margin(db, ref_date):
     return out
 
 
+def read_inst_streak(db, ref_date, lookback_days=12):
+    """法人連續同向天數（連買 +N / 連賣 -N）。專業籌碼分析強調『連續性』——
+    連續買超越多天，主力吸籌越確立；單日淨買可能只是雜訊。一次撈近 N 日全市場計算。"""
+    dates = sorted(db.institutional_flow.distinct('date', {'date': {'$lte': ref_date}}))[-lookback_days:]
+    if not dates:
+        return {}
+    series = defaultdict(dict)
+    for x in db.institutional_flow.find(
+            {'date': {'$in': dates}}, {'stock_id': 1, 'total_net': 1, 'date': 1}):
+        series[x['stock_id']][x['date']] = _tof(x.get('total_net')) or 0.0
+    streak = {}
+    for sym, dm in series.items():
+        vals = [dm.get(d, 0.0) for d in dates]        # 依日期升冪
+        last = vals[-1]
+        if last == 0:
+            streak[sym] = 0
+            continue
+        sign = 1 if last > 0 else -1
+        n = 0
+        for v in reversed(vals):                       # 從最新往回數同號
+            if (v > 0 and sign > 0) or (v < 0 and sign < 0):
+                n += 1
+            else:
+                break
+        streak[sym] = sign * n
+    return streak
+
+
 def _is_etf(sym: str) -> bool:
     """台股 ETF 代碼以 00 開頭（0050/0056/00xxx/009xxx）。其法人流量為申贖/再平衡機械性
     流動，非『主力』情緒，主力散戶研判預設排除。"""
@@ -103,6 +132,7 @@ def load(db, min_volume_lots, min_price, include_etf=False):
         return None, [], None
     ref = idoc['date']
     inst = read_institutional(db, ref)
+    streak = read_inst_streak(db, ref)
 
     # 融資：優先同日；若當日尚未更新則退回融資自己的最新日（並記錄落後）
     mdoc = db.margin_purchase_short_sale.find_one({'date': ref})
@@ -144,6 +174,7 @@ def load(db, min_volume_lots, min_price, include_etf=False):
             'vol_lots': vol_lots,
             'inst_net': ins['total'], 'foreign': ins['foreign'],
             'trust': ins['trust'], 'dealer': ins['dealer'],
+            'streak': streak.get(sym, 0),
             'margin_chg': mg['margin_chg'], 'short_chg': mg['short_chg'],
             'obv_slope': f.get('obv_slope'), 'volume_ratio': f.get('volume_ratio'),
         })
@@ -181,9 +212,12 @@ def build(rows):
     for r in rows:
         r['tag'], r['score'] = judge(r)
         r['reson'] = resonance(r, r['tag'])
-    accum = sorted([r for r in rows if r['tag'] == '主力吸籌·散戶退'], key=lambda r: -r['score'])
+    # 排名把「連買天數」納入加權（連續性 = 主力吸籌確立度，專業籌碼分析共識）
+    def w(r):
+        return r['score'] + max(0, r.get('streak', 0)) * 8
+    accum = sorted([r for r in rows if r['tag'] == '主力吸籌·散戶退'], key=lambda r: -w(r))
     distr = sorted([r for r in rows if r['tag'] == '主力出貨·散戶接'], key=lambda r: r['score'])
-    reson = sorted([r for r in rows if r['reson']], key=lambda r: -r['score'])
+    reson = sorted([r for r in rows if r['reson']], key=lambda r: -w(r))
     return accum, distr, reson
 
 
@@ -192,9 +226,9 @@ def write_csv(ref, rows, out_dir):
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"chip_scan_{ref.strftime('%Y%m%d')}.csv"
     cols = ['symbol', 'name', 'close', 'change_pct', 'vol_lots', 'inst_net',
-            'foreign', 'trust', 'dealer', 'margin_chg', 'short_chg', 'score', 'tag', 'reson']
+            'foreign', 'trust', 'dealer', 'streak', 'margin_chg', 'short_chg', 'score', 'tag', 'reson']
     header = ['代碼', '名稱', '收盤', '漲跌%', '量(張)', '法人淨(張)', '外資', '投信', '自營',
-              '融資增減(張)', '融券增減', '籌碼分數', '研判', '量價共振']
+              '法人連續(+買/-賣)', '融資增減(張)', '融券增減', '籌碼分數', '研判', '量價共振']
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.writer(f)
         w.writerow(header)
@@ -209,8 +243,11 @@ def line_msg(ref, m_date, rows, accum, distr, reson, top):
 
     def f1(r):
         chg = f"{r['change_pct']:+.1f}%" if r['change_pct'] is not None else '—'
+        s = r.get('streak', 0)
+        streak = f" 連買{s}" if s >= 2 else (f" 連賣{-s}" if s <= -2 else "")
+        trust = " 投信買" if r.get('trust', 0) >= 100 else ""
         return (f"  {r['symbol']} {r['name']} {r['close']:.1f} {chg} "
-                f"法人{r['inst_net']:+d} 融資{r['margin_chg']:+d}")
+                f"法人{r['inst_net']:+d} 融資{r['margin_chg']:+d}{streak}{trust}")
 
     L = [f"🎯 主力/散戶籌碼研判 ({d}){lag}", f"  共 {len(rows)} 檔（法人×融資交叉）\n"]
     L.append(f"🔥 主力吸籌×量價共振 ({len(reson)})")

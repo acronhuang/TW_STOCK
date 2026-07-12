@@ -30,8 +30,8 @@ from pymongo import MongoClient
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # 匯入 sibling script
-from chip_score_scan import (_tof, read_institutional, read_margin, _is_etf, judge,
-                             INST_FLOOR, MGN_FLOOR)
+from chip_score_scan import (_tof, read_institutional, read_margin, read_inst_streak,
+                             _is_etf, judge, INST_FLOOR, MGN_FLOOR)
 
 
 def vp_signal(r):
@@ -101,6 +101,7 @@ def load(db, min_volume_lots, min_price, include_etf=False):
         return None, [], None
     ref = idoc['date']
     inst = read_institutional(db, ref)
+    streak = read_inst_streak(db, ref)
     mdoc = db.margin_purchase_short_sale.find_one({'date': ref})
     m_date = ref if mdoc else (db.margin_purchase_short_sale.find_one({}, sort=[('date', -1)]) or {}).get('date')
     margin = read_margin(db, m_date) if m_date else {}
@@ -134,7 +135,8 @@ def load(db, min_volume_lots, min_price, include_etf=False):
             'symbol': sym, 'name': p.get('name', ''), 'close': close,
             'change_pct': round((close - pc) / pc * 100, 2) if pc and pc > 0 else None,
             'vol_lots': round(vol / 1000) or 1,
-            'inst_net': ins['total'], 'margin_chg': mg['margin_chg'],
+            'inst_net': ins['total'], 'trust': ins['trust'], 'streak': streak.get(sym, 0),
+            'margin_chg': mg['margin_chg'],
             'obv_slope': f.get('obv_slope'), 'volume_ratio': f.get('volume_ratio'),
             'vol_pct_60d': f.get('vol_pct_60d'), 'vp_divergence': f.get('vp_divergence'),
         })
@@ -148,7 +150,7 @@ def build(rows):
         r['signal'], r['signal_label'] = code, label
         if code in buckets:
             buckets[code].append(r)
-    buckets['BULL'].sort(key=lambda r: -(r['inst_net'] - r['margin_chg']))
+    buckets['BULL'].sort(key=lambda r: -(r['inst_net'] - r['margin_chg'] + max(0, r.get('streak', 0)) * 200))
     buckets['TRAP'].sort(key=lambda r: (r['inst_net']))              # 法人賣最多在前
     buckets['DIVERGE'].sort(key=lambda r: (r['inst_net']))
     buckets['BEAR'].sort(key=lambda r: (r['inst_net']))
@@ -160,9 +162,9 @@ def write_csv(ref, rows, out_dir):
     import csv
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"dual_scan_{ref.strftime('%Y%m%d')}.csv"
-    cols = ['symbol', 'name', 'close', 'change_pct', 'vol_lots', 'inst_net', 'margin_chg',
+    cols = ['symbol', 'name', 'close', 'change_pct', 'vol_lots', 'inst_net', 'streak', 'margin_chg',
             'vp_dir', 'vp_type', 'chip_tag', 'signal_label']
-    header = ['代碼', '名稱', '收盤', '漲跌%', '量(張)', '法人淨(張)', '融資增減(張)',
+    header = ['代碼', '名稱', '收盤', '漲跌%', '量(張)', '法人淨(張)', '法人連續', '融資增減(張)',
               '量價方向', '量價型態', '籌碼研判', '雙訊號結論']
     order = {'TRAP': 0, 'DIVERGE': 1, 'BULL': 2, 'BEAR': 3, 'STEALTH': 4, 'NA': 5}
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
@@ -179,8 +181,10 @@ def line_msg(ref, m_date, rows, b, top):
 
     def f1(r):
         chg = f"{r['change_pct']:+.1f}%" if r['change_pct'] is not None else '—'
+        s = r.get('streak', 0)
+        streak = f" 連買{s}" if s >= 2 else (f" 連賣{-s}" if s <= -2 else "")
         return (f"  {r['symbol']} {r['name']} {r['close']:.1f} {chg} "
-                f"法人{r['inst_net']:+d} 融資{r['margin_chg']:+d}")
+                f"法人{r['inst_net']:+d} 融資{r['margin_chg']:+d}{streak}")
 
     L = [f"🔀 量價×籌碼 雙訊號 ({d}){lag}", f"  掃 {len(rows)} 檔\n"]
     L.append(f"🚀 雙多共振 ({len(b['BULL'])})")
