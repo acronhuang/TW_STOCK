@@ -432,16 +432,19 @@ def show():
                 st.info("此功能尚未實作")
         
         with col2:
+            st.caption("⚠️ 重建索引會鎖住集合並重建其所有索引；stock_price（約 500 萬筆）可能需數分鐘，"
+                       "期間影響讀寫，請於離峰時段執行。")
             if st.button("📊 重建索引"):
-                with st.spinner("正在重建索引..."):
+                # pymongo 4.x 已移除 collection.reindex()，改用伺服器端 reIndex 指令
+                # （MongoDB standalone 適用）。逐集合執行並回報，小表先做。
+                collections = ['stock_factors', 'quarterly_earnings', 'stock_price']
+                for coll in collections:
                     try:
-                        # 重建所有集合的索引
-                        collections = ['stock_price', 'financial_reports', 'stock_factors']
-                        for coll in collections:
-                            db[coll].reindex()
-                        st.success("✅ 索引重建完成")
+                        with st.spinner(f"重建 {coll} 索引中…"):
+                            db.command("reIndex", coll)
+                        st.success(f"✅ {coll} 索引重建完成")
                     except Exception as e:
-                        st.error(f"❌ 重建失敗: {str(e)}")
+                        st.error(f"❌ {coll} 重建失敗: {e}")
         
         # 系統資訊
         st.markdown("### 系統資訊")
