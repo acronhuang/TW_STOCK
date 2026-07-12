@@ -7,7 +7,7 @@
 ## 一、資料層紅線
 
 ### 空表（0 筆，但仍被某些程式參照）
-`balance_sheet_detail` · `cash_flows_detail` · `financial_statement_detail` · `institutional_holdings` · `shareholding` · `industry_price` · `dividend`(空) · `order_statistics_5s` · `total_return_index` · `short_sale_suspension` · `total_credit_limit` · `securities_traders_info`
+`balance_sheet_detail` · `cash_flows_detail` · `financial_statement_detail` · `institutional_holdings` · ~~`shareholding`~~（**✅ 已接 TDCC 免費開放資料**，`tdcc_shareholding_sync.py`，每週）· `industry_price` · `dividend`(空) · `order_statistics_5s` · `total_return_index` · `short_sale_suspension` · `total_credit_limit` · `securities_traders_info`
 → **建議**：確認無下游依賴後 drop，或補資料源。
 
 ### 棄用舊表（有資料但不該用）
@@ -102,6 +102,9 @@ db.stock_price.aggregate([{$group:{_id:{$type:"$close"},n:{$sum:1}}}])   # doubl
 - [x] ~~**修 runaway log**：`unified_downloader` pymongo DEBUG 灌爆日誌（1.1GB/時、35GB）→ 靜音 pymongo + 清 35GB，磁碟 44G→79G~~
 - [x] ~~裝 pytest，測試套件（116 tests）可執行~~
 - [x] ~~新增**主力/散戶籌碼研判**指標（`chip_score_scan.py`：法人×融資交叉，排除 ETF，量價共振）~~
+- [x] ~~新增**量價×籌碼雙訊號共振**（`dual_signal_scan.py`：雙多/假突破陷阱/量升籌退/雙空/底部潛伏）~~
+- [x] ~~加**法人連續買賣超天數**（連續性加權）+ **投信**標記~~
+- [x] ~~**接 TDCC 集保股權分散**填 `shareholding` 空表（`tdcc_shareholding_sync.py`，免費、每週；千張大戶佔比整合進 chip）~~
 
 ### P0（影響正確性/安全）
 - [ ] **接遠端 repo**（內網 GitLab / GitHub private）+ push；本機 bundle 改 `git clone`（徹底消除人工 md5 同步）— 需決定 host

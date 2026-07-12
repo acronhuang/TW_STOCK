@@ -36,3 +36,4 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 0 8,14 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/watchdog.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_watchdog.log 2>&1  # watchdog
 15 18 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/chip_score_scan.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_chip_scan.log 2>&1  # chip_scan
 20 18 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/dual_signal_scan.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_dual_scan.log 2>&1  # dual_scan
+0 9 * * 2  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/tdcc_shareholding_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_tdcc_shareholding.log 2>&1  # tdcc_shareholding
