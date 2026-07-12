@@ -34,3 +34,4 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 0 9 * * 6  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/data_health.py --finmind 30 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_data_health.log 2>&1  # data_health_weekly_finmind
 0 4 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/verify_backup.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_verify_backup.log 2>&1  # verify_backup_weekly
 0 8,14 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/watchdog.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_watchdog.log 2>&1  # watchdog
+15 18 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/chip_score_scan.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_chip_scan.log 2>&1  # chip_scan
