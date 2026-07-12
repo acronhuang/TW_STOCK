@@ -1,0 +1,59 @@
+# 台股智能分析系統 (TW_STOCK)
+
+> 台股全市場量化分析與智能選股系統。每日自動下載股價/法人/融資/財報/籌碼，計算技術與基本面因子，做量價與籌碼研判、MoE 多角色團隊分析，經 LINE 推播選股與警示。本檔為給 LLM/AI 助手的專案導覽——開工前先讀這裡，再依需要展開下列文件。
+
+部署為三節點：**.166**（Ubuntu 主機：MongoDB `tw_stock_analysis`、FastAPI `:8888`(systemd `twstock-api`)、Streamlit 儀表板 `:8501`(systemd `twstock-dashboard`)、cron `TZ=Asia/Taipei`）；**.28**／**.27**（Ollama 模型節點，.27 負責合議）。程式 venv 在 `/home/mdsadmin/Stock/.venv`（專案外）。已導入 git（GitHub `acronhuang/TW_STOCK`）；系統設定以 config-as-code 納管於 `deploy/`。文件語言為繁體中文。
+
+## 先讀（系統全貌）
+
+- [架構風格](docs/架構規劃/架構四面向詳解-1-架構風格.md): 分層/模組化單體/微核心/插件/事件驅動等風格如何體現
+- [架構特性](docs/架構規劃/架構四面向詳解-2-架構特性.md): 品質屬性與安全紅線(S1–S5)
+- [架構決策](docs/架構規劃/架構四面向詳解-3-架構決策.md): 關鍵技術選擇與取捨
+- [邏輯組件](docs/架構規劃/架構四面向詳解-4-邏輯組件.md): 主要模組與職責
+- [環境基線](docs/架構規劃/規劃-環境基線.md): 三節點、服務、排程、路徑的權威基線
+
+## 資料完整性防護（P0–P3，務必先懂）
+
+- [運維手冊-完整度異常處理](docs/架構規劃/規劃-運維手冊-完整度異常處理.md): 收到 LINE 告警怎麼辦；自癒機制；三錨(真相/正確/存活)；看門狗；磁碟守衛
+- [紅線元件盤點與Backlog](docs/架構規劃/規劃-紅線元件盤點與Backlog.md): 死碼/空表/技術債清單與優先級 Backlog（改動前先查這裡）
+
+核心元件（`scripts/`）：`twse_openapi_sync.py`（完整度檢查→自癒`--heal`＋值合理性＋自適應門檻）、`watchdog.py`（排程心跳看門狗＋磁碟>85%告警）、`data_health.py`（每日健康快照＋趨勢＋FinMind交叉）、`verify_backup.py`（備份可還原性驗證）。
+
+## 選股與籌碼分析（每日收盤後 pipeline）
+
+每個交易日 18:00→18:20 三段掃描，各發一則 LINE（`results/` 存 CSV）：
+
+- 量價掃描 `scripts/volume_price_scan.py`（18:00）: OBV/量比/量能百分位/量價背離 → 資金方向
+- 主力/散戶籌碼研判 `scripts/chip_score_scan.py`（18:15）: 法人(外資/投信/自營)×融資×大戶集中度×連買天數 → 是誰在買
+- 量價×籌碼雙訊號 `scripts/dual_signal_scan.py`（18:20）: 交叉 → 雙多共振/假突破陷阱/量升籌退/雙空警示
+- 集保大戶同步 `scripts/tdcc_shareholding_sync.py`（週二）: TDCC 免費開放資料，千張大戶佔比填 `shareholding`
+
+量價因子由 `src/factors/volume_factors.py` 每日計算寫入 `stock_factors`。MoE 團隊分析（7 角色 + .27 合議）另見 [研判模型策略](docs/架構規劃/規劃-研判模型策略-單一vs合議.md)。
+
+## 進入點與程式地圖
+
+- FastAPI 服務: `src/api/server.py`（`:8888`）
+- Streamlit 儀表板: `dashboard/app.py`（`:8501`，頁面在 `dashboard/pages/`，由 app.py `from pages import` 載入）
+- [檔案功能與關聯總目錄](docs/架構規劃/規劃-檔案功能與關聯總目錄.md): 全 314 支程式逐檔「做什麼/依賴什麼/被誰用」＋使用狀態(🟢在用/🔴用不到/⚠️疑似)
+- [檔案盤點與BACKUP清單](docs/架構規劃/規劃-檔案盤點與BACKUP清單.md): 哪些檔案未使用、可搬 BACKUP
+
+## 部署與災難復原
+
+- [deploy/README](deploy/README.md): 從零重建 .166 的完整步驟（clone→venv→還原備份→systemd→cron→驗證）
+- `deploy/crontab.txt` / `deploy/systemd/*.service`: config-as-code，線上排程/服務的版控快照（改線上設定後須同步回此）
+
+## Optional（延伸規劃，按需展開）
+
+- [架構修正清單-實機對照](docs/架構規劃/規劃-架構修正清單-實機對照.md): 文件與實機差異的校正（含時區根因始末）
+- [推薦模組選型](docs/架構規劃/規劃-推薦模組選型.md): 技術選型建議
+- [2節點試點瘦身版](docs/架構規劃/規劃-2節點試點瘦身版.md) / [支援設備硬體需求](docs/架構規劃/規劃-支援設備硬體需求.md): 部署規模與硬體
+- [決策議程與RACI](docs/架構規劃/規劃-決策議程與RACI.md): 決策流程
+- [部署Prompt手冊](docs/架構規劃/規劃-部署Prompt手冊.md) / [部署Prompt-ClaudeCode版](docs/架構規劃/規劃-部署Prompt-ClaudeCode版.md): 部署用提示詞
+- `ARCHITECTURE.md` / `ARCHITECTURE_DETAIL.md`: 早期架構文件（部分內容已被 docs/架構規劃/ 取代）
+
+## 給 AI 助手的注意事項
+
+- 改動前查 [Backlog](docs/架構規劃/規劃-紅線元件盤點與Backlog.md)：有已知死碼(如 `src/moe/router.py`)、空表、雙 schema(margin)等地雷。
+- 本機 bundle 與 .166 過去靠人工同步；現以 git 為準（`git commit` + `git push`）。
+- 密鑰在 `.env`（未入版控）；程式一律 `os.getenv` 讀取，勿硬編碼（曾清除硬編碼 FinMind token）。
+- 時區是最危險的坑：cron 依系統時區，必須 `Asia/Taipei`。
