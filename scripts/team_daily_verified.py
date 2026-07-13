@@ -639,6 +639,13 @@ def main():
     ap.add_argument('--no-line', action='store_true', help='不發 LINE')
     args = ap.parse_args()
 
+    # 調參（實測）：序列討論 ≈ 31s/檔，daily industry50(~50) 合議步 ≈ 26 分可接受；
+    # 但全市場(--universe all, ~2000檔)× 31s ≈ 14 小時 → 自動降回盲投(deliberate)控時。
+    # 小批(tier/industry50)維持討論；已明確設 CONSENSUS_MODE 則尊重（可強制全市場也討論）。
+    if args.universe == 'all' and 'CONSENSUS_MODE' not in os.environ:
+        os.environ['CONSENSUS_MODE'] = 'deliberate'
+        print("ℹ️ 全市場批次 → 合議自動用盲投(deliberate)控時；小批才用序列討論。")
+
     if args.date:
         global _DATE_OVERRIDE
         _DATE_OVERRIDE = args.date
