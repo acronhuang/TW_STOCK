@@ -19,8 +19,10 @@ if [ ! -s "$JSON" ]; then
   exit 1
 fi
 
-echo "──── [2/4] phase2：投資顧問整合 + .27 合議投票 ────"
-$PY -u scripts/team_daily_verified.py --universe all --phase2 --no-line --date "$DATE"
+echo "──── [2/4] phase2：投資顧問整合 + .27 合議【序列討論】────"
+# 強制全市場也走序列討論(覆寫 main() 對 --universe all 的自動盲投 gate)。
+# ⚠️ 全市場 ~2000 檔 × ~31s ≈ 14 小時，且期間長時間佔用 .27/.28 共用 Ollama。
+CONSENSUS_MODE=discuss $PY -u scripts/team_daily_verified.py --universe all --phase2 --no-line --date "$DATE"
 echo "phase2 結束 $(date '+%F %T')"
 
 echo "──── [3/4] 同步 JSON → DB（team_analysis）────"
