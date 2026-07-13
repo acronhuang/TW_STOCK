@@ -93,10 +93,39 @@ def show():
 
     cons = full.get("consensus")
     if cons:
-        st.success(f"🗳️ 合議定案：**{cons.get('final')}**　"
-                   f"（買{cons['tally']['買進']}/持{cons['tally']['持有']}/賣{cons['tally']['賣出']}）")
-        for vote in cons.get("votes", []):
-            st.write(f"- `{vote['model']}` → **{vote['vote']}**：{vote.get('reason', '')}")
+        t = cons.get("tally") or {"買進": 0, "持有": 0, "賣出": 0}
+        src = cons.get("final_source")
+        src_tag = {"facilitator": "　（🧠 主持人綜合）",
+                   "majority": "　（多數決）"}.get(src, "")
+        st.success(f"🗳️ 合議定案：**{cons.get('final')}**{src_tag}　"
+                   f"（買{t.get('買進', 0)}/持{t.get('持有', 0)}/賣{t.get('賣出', 0)}）")
+
+        round_tallies = cons.get("round_tallies")
+        if round_tallies:
+            # ── 序列討論記錄（discuss()）——舊盲投記錄無此欄位 ──
+            title = f"🧠 討論過程（{cons.get('rounds_run', len(round_tallies))} 輪"
+            if cons.get("changed"):
+                title += f"，{cons['changed']} 位委員討論後改票"
+            title += "）"
+            with st.expander(title, expanded=True):
+                st.markdown("**各輪票數演變**（委員讀到彼此發言後可改票）")
+                for i, rt in enumerate(round_tallies):
+                    mark = "　← 定案" if i == len(round_tallies) - 1 else ""
+                    st.write(f"- 第 {i+1} 輪：買 {rt.get('買進',0)} / 持 {rt.get('持有',0)} "
+                             f"/ 賣 {rt.get('賣出',0)}{mark}")
+                if cons.get("transcript"):
+                    st.markdown("**末輪委員發言**（餵回給下一輪 / 主持人的逐字稿）")
+                    st.code(cons["transcript"], language=None)
+                if cons.get("facilitator"):
+                    st.markdown("**🧠 主持人綜合定案理由**")
+                    st.info(cons["facilitator"])
+                if cons.get("dissent"):
+                    st.caption(f"⚠️ 仍有 {len(cons['dissent'])} 位委員持異議：" +
+                               "、".join(f"{x['model']}→{x['vote']}" for x in cons["dissent"]))
+        else:
+            # ── 舊盲投記錄（deliberate()）：只列委員票 ──
+            for vote in cons.get("votes", []):
+                st.write(f"- `{vote['model']}` → **{vote['vote']}**：{vote.get('reason', '')}")
     if full.get("advisor"):
         with st.expander("🎩 投資顧問整合"):
             st.write(full["advisor"])
