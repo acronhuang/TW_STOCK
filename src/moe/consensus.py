@@ -14,19 +14,24 @@ import re
 import requests
 
 CONSENSUS_URL = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議節點 .27
+# 委員會（.27 上的通用模型；擴到 3 位讓討論更豐富、避免 2 人平手過多）。
+# 資安模型(foundation-sec/whiterabbitneo)對股票判斷弱，不納入。可用 env CONSENSUS_MODELS 覆寫（如加第 4 位 qwen2.5-7b-panel）。
 COMMITTEE = [m.strip() for m in
-             os.getenv('CONSENSUS_MODELS', 'hermes3:8b,qwen2.5-3b:latest').split(',')
+             os.getenv('CONSENSUS_MODELS', 'hermes3:8b,qwen2.5:7b,qwen2.5-3b:latest').split(',')
              if m.strip()]
 VOTES = ('買進', '持有', '賣出')
+# 主持人（③）：讀完討論逐字稿做綜合定案，取代純多數決。走 .28 主力節點的 14B 通才。
+FACILITATOR_URL = os.getenv('OLLAMA_FACILITATOR_URL', os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434'))
+FACILITATOR_MODEL = os.getenv('CONSENSUS_FACILITATOR', 'qwen2.5-14b')
 # 合議委員全走 .27 合議節點(hermes3 + qwen2.5-3b 皆 GPU；.27 qwen2.5-3b 已設 num_gpu 99 上 GPU)。
 
 
-def _ask(model: str, prompt: str, timeout: int = 120) -> str:
+def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
     try:
-        r = requests.post(f'{CONSENSUS_URL}/api/generate',
+        r = requests.post(f'{url or CONSENSUS_URL}/api/generate',
                           json={'model': model, 'prompt': prompt, 'stream': False,
                                 'options': {'temperature': 0.3, 'num_gpu': 99},  # 強制全層GPU
-                                'keep_alive': '10m'},  # ④ 委員跨輪常駐 .27，避免多輪討論每輪重載
+                                'keep_alive': '10m'},  # ④ 委員跨輪常駐，避免多輪討論每輪重載
                           timeout=timeout)
         r.raise_for_status()
         return r.json().get('response', '')
@@ -167,10 +172,29 @@ def _roundN_prompt(symbol, name, draft, data, transcript, prev_vote):
             f"（若改票，說明被什麼說服）。")
 
 
+def _facilitate(symbol, name, advisor_draft, data_summary, transcript, tally, rounds_run, timeout=120):
+    """③ 主持人：讀完討論逐字稿 → 綜合定案（不盲從多數，少數有理據可採納）。
+    走 .28 的 14B 通才。回 (vote, synthesis)；失敗回 (None, '')。"""
+    prompt = (f"你是投資決策委員會的主持人。委員們已就 {symbol} {name} 討論了 {rounds_run} 輪。\n\n"
+              f"【主分析師草案】\n{advisor_draft}\n\n【關鍵數據】\n{data_summary}\n\n"
+              f"【委員最終討論逐字稿】\n{transcript}\n\n"
+              f"【最終票數】買進 {tally['買進']} / 持有 {tally['持有']} / 賣出 {tally['賣出']}\n\n"
+              f"請綜合委員的論點與分歧做最終定案（不必盲從多數，若少數意見更有理據可採納）。\n"
+              f"第一行只寫「買進」或「持有」或「賣出」；接著 2-3 句說明定案理由，"
+              f"點出主要分歧與你如何權衡。")
+    resp = _ask(FACILITATOR_MODEL, prompt, timeout, url=FACILITATOR_URL)
+    if resp.startswith('ERR:'):
+        return None, ''
+    vote = _extract_vote(resp)
+    lines = [x.strip() for x in resp.strip().split('\n') if x.strip()]
+    synthesis = ' '.join(l for l in lines if l not in VOTES)[:400]
+    return vote, synthesis
+
+
 def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
-            rounds: int = 2, timeout: int = 120) -> dict:
-    """多輪序列討論。回 {votes, tally, final, n, dissent, rounds_run, changed,
-    round_tallies, transcript}（schema 相容 deliberate，另加討論過程欄位）。"""
+            rounds: int = 2, timeout: int = 120, facilitate: bool = True) -> dict:
+    """多輪序列討論 + 主持人綜合定案。回 {votes, tally, final, final_source, facilitator,
+    n, dissent, rounds_run, changed, round_tallies, transcript}（schema 相容 deliberate）。"""
     prev_votes, first_votes, votes, round_tallies, transcript = {}, {}, [], [], ''
     rounds_run = 0
     for r in range(max(1, rounds)):
@@ -191,11 +215,18 @@ def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
         vv = [x['vote'] for x in votes if x['vote']]
         if len(vv) == len(COMMITTEE) and len(set(vv)) == 1:
             break
-    final, tally, n = _finalize(votes, advisor_draft)
+    final, tally, n = _finalize(votes, advisor_draft)      # 多數決(fallback)
+    final_source, fac_synth = 'majority', ''
+    if facilitate:                                         # ③ 主持人綜合定案(優先)
+        fac_vote, fac_synth = _facilitate(symbol, name, advisor_draft, data_summary,
+                                          transcript, tally, rounds_run, timeout)
+        if fac_vote in VOTES:
+            final, final_source = fac_vote, 'facilitator'
     dissent = [x for x in votes if x['vote'] and x['vote'] != final]
     changed = sum(1 for x in votes if x['vote'] and first_votes.get(x['model'])
                   and x['vote'] != first_votes[x['model']])
-    return {'votes': votes, 'tally': tally, 'final': final, 'n': n, 'dissent': dissent,
+    return {'votes': votes, 'tally': tally, 'final': final, 'final_source': final_source,
+            'facilitator': fac_synth, 'n': n, 'dissent': dissent,
             'rounds_run': rounds_run, 'changed': changed,
             'round_tallies': round_tallies, 'transcript': transcript}
 

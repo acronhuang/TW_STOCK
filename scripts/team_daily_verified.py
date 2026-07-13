@@ -407,11 +407,14 @@ def _consensus_for(a: dict, meta: dict = None):
     advisor = a.get('advisor')
     if not advisor or advisor.startswith('整合失敗'):
         return None
-    from src.moe.consensus import deliberate
+    from src.moe.consensus import deliberate, discuss
     ev_txt = '; '.join(f"{e.get('metric')}={e.get('db')}" for e in (a.get('evidence') or [])
                        if e.get('db') is not None)
     name = (meta.get(a['symbol']) or {}).get('name', '') if meta else a.get('name', '')
-    return deliberate(a['symbol'], name, advisor[:1500], ev_txt)
+    # 預設走「序列討論 discuss」(多輪+逐字稿+主持人)；env CONSENSUS_MODE=deliberate 可切回盲投對照。
+    if os.getenv('CONSENSUS_MODE', 'discuss') == 'deliberate':
+        return deliberate(a['symbol'], name, advisor[:1500], ev_txt)
+    return discuss(a['symbol'], name, advisor[:1500], ev_txt, rounds=2)
 
 
 _VERDICTS = ['強力買進', '買進', '觀望', '減碼', '賣出']
