@@ -25,7 +25,8 @@ def _ask(model: str, prompt: str, timeout: int = 120) -> str:
     try:
         r = requests.post(f'{CONSENSUS_URL}/api/generate',
                           json={'model': model, 'prompt': prompt, 'stream': False,
-                                'options': {'temperature': 0.3, 'num_gpu': 99}},  # 強制全層GPU
+                                'options': {'temperature': 0.3, 'num_gpu': 99},  # 強制全層GPU
+                                'keep_alive': '10m'},  # ④ 委員跨輪常駐 .27，避免多輪討論每輪重載
                           timeout=timeout)
         r.raise_for_status()
         return r.json().get('response', '')
@@ -101,6 +102,102 @@ def deliberate(symbol: str, name: str, advisor_draft: str, data_summary: str,
     dissent = [x for x in valid if x['vote'] != final]
     return {'votes': votes, 'tally': tally, 'final': final,
             'n': len(valid), 'dissent': dissent}
+
+
+# ── 序列討論(多輪合議) ────────────────────────────────────────────────
+# deliberate() 是「並行盲投」:委員互相看不到彼此發言、只投一輪。
+# discuss() 把它升級為「序列討論」:每輪把上一輪『所有委員的判斷+理由』餵回給每位委員，
+# 讓他們讀完別人的看法後重新表態(可被說服改票)，迭代到「全體一致」或跑滿 rounds。
+# 這是「投票 → 討論」的分水嶺。主持人收斂(facilitator)為第二步;此處先用末輪多數決定案。
+
+def _parse_vote_reason(resp: str):
+    """從委員回覆抽 (票, 理由)。ERR/無票回 (None, 短訊)。"""
+    if resp.startswith('ERR:'):
+        return None, resp[:40]
+    vote = _extract_vote(resp)
+    reason = ''
+    if vote:
+        for l in (x.strip() for x in resp.strip().split('\n') if x.strip()):
+            if l in VOTES or re.fullmatch(r'[【\[（(].{0,12}[】\]）)]', l):
+                continue
+            reason = l
+            break
+    return vote, reason[:220]   # 較長：逐字稿要餵回完整論點供他人回應（非僅顯示用）
+
+
+def _finalize(votes: list, advisor_draft: str):
+    """末輪投票 → (final, tally, n_valid)。平手回退顧問草案評級，再退保守持有。"""
+    tally = {v: sum(1 for x in votes if x['vote'] == v) for v in VOTES}
+    valid = [x for x in votes if x['vote']]
+    draft_r = _advisor_rating(advisor_draft)
+    if not valid:
+        return draft_r or '持有', tally, 0
+    top = max(tally.values())
+    leaders = [v for v in VOTES if tally[v] == top]
+    if len(leaders) == 1:
+        final = leaders[0]
+    elif draft_r in leaders:
+        final = draft_r
+    else:
+        final = '持有'
+    return final, tally, len(valid)
+
+
+def _fmt_transcript(votes: list) -> str:
+    """把一輪委員發言組成逐字稿，供下一輪餵回。"""
+    lines = [f"- {x['model']}：投「{x['vote']}」，理由：{x['reason'] or '（未述）'}"
+             for x in votes if x['vote']]
+    return '\n'.join(lines) if lines else '（上一輪無有效發言）'
+
+
+def _round1_prompt(symbol, name, draft, data):
+    return (f"你是投資決策委員會成員。以下是主分析師對 {symbol} {name} 的整合建議草案與關鍵數據，"
+            f"請獨立判斷後投一票。\n\n"
+            f"【主分析師草案】\n{draft}\n\n【關鍵數據】\n{data}\n\n"
+            f"規則：第一行只寫「買進」或「持有」或「賣出」三選一，第二行用一句話說明理由。")
+
+
+def _roundN_prompt(symbol, name, draft, data, transcript, prev_vote):
+    return (f"你是投資決策委員會成員，正對 {symbol} {name} 進行下一輪討論。\n\n"
+            f"【主分析師草案】\n{draft}\n\n【關鍵數據】\n{data}\n\n"
+            f"【其他委員上一輪的判斷與理由】\n{transcript}\n\n"
+            f"你上一輪投「{prev_vote or '未表態'}」。看完其他委員的意見後，你要維持還是修正？"
+            f"可被有理據的看法說服而改票，也可堅持己見並反駁。\n"
+            f"規則：第一行只寫「買進」或「持有」或「賣出」三選一，第二行一句理由"
+            f"（若改票，說明被什麼說服）。")
+
+
+def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
+            rounds: int = 2, timeout: int = 120) -> dict:
+    """多輪序列討論。回 {votes, tally, final, n, dissent, rounds_run, changed,
+    round_tallies, transcript}（schema 相容 deliberate，另加討論過程欄位）。"""
+    prev_votes, first_votes, votes, round_tallies, transcript = {}, {}, [], [], ''
+    rounds_run = 0
+    for r in range(max(1, rounds)):
+        rounds_run = r + 1
+        votes = []
+        for m in COMMITTEE:
+            prompt = (_round1_prompt(symbol, name, advisor_draft, data_summary) if r == 0
+                      else _roundN_prompt(symbol, name, advisor_draft, data_summary,
+                                          transcript, prev_votes.get(m)))
+            vote, reason = _parse_vote_reason(_ask(m, prompt, timeout))
+            votes.append({'model': m, 'vote': vote, 'reason': reason})
+        round_tallies.append({v: sum(1 for x in votes if x['vote'] == v) for v in VOTES})
+        if r == 0:
+            first_votes = {x['model']: x['vote'] for x in votes}
+        prev_votes = {x['model']: x['vote'] for x in votes}
+        transcript = _fmt_transcript(votes)
+        # 早退：全員都投了且一致 → 共識達成，無需再討論
+        vv = [x['vote'] for x in votes if x['vote']]
+        if len(vv) == len(COMMITTEE) and len(set(vv)) == 1:
+            break
+    final, tally, n = _finalize(votes, advisor_draft)
+    dissent = [x for x in votes if x['vote'] and x['vote'] != final]
+    changed = sum(1 for x in votes if x['vote'] and first_votes.get(x['model'])
+                  and x['vote'] != first_votes[x['model']])
+    return {'votes': votes, 'tally': tally, 'final': final, 'n': n, 'dissent': dissent,
+            'rounds_run': rounds_run, 'changed': changed,
+            'round_tallies': round_tallies, 'transcript': transcript}
 
 
 def line(consensus: dict) -> str:
