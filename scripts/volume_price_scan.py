@@ -54,7 +54,8 @@ def load_universe(db, min_volume_lots: int, min_price: float):
 
     facs = list(db.stock_factors.find(
         {'date': fd, 'volume_ratio': {'$ne': None}},
-        {'symbol': 1, 'volume_ratio': 1, 'vol_pct_60d': 1, 'obv_slope': 1, 'vp_divergence': 1},
+        {'symbol': 1, 'volume_ratio': 1, 'vol_pct_60d': 1, 'obv_slope': 1,
+         'vp_divergence': 1, 'atv_ratio': 1, 'turnover': 1},
     ))
 
     # 最近兩個交易日的股價（算當日漲跌幅）
@@ -62,7 +63,7 @@ def load_universe(db, min_volume_lots: int, min_price: float):
     today_d = price_dates[-1]
     prev_d = price_dates[0] if len(price_dates) > 1 else today_d
     today = {p['symbol']: p for p in db.stock_price.find(
-        {'date': today_d}, {'symbol': 1, 'close': 1, 'volume': 1, 'name': 1})}
+        {'date': today_d}, {'symbol': 1, 'close': 1, 'volume': 1, 'name': 1, 'amount': 1})}
     prev = {p['symbol']: _tof(p.get('close')) for p in db.stock_price.find(
         {'date': prev_d}, {'symbol': 1, 'close': 1})}
 
@@ -98,6 +99,9 @@ def load_universe(db, min_volume_lots: int, min_price: float):
             'vol_pct_60d': f.get('vol_pct_60d'),
             'obv_slope': f.get('obv_slope'),
             'vp_divergence': f.get('vp_divergence'),
+            'atv_ratio': f.get('atv_ratio'),          # 均額放大倍數(大單/散單)
+            'turnover': f.get('turnover'),            # 周轉率%
+            'amount': _tof(p.get('amount')),          # 成交值(元)
             'inst_net_lots': round(inet / 1000) if inet is not None else None,
         })
     return fd, rows
@@ -143,8 +147,10 @@ def write_csv(fd, rows, cats, out_dir: Path) -> Path:
     for r in cats['inflow']:     tag.setdefault(r['symbol'], '資金流入')
     for r in cats['outflow']:    tag.setdefault(r['symbol'], '資金流出')
     cols = ['symbol', 'name', 'close', 'change_pct', 'volume_lots',
-            'volume_ratio', 'vol_pct_60d', 'obv_slope', 'vp_divergence', 'category']
-    header = ['代碼', '名稱', '收盤', '漲跌%', '量(張)', '量比', '量能百分位', 'OBV斜率', '量價背離', '分類']
+            'volume_ratio', 'vol_pct_60d', 'obv_slope', 'vp_divergence',
+            'atv_ratio', 'turnover', 'amount', 'category']
+    header = ['代碼', '名稱', '收盤', '漲跌%', '量(張)', '量比', '量能百分位',
+              'OBV斜率', '量價背離', '均額比', '周轉率%', '成交值(元)', '分類']
     rank = sorted(rows, key=lambda r: -(r['obv_slope'] or -99))
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.writer(f)
@@ -152,6 +158,7 @@ def write_csv(fd, rows, cats, out_dir: Path) -> Path:
         for r in rank:
             w.writerow([r['symbol'], r['name'], r['close'], r['change_pct'], r['volume_lots'],
                         r['volume_ratio'], r['vol_pct_60d'], r['obv_slope'], r['vp_divergence'],
+                        r.get('atv_ratio'), r.get('turnover'), r.get('amount'),
                         tag.get(r['symbol'], '')])
     return path
 
@@ -165,7 +172,9 @@ def build_line_message(fd, rows, cats, top: int, refined: bool = False) -> str:
 
     def fmt(r):
         chg = f"{r['change_pct']:+.1f}%" if r['change_pct'] is not None else "—"
-        return f"  {r['symbol']} {r['name']} {r['close']:.1f} {chg} 量比{r['volume_ratio']:.1f}"
+        atv = r.get('atv_ratio')
+        big = f" 均額×{atv}" if (atv and atv >= 1.3) else ""   # 均額放大=大單進場(vs散單堆量)
+        return f"  {r['symbol']} {r['name']} {r['close']:.1f} {chg} 量比{r['volume_ratio']:.1f}{big}"
 
     def inst_mark(r):
         n = r.get('inst_net_lots')

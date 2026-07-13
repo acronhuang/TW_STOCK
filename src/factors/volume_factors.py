@@ -39,6 +39,7 @@ class VolumeFactors:
 
     def __init__(self, db):
         self.db = db
+        self._shares_map = None      # {stock_id: 流通股數(千股)}，首次用時載入並快取
 
     def _to_float(self, value) -> Optional[float]:
         if value is None:
@@ -46,7 +47,7 @@ class VolumeFactors:
         if isinstance(value, Decimal128):
             return float(value.to_decimal())
         try:
-            return float(value)
+            return float(str(value).replace(',', ''))   # 相容字串(含千分位)：amount/transaction 常為 str
         except (ValueError, TypeError):
             return None
 
@@ -233,6 +234,50 @@ class VolumeFactors:
 
     # ── 彙整 ────────────────────────────────────────────────────────────
 
+    # ── A 補強因子：均額(大單/散單) / 周轉率 ────────────────────────────
+
+    def _load_value_series(self, symbol: str, date: datetime, lookback_days: int = 40):
+        """載入近 N 日的 (成交金額, 成交筆數) 序列（升冪，list，缺值為 None）。與 _load_series
+        分開，避免動到既有簽名；均額計算不需與收盤對齊，各自過濾即可。"""
+        start = date - timedelta(days=lookback_days)
+        rows = list(self.db.stock_price.find(
+            {'symbol': symbol, 'date': {'$gte': start, '$lte': date}},
+            {'amount': 1, 'transaction': 1, 'date': 1},
+        ).sort('date', 1))
+        amts = [self._to_float(r.get('amount')) for r in rows]
+        txns = [self._to_float(r.get('transaction')) for r in rows]
+        return amts, txns
+
+    def calculate_avg_trade_ratio(self, amts: list, txns: list):
+        """每筆均額 = 成交金額 / 成交筆數（元/筆）。回 (avg_trade_value, atv_ratio)。
+        atv_ratio = 今日均額 / 前 VOL_MA_WINDOW 日均額 → 大單放大倍數：
+        >1.5 常代表大單進場（主力足跡，量價側、當日盤後即得，不必等法人 T+1）。"""
+        per = [(a / t) if (a is not None and t is not None and t > 0) else None
+               for a, t in zip(amts, txns)]
+        if not per or per[-1] is None:
+            return None, None
+        today = per[-1]
+        hist = [p for p in per[-(self.VOL_MA_WINDOW + 1):-1] if p is not None]
+        if len(hist) < 5:
+            return round(today), None
+        base = sum(hist) / len(hist)
+        return round(today), (round(today / base, 2) if base > 0 else None)
+
+    def _shares(self, symbol: str) -> Optional[float]:
+        """流通股數(千股)，來自 taiwan_stock_info；一次載入全市場快取。"""
+        if self._shares_map is None:
+            self._shares_map = {d['stock_id']: self._to_float(d.get('outstanding_shares'))
+                                for d in self.db.taiwan_stock_info.find(
+                                    {}, {'stock_id': 1, 'outstanding_shares': 1})}
+        return self._shares_map.get(symbol)
+
+    def calculate_turnover(self, vols: np.ndarray, symbol: str) -> Optional[float]:
+        """周轉率(%) = 當日成交量(股) / 流通股數(股) × 100。把量能標準化，不同股本可比。"""
+        sh = self._shares(symbol)          # 千股
+        if not sh or sh <= 0:
+            return None
+        return round(float(vols[-1]) / (sh * 1000.0) * 100.0, 3)
+
     def calculate_all_volume_factors(self, symbol: str, date: datetime) -> Dict:
         """計算單檔單日所有量價因子；資料不足的因子回傳 None。"""
         closes, vols = self._load_series(symbol, date)
@@ -241,7 +286,11 @@ class VolumeFactors:
                 'date': date, 'symbol': symbol,
                 'volume_ratio': None, 'vol_pct_60d': None,
                 'obv_slope': None, 'vp_divergence': None,
+                'avg_trade_value': None, 'atv_ratio': None, 'turnover': None,
             }
+        amts, txns = self._load_value_series(symbol, date)
+        avg_trade_value, atv_ratio = self.calculate_avg_trade_ratio(amts, txns)
+        turnover = self.calculate_turnover(vols, symbol)
         # 框架量價狀態碼(0無/1絕望量/2鎖籌/3窒息量)；存碼而非字串，避免被掃描數值快取丟棄
         vs = self.volume_state(closes, vols)
         vs_code = {'絕望量': 1, '鎖籌': 2, '窒息量': 3}.get(vs, 0)
@@ -253,4 +302,7 @@ class VolumeFactors:
             'obv_slope':     self.calculate_obv_slope(closes, vols),
             'vp_divergence': self.calculate_vp_divergence(closes, vols),
             'vol_state':     vs_code,
+            'avg_trade_value': avg_trade_value,   # 每筆均額(元)
+            'atv_ratio':       atv_ratio,         # 均額放大倍數(大單偵測)
+            'turnover':        turnover,          # 周轉率(%)
         }

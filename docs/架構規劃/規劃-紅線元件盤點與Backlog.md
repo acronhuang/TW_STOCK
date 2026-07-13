@@ -106,6 +106,8 @@ db.stock_price.aggregate([{$group:{_id:{$type:"$close"},n:{$sum:1}}}])   # doubl
 - [x] ~~加**法人連續買賣超天數**（連續性加權）+ **投信**標記~~
 - [x] ~~**接 TDCC 集保股權分散**填 `shareholding` 空表（`tdcc_shareholding_sync.py`，免費、每週；千張大戶佔比整合進 chip）~~
 - [x] ~~**接 TWSE 全市場外資持股比例**（`twse_foreign_holding_sync.py` → `foreign_holding`，免費每日；FinMind 免費版全市場被鎖，改走 TWSE MI_QFIIS `selectType=ALLBUT0999`；近5日變化整合進 chip）~~
+- [x] ~~**量價補三因子**（`volume_factors`）：均額比 `atv_ratio`(成交金額÷筆數，大單/散單偵測)、周轉率 `turnover`(量÷流通股數)、成交值 `amount`；量價掃描標「均額×」區分主力大單 vs 散戶散單~~
+- [x] ~~**修 `backfill_by_date` 漏存 amount/transaction**：P1 自癒經 MI_INDEX 補的日子會掉成交金額/筆數（均額因子失效）→ 已補存兩市場，07-13 回補~~
 
 ### P0（影響正確性/安全）
 - [ ] **接遠端 repo**（內網 GitLab / GitHub private）+ push；本機 bundle 改 `git clone`（徹底消除人工 md5 同步）— 需決定 host

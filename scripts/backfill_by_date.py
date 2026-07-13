@@ -60,11 +60,13 @@ def fetch_twse(date_str: str):
         close = _to_dec(row[8])
         if close is None:
             continue
-        # MI_INDEX: 0代號 1名稱 2成交股數 5開 6高 7低 8收
+        # MI_INDEX: 0代號 1名稱 2成交股數 3成交筆數 4成交金額 5開 6高 7低 8收
         out.append({
             "stock_id": code, "symbol": code, "date": dt,
             "open": _to_dec(row[5]), "high": _to_dec(row[6]), "low": _to_dec(row[7]),
             "close": close, "adj_close": close, "volume": _to_dec(row[2]),
+            "amount": str(row[4]).replace(",", "").strip(),         # 成交金額(供均額因子)
+            "transaction": str(row[3]).replace(",", "").strip(),     # 成交筆數
             "name": str(row[1]).strip(), "data_source": "TWSE_MI_INDEX",
             "updated_at": datetime.now(),
         })
@@ -82,7 +84,7 @@ def fetch_tpex(date_str: str):
     rows = (r.json().get("tables") or [{}])[0].get("data") or []
     out = []
     for row in rows:
-        if len(row) < 8:
+        if len(row) < 10:
             continue
         code = str(row[0]).strip()
         if not code.isdigit():
@@ -90,11 +92,13 @@ def fetch_tpex(date_str: str):
         close = _to_dec(row[2])
         if close is None:
             continue
-        # otc EW: 0代號 1名稱 2收 4開 5高 6低 7成交股數
+        # otc EW: 0代號 1名稱 2收 4開 5高 6低 7成交股數 8成交金額 9成交筆數
         out.append({
             "stock_id": code, "symbol": code, "date": dt,
             "open": _to_dec(row[4]), "high": _to_dec(row[5]), "low": _to_dec(row[6]),
             "close": close, "adj_close": close, "volume": _to_dec(row[7]),
+            "amount": str(row[8]).replace(",", "").strip(),         # 成交金額(供均額因子)
+            "transaction": str(row[9]).replace(",", "").strip(),     # 成交筆數
             "name": str(row[1]).strip(), "data_source": "TPEX_OTC",
             "updated_at": datetime.now(),
         })
