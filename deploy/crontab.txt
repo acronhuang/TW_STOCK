@@ -29,6 +29,9 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 0 1 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash backup_mongodb.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_mongodb_backup.log 2>&1  # weekly_mongodb_backup
 0 2 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/sync_shares_openapi.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_outstanding_shares.log 2>&1  # weekly_outstanding_shares
 0 8 * * 6  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/weekly_team_verify.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_team_verify.log 2>&1  # weekly_team_verify
+# 全市場媒體新聞預抓（週五 19:30，供 21:00 全市場團隊分析讀快取）
+30 19 * * 5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/media_news_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_media_news.log 2>&1  # weekly_media_news
+
 0 21 * * 5  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/weekly_team_full.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_team_full.log 2>&1  # weekly_team_full
 0 22 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/data_health.py --snapshot --trend >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_data_health.log 2>&1  # data_health_daily
 0 9 * * 6  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/data_health.py --finmind 30 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_data_health.log 2>&1  # data_health_weekly_finmind

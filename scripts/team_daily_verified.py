@@ -662,8 +662,8 @@ def main():
         os.environ['CONSENSUS_MODE'] = 'deliberate'
         print("ℹ️ 全市場批次 → 合議自動用盲投(deliberate)控時；小批才用序列討論。")
     if args.universe == 'all' and 'NEWS_GOOGLE' not in os.environ:
-        os.environ['NEWS_GOOGLE'] = '0'     # 全市場只用 major_news，不外抓 Google（避免 2000 檔逐一外抓被擋）
-        print("ℹ️ 全市場批次 → 新聞只用 major_news（不外抓 Google News）。")
+        os.environ['NEWS_GOOGLE'] = '0'     # 全市場不即時外抓 Google（避免 2000 檔逐一被限流）
+        print("ℹ️ 全市場批次 → 媒體新聞讀 media_news 預抓快取（scripts/media_news_sync.py，週五 19:30 先抓）；不即時外抓。")
 
     if args.date:
         global _DATE_OVERRIDE
