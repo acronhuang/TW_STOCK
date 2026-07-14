@@ -130,6 +130,10 @@ def show():
         with st.expander("🎩 投資顧問整合"):
             st.write(full["advisor"])
 
+    if full.get("news"):
+        with st.expander("📰 新聞佐證（餵給分析師的事件：官方重大訊息 + 媒體新聞）"):
+            st.text(full["news"])
+
     for role, txt in (full.get("reports") or {}).items():
         with st.expander(ROLE_ICON.get(role, role)):
             st.write(txt)

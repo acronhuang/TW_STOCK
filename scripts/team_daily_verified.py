@@ -205,11 +205,22 @@ def _ma_inst_extra(symbol: str) -> dict:
         return {}
 
 
+def _news_for(symbol: str) -> str:
+    """取新聞事件佐證（major_news + Google News）。失敗開放：出錯回空、不影響分析。"""
+    try:
+        from src.analysis.news_evidence import news_evidence
+        return news_evidence(symbol)
+    except Exception as e:
+        print(f"     ⚠️ 新聞佐證取得失敗（不影響分析）: {e}")
+        return ""
+
+
 def analyze_symbol(symbol: str, quick: bool) -> dict:
     data = fetch_all_data(symbol)
     evidence = verify_metrics(symbol)
     sv_pats = senvision_patterns(symbol)          # 蔡森型態結果
     extra = _ma_inst_extra(symbol)                # MA乖離 + 法人連續
+    news_txt = _news_for(symbol)                  # 新聞事件佐證（量價/籌碼看不到的基本面事件）
 
     reports = {}
     for role in ANALYST_ROLES:
@@ -218,6 +229,9 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
             # 技術角色依「蔡森方法」分析：餵入 SenVision 型態/頸線/目標價/風報比
             prompt += "\n\n" + senvision_text(sv_pats) + \
                       "\n\n請務必結合上述蔡森型態結果(型態/頸線/目標價/風報比)做技術判讀，而非只看因子。"
+        if news_txt and role != 'technical-analyst':   # 事件相關角色餵新聞（技術純看圖，略過）
+            prompt += "\n\n" + news_txt + \
+                      "\n（新聞可能含同名公司雜訊，請自行判斷相關性後納入研判。）"
         prompt += EVIDENCE_SUFFIX
         # timeout 放寬：deepseek-r1:14b 等模型在角色迴圈中『第一次呼叫』需冷載(9GB)+thinking，
         # 易破 180s（後續同模型 warm 則快）。給 300s 吸收冷啟動。
@@ -232,6 +246,8 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     if not quick:
         data['reports'] = reports
         prompt = build_expert_prompt('investment-advisor', symbol, data)
+        if news_txt:                              # 顧問整合時也看得到原始新聞事件
+            prompt += "\n\n" + news_txt
         # 顧問 qwen3.6:27b(17GB) 冷載 + 整合6份報告，給 600s
         r = ask_role('investment-advisor', prompt, include_role_prompt=True, timeout=600)
         advisor = r.get('response', f"整合失敗: {r.get('error')}")
@@ -248,7 +264,7 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
 
     return {'symbol': symbol, 'evidence': evidence, 'reports': reports,
             'advisor': advisor, 'senvision': sv_pats, 'extra': extra,
-            'consensus': consensus}
+            'news': news_txt, 'consensus': consensus}
 
 
 def _first_line(txt: str, n: int = 60) -> str:
@@ -645,6 +661,9 @@ def main():
     if args.universe == 'all' and 'CONSENSUS_MODE' not in os.environ:
         os.environ['CONSENSUS_MODE'] = 'deliberate'
         print("ℹ️ 全市場批次 → 合議自動用盲投(deliberate)控時；小批才用序列討論。")
+    if args.universe == 'all' and 'NEWS_GOOGLE' not in os.environ:
+        os.environ['NEWS_GOOGLE'] = '0'     # 全市場只用 major_news，不外抓 Google（避免 2000 檔逐一外抓被擋）
+        print("ℹ️ 全市場批次 → 新聞只用 major_news（不外抓 Google News）。")
 
     if args.date:
         global _DATE_OVERRIDE
