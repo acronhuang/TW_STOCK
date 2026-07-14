@@ -196,6 +196,7 @@ def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
     """多輪序列討論 + 主持人綜合定案。回 {votes, tally, final, final_source, facilitator,
     n, dissent, rounds_run, changed, round_tallies, transcript}（schema 相容 deliberate）。"""
     prev_votes, first_votes, votes, round_tallies, transcript = {}, {}, [], [], ''
+    round0_votes = []          # round 0 = 委員各自獨立投票 = 盲投對照(免費，無額外呼叫)
     rounds_run = 0
     for r in range(max(1, rounds)):
         rounds_run = r + 1
@@ -209,6 +210,7 @@ def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
         round_tallies.append({v: sum(1 for x in votes if x['vote'] == v) for v in VOTES})
         if r == 0:
             first_votes = {x['model']: x['vote'] for x in votes}
+            round0_votes = votes
         prev_votes = {x['model']: x['vote'] for x in votes}
         transcript = _fmt_transcript(votes)
         # 早退：全員都投了且一致 → 共識達成，無需再討論
@@ -216,6 +218,7 @@ def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
         if len(vv) == len(COMMITTEE) and len(set(vv)) == 1:
             break
     final, tally, n = _finalize(votes, advisor_draft)      # 多數決(fallback)
+    blind_final = _finalize(round0_votes, advisor_draft)[0]  # 盲投對照定案(round0，A/B 用)
     final_source, fac_synth = 'majority', ''
     if facilitate:                                         # ③ 主持人綜合定案(優先)
         fac_vote, fac_synth = _facilitate(symbol, name, advisor_draft, data_summary,
@@ -226,6 +229,7 @@ def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
     changed = sum(1 for x in votes if x['vote'] and first_votes.get(x['model'])
                   and x['vote'] != first_votes[x['model']])
     return {'votes': votes, 'tally': tally, 'final': final, 'final_source': final_source,
+            'blind_final': blind_final,   # A/B：盲投(round0)定案 vs final(討論+主持人)
             'facilitator': fac_synth, 'n': n, 'dissent': dissent,
             'rounds_run': rounds_run, 'changed': changed,
             'round_tallies': round_tallies, 'transcript': transcript}
