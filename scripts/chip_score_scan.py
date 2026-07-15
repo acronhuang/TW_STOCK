@@ -52,6 +52,22 @@ def _tof(v):
         return None
 
 
+def _last_complete_date(db, coll, ratio=0.6, window=8):
+    """回傳 coll 最後一個『筆數接近近期常態』的交易日，跳過 T+1 尚未公布齊的最新日。
+    institutional_flow(三大法人 T86)T+1 公布：當日傍晚僅部分(如 817/2050)，
+    直接取最新日會讓多數股沒當日法人 → 研判整包 0。取最後完整日才不漏。"""
+    import statistics
+    dates = sorted(db[coll].distinct('date'))[-window:]
+    if not dates:
+        return None
+    counts = [db[coll].count_documents({'date': d}) for d in dates]
+    med = statistics.median(counts)
+    for d, c in zip(reversed(dates), reversed(counts)):
+        if med <= 0 or c >= ratio * med:
+            return d
+    return dates[-1]
+
+
 def read_institutional(db, ref_date):
     """{symbol: {foreign,trust,dealer,total}}（張）。法人 total_net 單位為股 → /1000。"""
     out = {}
@@ -167,22 +183,23 @@ def _is_etf(sym: str) -> bool:
 
 def load(db, min_volume_lots, min_price, include_etf=False):
     """彙整最新交易日的 法人 + 融資 + 股價 + 量價因子。回傳 (ref_date, rows, m_date)。"""
-    idoc = db.institutional_flow.find_one({}, sort=[('date', -1)])
-    if not idoc:
+    # 法人：取最後完整日（跳過 T+1 未齊的最新日），與股價日解耦
+    ref = _last_complete_date(db, 'institutional_flow')
+    if not ref:
         return None, [], None
-    ref = idoc['date']
     inst = read_institutional(db, ref)
     streak = read_inst_streak(db, ref)
     holders = read_holder_conc(db)
     fholding = read_foreign_holding(db)
 
-    # 融資：優先同日；若當日尚未更新則退回融資自己的最新日（並記錄落後）
+    # 融資：與法人同日比較（背離判斷需同日）；當日缺則退回融資最新日
     mdoc = db.margin_purchase_short_sale.find_one({'date': ref})
     m_date = ref if mdoc else (db.margin_purchase_short_sale.find_one({}, sort=[('date', -1)]) or {}).get('date')
     margin = read_margin(db, m_date) if m_date else {}
 
-    # 股價（當日 + 前一交易日算漲跌）
-    pdates = sorted(db.stock_price.distinct('date', {'date': {'$lte': ref}}))[-2:]
+    # 股價：用自己的最新日（法人 T+1 落後屬正常，股價仍要當日，不受 ref 牽制）
+    # $type:date 濾掉 stock_price 中混入的 str 型別髒日期，避免 distinct 排序型別衝突
+    pdates = sorted(db.stock_price.distinct('date', {'date': {'$type': 'date'}}))[-2:]
     today_d = pdates[-1]
     prev_d = pdates[0] if len(pdates) > 1 else today_d
     today = {p['symbol']: p for p in db.stock_price.find(

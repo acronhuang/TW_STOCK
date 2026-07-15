@@ -692,6 +692,22 @@ def check_integrity(db) -> tuple[list[str], list[str]]:
         # 以該表「自己的最新日」精準計數（用原始 date 值，型別安全，不需 fallback 全表總數）
         count = col.count_documents({"date": doc["date"], **flt})
 
+        # lag>0 的表（如 institutional_flow：三大法人 T86 T+1 公布）：最新日常是尚未
+        # 公布齊的 partial（如 817/2050）。筆數判定改取「最近 (max_lag+1) 個交易日的最高
+        # 筆數」——窗內有一天齊即算齊，與 max_lag 落後容許一致，避免把 T+1 當日誤判缺料。
+        # ($sort 交給 Mongo，可跨 date 型別排序，不會踩到 Python 混型別排序錯誤)
+        check_count, check_date = count, latest
+        if max_lag > 0:
+            recent = [g["_id"] for g in col.aggregate([
+                {"$match": (flt or {"date": {"$exists": True}})},
+                {"$group": {"_id": "$date"}}, {"$sort": {"_id": -1}},
+                {"$limit": max_lag + 1},
+            ])]
+            for d in recent:
+                c = col.count_documents({"date": d, **flt})
+                if c > check_count:
+                    check_count, check_date = c, _to_date(d)
+
         # 自適應門檻：靜態為地板，近期中位數把它往上抬（真相錨點）。
         # 僅限固定母體表；爆發/稀疏表維持靜態（見 _ADAPTIVE_TABLES）。
         if col_name in _ADAPTIVE_TABLES:
@@ -711,11 +727,11 @@ def check_integrity(db) -> tuple[list[str], list[str]]:
             val_bad = _value_sanity_bad(col, latest, flt)
             if val_bad > _VALUE_BAD_MAX:
                 problems.append(f"值合理性異常 {val_bad} 筆（OHLC 超出範圍/零價卻有量）")
-        if count < eff_min:
+        if check_count < eff_min:
             if median is not None and eff_min > min_count:
-                problems.append(f"筆數 {count} < 門檻 {eff_min}（近{_ADAPT_WINDOW}日中位 {median}×{_ADAPT_RATIO}）")
+                problems.append(f"筆數 {check_count} < 門檻 {eff_min}（近{_ADAPT_WINDOW}日中位 {median}×{_ADAPT_RATIO}）")
             else:
-                problems.append(f"筆數 {count} < 預期 {eff_min}")
+                problems.append(f"筆數 {check_count} < 預期 {eff_min}")
 
         if problems:
             fail_list.append(f"❌ {col_name}: " + "；".join(problems))
@@ -723,7 +739,7 @@ def check_integrity(db) -> tuple[list[str], list[str]]:
             hint = f"（門檻{eff_min}｜中位{median}）" if median is not None else ""
             if val_bad is not None:
                 hint += f" 值檢✓（{val_bad} 異常）" if val_bad else " 值檢✓"
-            ok_list.append(f"✅ {col_name}: {count} 筆 @ {latest} {hint}".rstrip())
+            ok_list.append(f"✅ {col_name}: {check_count} 筆 @ {check_date} {hint}".rstrip())
 
     return ok_list, fail_list
 
@@ -854,6 +870,13 @@ def run_heal(db, fail_list: list) -> tuple[list, list]:
 def send_heal_report(orig_fail, actions, escalated, final_ok, final_fail):
     """自癒後的 LINE 報告：修復了什麼、升級了什麼、是否仍有殘留。"""
     try:
+        # 與 send_line_report 一致：補專案根到 sys.path（否則 No module named 'src'）＋
+        # 載入 .env（否則 LineNotifier 拿不到 token → 「LINE 未設定」靜默跳過）。
+        from pathlib import Path
+        project_root = Path(__file__).parent.parent
+        sys.path.insert(0, str(project_root))
+        from dotenv import load_dotenv
+        load_dotenv(str(project_root / ".env"))
         from src.alerts.line_notifier import LineNotifier
         notifier = LineNotifier()
         if not notifier.enabled:

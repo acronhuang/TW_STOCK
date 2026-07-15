@@ -92,6 +92,18 @@ def _db_latest(coll: str, key: str, symbol: str, field: str, non_null: bool = Fa
     return (_tof(doc.get(field)) if doc else None), (doc.get('date') if doc else None)
 
 
+_MARKET_LAST = [None]
+
+
+def _market_last_day():
+    """全市場最新交易日（stock_price 任一檔的最大 date）。用來判個股當日價是否『過期』。
+    partial download 時，多數檔已有今日價 → 市場最新日=今日；缺價個股其最新日<今日 → 標記過期。"""
+    if _MARKET_LAST[0] is None:
+        doc = DB.stock_price.find_one({}, sort=[('date', -1)])
+        _MARKET_LAST[0] = doc.get('date') if doc else False   # False=查過但無資料，避免重查
+    return _MARKET_LAST[0] or None
+
+
 # FinMind 複核節流：本地 DB 為權威來源，FinMind 僅作抽查稽核。
 # 每個 process 最多複核 N 檔(避免 50 檔 ×3 打爆 600/hr 配額、與其他排程互搶)，
 # 超過則純用本地 DB(標 📁本地，非警示)。符合「本地優先」原則。
@@ -113,10 +125,17 @@ def verify_metrics(symbol: str) -> list[dict]:
     audit = _fm_audit_take()    # 本檔是否動用 FinMind 複核(節流)
 
     # 1) 收盤價：stock_price(本地) vs TaiwanStockPrice(抽查)
-    db_close, _ = _db_latest('stock_price', 'symbol', symbol, 'close')
+    db_close, close_date = _db_latest('stock_price', 'symbol', symbol, 'close')
     fm_price = _finmind('TaiwanStockPrice', symbol, start) if audit else None
     live_close = _tof(fm_price[-1].get('close')) if fm_price else None
-    rows.append(_cmp('收盤價', db_close, live_close, 'FinMind', tol=0.03))
+    close_row = _cmp('收盤價', db_close, live_close, 'FinMind', tol=0.03)
+    # 防呆：個股最新收盤日 < 全市場最新交易日 → 當日價未下載，正沿用舊價 → 標記過期。
+    # （partial download 的靜默失效，FinMind 3% 容差抓不到 <3% 的隔日跳動，故獨立把關）
+    mkt_last = _market_last_day()
+    if close_date and mkt_last and close_date < mkt_last:
+        close_row['stale'] = True
+        close_row['flag'] = f"⚠️過期{close_date.strftime('%m/%d')}"
+    rows.append(close_row)
 
     # 2) 本益比 / 殖利率：stock_factors(本地,最新非空) vs TaiwanStockPER(抽查)
     db_pe, _ = _db_latest('stock_factors', 'symbol', symbol, 'pe_ratio', non_null=True)
@@ -488,6 +507,14 @@ def _ev_val(a, metric):
     return None
 
 
+def _ev_close_stale(a) -> bool:
+    """收盤價是否為過期(當日未下載、沿用舊價)。"""
+    for e in a.get('evidence', []):
+        if e.get('metric') == '收盤價':
+            return bool(e.get('stale'))
+    return False
+
+
 def _pat_dir(sv: dict) -> str:
     """蔡森型態方向：以 target vs stop 判定(最穩，不受 Failed-Breakdown 命名干擾)；
     退而求其次看型態名。回傳 'long'/'short'/'none'。"""
@@ -510,7 +537,7 @@ def _enrich_line(a: dict, meta: dict, show_verdict: bool) -> str:
     price, pe, dy = _ev_val(a, '收盤價'), _ev_val(a, '本益比'), _ev_val(a, '殖利率%')
     bits = []
     if price is not None:
-        bits.append(f"{price:g}")
+        bits.append(f"{price:g}⚠️舊價" if _ev_close_stale(a) else f"{price:g}")
     if pe:
         bits.append("PE高" if pe > 80 else f"PE{pe:.0f}")   # PE>80 多為低獲利,數值無意義 → 標『高』
     if dy:
@@ -633,6 +660,8 @@ def _send_line(msg: str):
     try:
         from src.alerts.line_notifier import LineNotifier
         ln = LineNotifier()
+        if os.getenv('LINE_SPOOL'):      # spool 模式：整則暫存不分段（避免 digest 分類碎片化）
+            ln.send(msg); print("✅ LINE 已暫存(spool)"); return
         if not ln.enabled:
             print("⚠️ LINE 未設定"); return
         # LINE 單則上限~5000字 → 過長分段

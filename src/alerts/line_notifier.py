@@ -107,7 +107,20 @@ class LineNotifier:
         return self._mode != 'disabled'
 
     def send(self, message: str) -> bool:
-        """發送 LINE 訊息"""
+        """發送 LINE 訊息。
+        若設環境變數 LINE_SPOOL：不即時發，改把訊息附加到該檔（收盤後由
+        evening_digest.py 讀出、分類彙整成 2-3 則統一推播 → 降噪）。"""
+        spool = os.getenv('LINE_SPOOL')
+        if spool:
+            try:
+                with open(spool, 'a', encoding='utf-8') as fh:
+                    fh.write(json.dumps(
+                        {'ts': datetime.now().strftime('%H:%M'), 'body': message},
+                        ensure_ascii=False) + '\n')
+                logger.info('[LINE spool] 已暫存 1 則')
+                return True
+            except Exception as e:
+                logger.error(f'[LINE spool 失敗，改直接發] {e}')
         if self._mode == 'messaging_push':
             return self._send_push(message)
         elif self._mode == 'messaging_broadcast':

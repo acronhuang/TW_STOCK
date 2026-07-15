@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # 匯入 sibling script
 from chip_score_scan import (_tof, read_institutional, read_margin, read_inst_streak,
-                             _is_etf, judge, INST_FLOOR, MGN_FLOOR)
+                             _is_etf, judge, INST_FLOOR, MGN_FLOOR, _last_complete_date)
 
 
 def vp_signal(r):
@@ -96,17 +96,19 @@ def combine(r):
 
 
 def load(db, min_volume_lots, min_price, include_etf=False):
-    idoc = db.institutional_flow.find_one({}, sort=[('date', -1)])
-    if not idoc:
+    # 法人：取最後完整日（跳過 T+1 未齊的最新日），與股價日解耦
+    ref = _last_complete_date(db, 'institutional_flow')
+    if not ref:
         return None, [], None
-    ref = idoc['date']
     inst = read_institutional(db, ref)
     streak = read_inst_streak(db, ref)
     mdoc = db.margin_purchase_short_sale.find_one({'date': ref})
     m_date = ref if mdoc else (db.margin_purchase_short_sale.find_one({}, sort=[('date', -1)]) or {}).get('date')
     margin = read_margin(db, m_date) if m_date else {}
 
-    pdates = sorted(db.stock_price.distinct('date', {'date': {'$lte': ref}}))[-2:]
+    # 股價：用自己的最新日（不受法人 ref 牽制，避免被拉回 T-1）
+    # $type:date 濾掉 stock_price 中混入的 str 型別髒日期，避免 distinct 排序型別衝突
+    pdates = sorted(db.stock_price.distinct('date', {'date': {'$type': 'date'}}))[-2:]
     today_d = pdates[-1]
     prev_d = pdates[0] if len(pdates) > 1 else today_d
     today = {p['symbol']: p for p in db.stock_price.find(
