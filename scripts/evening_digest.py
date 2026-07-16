@@ -139,6 +139,9 @@ def main():
 
     # 實發：務必確保自己不在 spool 模式（否則會把彙整again寫回 spool）
     os.environ.pop("LINE_SPOOL", None)
+    # cron 環境不帶 .env → 沒這行 LineNotifier 拿不到 token、靜默走「未設定」不發。
+    from dotenv import load_dotenv
+    load_dotenv(str(ROOT / ".env"))
     from src.alerts.line_notifier import LineNotifier
     ln = LineNotifier()
     if not ln.enabled:
