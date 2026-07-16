@@ -17,30 +17,37 @@ rm -f "$SPOOL"                       # 清上一輪殘留，避免跨日污染
 
 step(){ echo "--- [$(date +%H:%M:%S)] $1 ---"; }
 
-step "1/8 完整度自癒 heal（補齊當日股價）"
+# 順序關鍵：必須「先下載股價 → 再 heal → 才算因子」。
+# twse_openapi_sync(17:30 cron)只抓周邊表(融資/當沖/零股/盤後)，stock_price 是
+# twse_daily_update 抓的。若 heal 排在下載前，DB 內最新日還是昨天 → 完整度檢查
+# 拿昨天(完整)比對 → 誤判「全部正常」→ heal 空轉，當日缺價全部沿用舊值。
+step "1/9 下載當日股價（stock_price）"
+$PY scripts/twse_daily_update.py || echo "  twse_daily_update 失敗（續）"
+
+step "2/9 完整度自癒 heal（補齊當日缺漏）"
 $PY scripts/twse_openapi_sync.py --heal || echo "  heal 非零退出（續）"
 
-step "2/8 重算因子 + 蔡森掃描（在完整價上）"
+step "3/9 重算因子 + 蔡森掃描（在補齊後的價上）"
 bash scripts/daily_senvision.sh || echo "  senvision 失敗（續）"
 
-step "3/8 北大四大法則日檢"
+step "4/9 北大四大法則日檢"
 $PY scripts/daily_alert_check.py || echo "  alert_check 失敗（續）"
 
-step "4/8 每日選股推薦"
+step "5/9 每日選股推薦"
 $PY scripts/daily_recommendations.py || echo "  recommendations 失敗（續）"
 
-step "5/8 量價掃描 / OBV 背離"
+step "6/9 量價掃描 / OBV 背離"
 $PY scripts/volume_price_scan.py || echo "  volume_price 失敗（續）"
 $PY scripts/obv_bottom_divergence_scan.py || echo "  obv 失敗（續）"
 
-step "6/8 主力散戶籌碼 / 雙訊號"
+step "7/9 主力散戶籌碼 / 雙訊號"
 $PY scripts/chip_score_scan.py || echo "  chip 失敗（續）"
 $PY scripts/dual_signal_scan.py || echo "  dual 失敗（續）"
 
-step "7/8 團隊分析（Phase1+2）"
+step "8/9 團隊分析（Phase1+2）"
 bash scripts/team_daily_50.sh || echo "  team 失敗（續）"
 
-step "8/8 彙整推播（2-3 則）"
+step "9/9 彙整推播（2-3 則）"
 unset LINE_SPOOL                     # digest 需實發（內部亦會 pop 一次防呆）
 $PY scripts/evening_digest.py --spool "$SPOOL" || echo "  digest 失敗"
 

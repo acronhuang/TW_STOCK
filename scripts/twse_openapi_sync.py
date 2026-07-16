@@ -650,15 +650,14 @@ def check_integrity(db) -> tuple[list[str], list[str]]:
     if tz_problem:
         fail_list.append(tz_problem)
 
-    # 參考交易日 = stock_price 最新日期（排除 TAIEX，見 _MARKET_FILTER）
-    ref_doc = _latest_date_doc(db["stock_price"], _MARKET_FILTER)
-    ref_day = _to_date(ref_doc["date"]) if ref_doc else None
+    # 參考交易日：與 run_heal 共用 _reference_day（各表最新日取最大，非 stock_price 自己）
+    today = datetime.now().date()
+    ref_day = _reference_day(db)
     if ref_day is None:
-        fail_list.append("❌ stock_price 查無（非TAIEX）資料，無法判斷參考交易日")
+        fail_list.append("❌ 所有資料表皆查無 date，無法判斷參考交易日")
         return ok_list, fail_list
 
-    # pipeline 停擺檢查：連 stock_price 都落後今日太多（此處用日曆天，含週末/連假緩衝）
-    today = datetime.now().date()
+    # pipeline 停擺檢查：連參考日都落後今日太多（此處用日曆天，含週末/連假緩衝）
     pipeline_lag = (today - ref_day).days
     if pipeline_lag > PIPELINE_STALE_DAYS:
         fail_list.append(
@@ -669,11 +668,15 @@ def check_integrity(db) -> tuple[list[str], list[str]]:
     # 交易日曆（近 120 天 stock_price 出現過、且 <= 參考日 的日期）。
     # 用「交易日」而非日曆天衡量落後，避免週末/連假把正常的 T+1 誤判成落後 3 天。
     cal_since = datetime.combine(ref_day - timedelta(days=120), datetime.min.time())
-    trading_days = sorted(
+    _cal = {
         d for d in (_to_date(x) for x in db["stock_price"].distinct(
             "date", {"date": {"$gte": cal_since}, **_MARKET_FILTER}))
         if d is not None and d <= ref_day
-    )
+    }
+    # 參考日必須在日曆內：日曆源自 stock_price，若正是 stock_price 缺當日，
+    # 日曆就沒有當日 → lag 永遠算 0、偵測不到「今天沒下載」。補進去才測得出。
+    _cal.add(ref_day)
+    trading_days = sorted(_cal)
 
     def _trading_day_lag(latest_d: _date) -> int:
         """落後幾個交易日 = 交易日曆中『晚於 latest_d 且 <= 參考日』的天數。"""
@@ -801,9 +804,22 @@ _COLL_TO_SYNC = {
 
 
 def _reference_day(db):
-    """參考交易日（排除 TAIEX），回 datetime.date 或 None。"""
-    doc = _latest_date_doc(db["stock_price"], _MARKET_FILTER)
-    return _to_date(doc["date"]) if doc else None
+    """參考交易日 = 各表最新日的「最大值」（上限今天）。回 datetime.date 或 None。
+
+    不可只用 stock_price 自己 —— 那是循環參照：當日股價整批沒下載時，ref 跟著退回昨天，
+    於是 (1) 檢查拿「昨天(完整)」自我比對 → 誤報「全部正常」；(2) heal 也會去補昨天
+    （已完整的那天）→ 今天永遠補不到。2026-07-16 實際踩過：20:00 時周邊表已是 07-16、
+    stock_price 仍停 07-15，卻報全正常、heal 空轉。
+    周邊表(融資/當沖/零股/盤後…)由 17:30 openapi_sync 每交易日更新，可當真相錨。
+    check_integrity 與 run_heal 共用本函式，確保「判定的日子」與「補的日子」一致。"""
+    today = datetime.now().date()
+    cands = []
+    for cn in TABLE_CHECKS:
+        doc = _latest_date_doc(db[cn], _MARKET_FILTER if cn == "stock_price" else {})
+        d = _to_date(doc["date"]) if doc else None
+        if d is not None and d <= today:      # 上限今天，防某表有未來日汙染參考日
+            cands.append(d)
+    return max(cands) if cands else None
 
 
 def _fail_collection(msg: str):
