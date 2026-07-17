@@ -114,6 +114,12 @@ def main():
     print(msg)
     if not no_line:
         try:
+            # cron 不帶 .env → 少了這行 LineNotifier 拿不到 token、enabled=False，
+            # 本檔就一直走「LINE 未設定」靜默跳過：長期沒發過，且因未呼叫 send()
+            # 連 spool 都不會進 → 整份分析從 digest 消失。
+            from pathlib import Path
+            from dotenv import load_dotenv
+            load_dotenv(str(Path(__file__).resolve().parent.parent / ".env"))
             from src.alerts.line_notifier import LineNotifier
             ln = LineNotifier()
             if ln.enabled:
