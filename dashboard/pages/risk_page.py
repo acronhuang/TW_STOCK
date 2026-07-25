@@ -134,33 +134,68 @@ def show():
             "損益%": st.column_config.NumberColumn(format="%.1f"),
         })
 
-    # ---------- ③ 實倉回放 ----------
+    # ---------- ③ 實倉回放 + 互動式策略回測 ----------
     st.markdown("---")
-    st.markdown("### 📈 實倉回放")
-    st.caption("從**各批實際買進日**起,用還原價(還原除權息+分割)算組合市值曲線,對比「同一筆錢、同一天改買 0050」。"
-               "需要分批有填**買進日**才會納入。")
+    st.markdown("### 📈 實倉回放 + 互動式策略回測")
+    st.caption("以**各批實際進場點**為基礎,用還原價(除權息+分割)算市值曲線。"
+               "可調出場規則,即時比較「有紀律出場(策略)」vs「單純買抱」vs「同資金買 0050」。"
+               "需分批有填**買進日**才納入。")
     has_date = any(lt["buy_date"] for lt in L.list_lots(db))
     if not has_date:
-        st.info("目前分批都還沒填買進日 → 無法回放。請在上方明細填入各筆買進日後儲存。")
+        st.info("目前分批都還沒填買進日 → 無法回測。請在上方明細填入各筆買進日後儲存。")
     else:
+        with st.expander("⚙️ 策略參數（調整後即時重算）", expanded=True):
+            k1, k2, k3, k4 = st.columns(4)
+            use_sl = k1.checkbox("停損", value=True, key="rk_sl")
+            sl = k1.slider("停損 %", 3, 30, 10, key="rk_slv", disabled=not use_sl) / 100
+            use_tp = k2.checkbox("停利", value=False, key="rk_tp")
+            tp = k2.slider("停利 %", 5, 100, 30, key="rk_tpv", disabled=not use_tp) / 100
+            use_tr = k3.checkbox("移動停損", value=False, key="rk_tr")
+            tr = k3.slider("移動停損 %", 3, 30, 15, key="rk_trv", disabled=not use_tr) / 100
+            use_md = k4.checkbox("持有上限", value=False, key="rk_md")
+            md = k4.slider("上限天數", 20, 500, 120, step=10, key="rk_mdv", disabled=not use_md)
         try:
-            rep = L.equity_replay(db)
-            if rep is None or rep.empty:
-                st.warning("回放無資料(可能還原價缺失)。")
+            eq, trades = L.strategy_replay(
+                db,
+                stop_loss=sl if use_sl else None,
+                take_profit=tp if use_tp else None,
+                trailing=tr if use_tr else None,
+                max_days=md if use_md else None,
+            )
+            if eq is None or eq.empty:
+                st.warning("回測無資料(可能還原價缺失)。")
             else:
-                last = rep.iloc[-1]
-                cost = float(last["投入成本"])
-                rp = (float(last["持倉市值"]) / cost - 1) * 100 if cost else 0
-                rb = (float(last["同資金買0050"]) / cost - 1) * 100 if cost else 0
-                c1, c2, c3 = st.columns(3)
-                c1.metric("投入成本", f"{cost:,.0f}")
-                c2.metric("持倉市值", f"{float(last['持倉市值']):,.0f}", f"{rp:+.1f}%")
-                c3.metric("同資金買0050", f"{float(last['同資金買0050']):,.0f}", f"{rb:+.1f}%")
-                st.caption(f"區間 {str(rep.index[0])[:10]} ~ {str(rep.index[-1])[:10]}　·　"
-                           f"{'✅ 跑贏大盤' if rp > rb else '⚠️ 跑輸大盤'} {abs(rp - rb):.1f} 個百分點")
-                st.line_chart(rep, height=320)
+                last = eq.iloc[-1]
+                c = float(last["投入成本"])
+                rs = (float(last["策略市值"]) / c - 1) * 100 if c else 0
+                rh = (float(last["買抱市值"]) / c - 1) * 100 if c else 0
+                rb = (float(last["同資金買0050"]) / c - 1) * 100 if c else 0
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("投入成本", f"{c:,.0f}")
+                m2.metric("策略市值", f"{float(last['策略市值']):,.0f}", f"{rs:+.1f}%")
+                m3.metric("單純買抱", f"{float(last['買抱市值']):,.0f}", f"{rh:+.1f}%")
+                m4.metric("同資金買0050", f"{float(last['同資金買0050']):,.0f}", f"{rb:+.1f}%")
+                verdict = "✅ 策略優於買抱" if rs > rh + 0.1 else ("≈ 與買抱相當" if abs(rs - rh) <= 0.1 else "⚠️ 策略劣於買抱")
+                st.caption(f"區間 {str(eq.index[0])[:10]} ~ {str(eq.index[-1])[:10]}　·　{verdict}（{rs - rh:+.1f} 個百分點）")
+                st.line_chart(eq, height=320)
+                # 交易明細
+                trs = []
+                for t in trades:
+                    trs.append({
+                        "代號": t["symbol"], "名稱": _name(t["symbol"]),
+                        "買進日": str(t["buy_date"])[:10], "買價": t["buy_price"],
+                        "出場日": str(t["exit_date"])[:10], "出場價": t["exit_price"],
+                        "出場原因": t["reason"], "報酬%": t["ret_pct"],
+                    })
+                order = {"停損": 0, "移動停損": 1, "到期": 2, "停利": 3, "續持": 4}
+                trs.sort(key=lambda r: (order.get(r["出場原因"], 9), r["報酬%"]))
+                with st.expander(f"📋 交易明細（{len(trs)} 筆）", expanded=False):
+                    st.dataframe(pd.DataFrame(trs), hide_index=True, width="stretch",
+                                 column_config={"報酬%": st.column_config.NumberColumn(format="%.1f"),
+                                                "買價": st.column_config.NumberColumn(format="%.2f"),
+                                                "出場價": st.column_config.NumberColumn(format="%.2f")})
         except Exception as e:
-            st.warning(f"回放計算失敗: {e}")
+            st.warning(f"回測計算失敗: {e}")
 
     # ---------- ④ 持倉風控合議 ----------
     st.markdown("---")

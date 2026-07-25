@@ -206,3 +206,94 @@ def equity_replay(db, benchmark="0050"):
         return None
     df = pd.DataFrame({"持倉市值": port, "同資金買0050": bnch, "投入成本": cost})
     return df[df["投入成本"] > 0]
+
+
+def strategy_replay(db, stop_loss=None, take_profit=None, trailing=None,
+                    max_days=None, benchmark="0050"):
+    """以各批**真實進場點**為基礎,套用可調出場規則做互動式回測。
+
+    規則(擇最早觸發者出場,出場後該筆轉現金、報酬凍結):
+      stop_loss   現價 <= 進場價×(1-sl)      例 0.08
+      take_profit 現價 >= 進場價×(1+tp)
+      trailing    現價 <= 進場後最高×(1-tr)   移動停損
+      max_days    持有天數 >= N
+
+    回傳 (equity_df, trades):
+      equity_df: index=日期, 欄=[策略市值, 買抱市值, 同資金買0050, 投入成本]
+      trades:    每筆 dict(symbol,name?,buy_date,buy_price,shares,exit_date,exit_price,reason,ret_pct)
+    """
+    import pandas as pd
+    rows = [l for l in db.portfolio_lots.find({}) if l.get("buy_date")]
+    if not rows:
+        return None, []
+    start = min(l["buy_date"] for l in rows)
+    bench = _adj_series(db, benchmark, start)
+    if bench is None or bench.empty:
+        return None, []
+    idx = bench.index
+    strat = pd.Series(0.0, index=idx)
+    hold = pd.Series(0.0, index=idx)
+    bnch = pd.Series(0.0, index=idx)
+    cost = pd.Series(0.0, index=idx)
+    trades = []
+    used = 0
+    for l in rows:
+        bd = l["buy_date"]
+        sh = _f(l.get("shares")) or 0
+        pr = _f(l.get("price")) or 0
+        invested = sh * pr
+        if invested <= 0:
+            continue
+        s = _adj_series(db, l["symbol"], bd)
+        if s is None or s.empty:
+            continue
+        s = s.reindex(idx).ffill()
+        after = s[s.index >= bd].dropna()
+        b_after = bench[bench.index >= bd].dropna()
+        if after.empty or b_after.empty:
+            continue
+        entry = after.iloc[0]
+        bbase = b_after.iloc[0]
+        # 逐日套用出場規則
+        peak = entry
+        ex_dt, ex_px, reason = after.index[-1], after.iloc[-1], "續持"
+        for dt, px in after.items():
+            if px > peak:
+                peak = px
+            if stop_loss and px <= entry * (1 - stop_loss):
+                ex_dt, ex_px, reason = dt, entry * (1 - stop_loss), "停損"
+                break
+            if take_profit and px >= entry * (1 + take_profit):
+                ex_dt, ex_px, reason = dt, entry * (1 + take_profit), "停利"
+                break
+            if trailing and px <= peak * (1 - trailing):
+                ex_dt, ex_px, reason = dt, px, "移動停損"
+                break
+            if max_days and (dt - bd).days >= max_days:
+                ex_dt, ex_px, reason = dt, px, "到期"
+                break
+        ret = (ex_px / entry - 1)
+        # 曲線:進場~出場走市值,出場後凍結為現金(=進場資金×(1+報酬))
+        mask_hold = idx >= bd
+        held_val = invested * (s / entry)                    # 買抱:全程持有
+        strat_val = pd.Series(0.0, index=idx)
+        live = (idx >= bd) & (idx <= ex_dt)
+        after_ex = idx > ex_dt
+        strat_val[live] = invested * (s[live] / entry)
+        strat_val[after_ex] = invested * (1 + ret)           # 出場後凍結
+        strat = strat.add(strat_val.where(mask_hold, 0.0), fill_value=0)
+        hold = hold.add(held_val.where(mask_hold, 0.0).fillna(0.0), fill_value=0)
+        bnch.loc[mask_hold] = bnch.loc[mask_hold] + invested * (bench[mask_hold] / bbase).fillna(1.0)
+        cost.loc[mask_hold] = cost.loc[mask_hold] + invested
+        trades.append({
+            "symbol": l["symbol"], "buy_date": bd, "buy_price": round(pr, 2),
+            "shares": int(sh), "exit_date": ex_dt, "exit_price": round(float(ex_px), 2),
+            "reason": reason, "ret_pct": round(ret * 100, 1),
+        })
+        used += 1
+    if used == 0:
+        return None, []
+    eq = pd.DataFrame({"策略市值": strat, "買抱市值": hold,
+                       "同資金買0050": bnch, "投入成本": cost})
+    eq = eq[eq["投入成本"] > 0]
+    return eq, trades
