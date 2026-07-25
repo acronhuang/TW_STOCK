@@ -24,6 +24,8 @@ sys.path.insert(0, str(ROOT))
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 TWTAUU = "https://www.twse.com.tw/rwd/zh/reducation/TWTAUU"
+# TPEX 上櫃減資恢復買賣參考價(只給未來~3天滾動窗,故需每日捕捉)
+TPEX_REVIVT = "https://www.tpex.org.tw/www/zh-tw/bulletin/revivt"
 
 # ETF 受益權單位分割/反分割(公開事件,少數;比例從實際相鄰交易日收盤算,避免斷層)
 ETF_SPLITS = [
@@ -73,6 +75,36 @@ def fetch_twse_reduction(session, year):
     return out
 
 
+def fetch_tpex_reduction(session):
+    """TPEX 上櫃減資恢復買賣參考價(滾動窗,需每日跑才不漏)。
+    欄位: 0恢復買賣日期 1代號 2名稱 3最後交易日收盤 4減資恢復參考價 ... 9減資原因。
+    日期是民國 YYY/MM/DD。ratio = 參考價/停止前收盤(同 TWSE)。"""
+    try:
+        r = session.get(TPEX_REVIVT, headers={"User-Agent": UA}, timeout=25)
+        j = r.json()
+    except Exception as e:
+        print(f"  TPEX 取得失敗: {e}")
+        return []
+    out = []
+    for t in j.get("tables", []):
+        for row in t.get("data", []):
+            if len(row) < 10:
+                continue
+            ev = _roc_to_dt(row[0])
+            sym = str(row[1]).strip()
+            pre = _f(row[3])
+            ref = _f(row[4])
+            if not (ev and sym and pre and ref and pre > 0):
+                continue
+            out.append({
+                "symbol": sym, "event_date": ev, "type": "減資",
+                "reason": str(row[9]).strip() if len(row) > 9 else "",
+                "pre_close": pre, "ref_price": ref,
+                "ratio": round(ref / pre, 6), "source": "TPEX_revivt",
+            })
+    return out
+
+
 def build_etf_splits(db):
     """從 stock_price 實際相鄰交易日算 ETF 分割比例(指定日期→無斷層歧義)。"""
     from bson.decimal128 import Decimal128
@@ -104,6 +136,8 @@ def main():
     ap.add_argument("--start-year", type=int, default=2015)
     ap.add_argument("--end-year", type=int, default=2026)
     ap.add_argument("--db", default="tw_stock_analysis")
+    ap.add_argument("--tpex-only", action="store_true",
+                    help="只抓 TPEX 上櫃滾動窗(每日 cron 用,快)")
     args = ap.parse_args()
 
     db = MongoClient("localhost", 27017)[args.db]
@@ -111,21 +145,30 @@ def main():
 
     events = []
     import time
-    for y in range(args.start_year, args.end_year + 1):
-        try:
-            evs = fetch_twse_reduction(session, y)
-            events.extend(evs)
-            print(f"  {y}: 上市減資 {len(evs)} 筆")
-        except Exception as e:
-            print(f"  {y}: 失敗 {e}")
-        time.sleep(1.0)
 
-    etf = build_etf_splits(db)
-    events.extend(etf)
-    print(f"  ETF 分割 {len(etf)} 筆: {[(e['symbol'], e['ratio']) for e in etf]}")
+    # TPEX 上櫃(滾動窗,每日都抓)
+    tpex = fetch_tpex_reduction(session)
+    events.extend(tpex)
+    print(f"  TPEX 上櫃減資(當前窗): {len(tpex)} 筆" + (f" {[(e['symbol'], e['ratio']) for e in tpex]}" if tpex else ""))
 
+    if not args.tpex_only:
+        for y in range(args.start_year, args.end_year + 1):
+            try:
+                evs = fetch_twse_reduction(session, y)
+                events.extend(evs)
+                print(f"  {y}: 上市減資 {len(evs)} 筆")
+            except Exception as e:
+                print(f"  {y}: 失敗 {e}")
+            time.sleep(1.0)
+
+        etf = build_etf_splits(db)
+        events.extend(etf)
+        print(f"  ETF 分割 {len(etf)} 筆: {[(e['symbol'], e['ratio']) for e in etf]}")
+
+    now = datetime.now()
     ins = upd = 0
     for e in events:
+        e["updated_at"] = now
         res = db.corporate_actions.update_one(
             {"symbol": e["symbol"], "event_date": e["event_date"], "type": e["type"]},
             {"$set": e}, upsert=True)

@@ -172,9 +172,10 @@ def main():
         cut = datetime.now() - timedelta(days=args.days)
         changed = set(db.adjustment_factors.distinct("stock_id", {"updated_at": {"$gte": cut}}))
         missing = set(db.stock_price.distinct("stock_id", {"adjustment_factor": None}))
-        want = changed | missing
+        corp    = set(db.corporate_actions.distinct("symbol", {"updated_at": {"$gte": cut}}))
+        want = changed | missing | corp
         ids = [s for s in ids if s in want]
-        print(f"增量模式:除權息異動 {len(changed):,} 檔 + 缺還原欄位 {len(missing):,} 檔 "
+        print(f"增量模式:除權息異動 {len(changed):,} + 缺欄位 {len(missing):,} + 減資分割異動 {len(corp):,} 檔 "
               f"→ 待處理 {len(ids):,} 檔")
         if not ids:
             print("無異動,結束。")
