@@ -52,11 +52,26 @@ def segments(events):
     return segs
 
 
+def _corp_events(db, sid):
+    """corporate_actions(TWSE 權威減資/分割)的 (event_date, ratio)。
+    語意同除權息:事件日「之前」的價 × ratio(減資 ratio>1、分割 ratio<1)。
+    權威來源,不套除權息的 <1.5 濾網;僅擋極端異常(0<ratio<20)。"""
+    out = []
+    for r in db.corporate_actions.find({"symbol": sid},
+                                       {"_id": 0, "event_date": 1, "ratio": 1}):
+        rt = f(r.get("ratio"))
+        if 0 < rt < 20:
+            out.append((r["event_date"], rt))
+    return out
+
+
 def process(db, sid, dry_run):
     evs = [(r["ex_date"], f(r["factor"]))
            for r in db.adjustment_factors.find(
                {"stock_id": sid}, {"_id": 0, "ex_date": 1, "factor": 1}).sort("ex_date", 1)]
-    evs = [(d, x) for d, x in evs if 0 < x < 1.5]   # 防呆:factor 應 <1,異常值不套用
+    evs = [(d, x) for d, x in evs if 0 < x < 1.5]   # 防呆:除權息 factor 應 <1,異常值不套用
+    evs += _corp_events(db, sid)                    # 併入 TWSE 權威減資/分割
+    evs.sort(key=lambda t: t[0])                    # segments() 需日期升冪
 
     modified = 0
     for lo, hi, cum in segments(evs):
