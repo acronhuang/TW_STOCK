@@ -30,7 +30,21 @@ logger = logging.getLogger(__name__)
 MONGO_URI = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
 TOKEN = os.getenv('FINMIND_API_TOKEN')
 DB_NAME = 'tw_stock_analysis'
-START_DATE = '2015-01-01'
+START_DATE = '2010-01-01'
+
+
+NODATA_COL = 'dividend_sync_nodata'
+NODATA_COOLDOWN_DAYS = 30
+
+
+def active_universe(db):
+    """抓取母體:近 40 天仍在交易的 4 碼普通股(排除 ETF / 受益憑證 / 權證)。"""
+    latest = db.stock_price.find_one(sort=[('date', -1)])
+    if not latest:
+        return set()
+    since = latest['date'] - timedelta(days=40)
+    return {s for s in db.stock_price.distinct('stock_id', {'date': {'$gte': since}})
+            if len(s) == 4 and not s.startswith('00')}
 
 
 def parse_year(year_str):
@@ -160,18 +174,24 @@ def main():
         symbols = [args.sym]
         logger.info(f'單一股票模式: {args.sym}')
     else:
-        # 找出 stock_factors 有殖利率但 dividend_detail 缺少的股票
-        sf_syms = set(db.stock_factors.distinct('symbol', {'dividend_yield': {'$gt': 0}}))
+        # 母體 = 近期仍在交易的普通股。
+        # 舊版用 stock_factors.dividend_yield>0 當母體,但 TWSE 殖利率只算現金股利,
+        # 只配股票股利的公司永遠進不了名單 —— 2026-07-20 實測有 323 檔因此長期漏收。
+        universe = active_universe(db)
         local_syms = set(db.dividend_detail.distinct('stock_id'))
 
         if args.all:
-            symbols = sorted(sf_syms)
+            symbols = sorted(universe)
             logger.info(f'強制全量更新: {len(symbols)} 支')
         else:
-            missing = sf_syms - local_syms
+            # 問過且確定無配息的,冷卻期內不再問,避免每天空燒 API 配額
+            cooled = {r['stock_id'] for r in db[NODATA_COL].find(
+                {'last_checked': {'$gte': datetime.now() - timedelta(days=NODATA_COOLDOWN_DAYS)}},
+                {'stock_id': 1})}
+            missing = universe - local_syms - cooled
             # 也加入有本地資料但超過6個月未更新的
             outdated = []
-            for sym in (sf_syms & local_syms):
+            for sym in (universe & local_syms):
                 latest = db.dividend_detail.find_one({'stock_id': sym}, sort=[('date', -1)])
                 if latest:
                     try:
@@ -182,7 +202,8 @@ def main():
                         pass
 
             symbols = sorted(missing) + sorted(outdated)
-            logger.info(f'缺少資料: {len(missing)} 支 | 需更新: {len(outdated)} 支 | 合計: {len(symbols)} 支')
+            logger.info(f'母體: {len(universe)} 支 | 缺少: {len(missing)} 支 | '
+                        f'冷卻中: {len(cooled)} 支 | 需更新: {len(outdated)} 支 | 合計: {len(symbols)} 支')
 
     symbols = symbols[:args.limit]
     logger.info(f'本次處理: {len(symbols)} 支（上限 {args.limit}）')
@@ -203,7 +224,12 @@ def main():
             total['skipped'] += 1
         elif result['new'] == 0 and result['updated'] == 0 and result['unchanged'] == 0:
             total['no_data'] += 1
+            db[NODATA_COL].update_one(
+                {'stock_id': sym},
+                {'$set': {'last_checked': datetime.now()}, '$inc': {'checks': 1}},
+                upsert=True)
         else:
+            db[NODATA_COL].delete_one({'stock_id': sym})   # 開始配息了,移出冷卻名單
             total['new'] += result['new']
             total['updated'] += result['updated']
             total['unchanged'] += result['unchanged']

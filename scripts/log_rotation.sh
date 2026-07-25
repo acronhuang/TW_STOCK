@@ -37,7 +37,9 @@ echo "  已刪除 ${RETAIN_DAYS} 天前的日誌: $DELETED 個"
 MAX_BYTES=$((MAX_FILE_SIZE_MB * 1024 * 1024))
 LARGE_DELETED=0
 while IFS= read -r f; do
-    SIZE=$(stat -f%z "$f" 2>/dev/null || echo 0)
+    # stat -c%s 為 GNU/Linux 語法，-f%z 為 BSD/macOS；本專案由 macOS 移機至 Ubuntu，
+    # 原本只有 BSD 版 → 在 Linux 恆回 0，日誌輪替靜默失效（2026-07-19 修）
+    SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
     if [ "$SIZE" -gt "$MAX_BYTES" ]; then
         echo "  刪除超大檔: $(basename "$f") ($((SIZE / 1024 / 1024))MB)"
         rm -f "$f" && ((LARGE_DELETED++))
@@ -49,7 +51,9 @@ echo "  已刪除超大日誌: $LARGE_DELETED 個"
 LAUNCHD_MAX_BYTES=$((LAUNCHD_MAX_MB * 1024 * 1024))
 for f in "$LOG_BASE"/launchd_*.log; do
     [ -f "$f" ] || continue
-    SIZE=$(stat -f%z "$f" 2>/dev/null || echo 0)
+    # stat -c%s 為 GNU/Linux 語法，-f%z 為 BSD/macOS；本專案由 macOS 移機至 Ubuntu，
+    # 原本只有 BSD 版 → 在 Linux 恆回 0，日誌輪替靜默失效（2026-07-19 修）
+    SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
     if [ "$SIZE" -gt "$LAUNCHD_MAX_BYTES" ]; then
         tail -2000 "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
         echo "  截斷: $(basename "$f") (原 $((SIZE / 1024 / 1024))MB)"
@@ -59,7 +63,9 @@ done
 # 4. 清理 api_server.log（超過 10MB 截斷）
 for f in "$LOG_BASE"/api_server.log "$LOG_BASE"/api_server_err.log; do
     [ -f "$f" ] || continue
-    SIZE=$(stat -f%z "$f" 2>/dev/null || echo 0)
+    # stat -c%s 為 GNU/Linux 語法，-f%z 為 BSD/macOS；本專案由 macOS 移機至 Ubuntu，
+    # 原本只有 BSD 版 → 在 Linux 恆回 0，日誌輪替靜默失效（2026-07-19 修）
+    SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
     if [ "$SIZE" -gt "$LAUNCHD_MAX_BYTES" ]; then
         tail -2000 "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
         echo "  截斷: $(basename "$f") (原 $((SIZE / 1024 / 1024))MB)"

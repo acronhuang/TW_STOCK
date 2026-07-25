@@ -5,6 +5,7 @@ import sys, os, warnings
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 warnings.filterwarnings('ignore')
 import numpy as np
+from _adj_price import ADJ_PROJ, use_adjusted  # noqa: E402
 import pandas as pd
 from pymongo import MongoClient
 from src.factors.volume_factors import VolumeFactors
@@ -41,8 +42,10 @@ def has_senvision_bottom(df_slice, sym):
 
 for sym in syms:
     docs = list(db.stock_price.find(
-        {'symbol': sym}, {'date': 1, 'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1}
+        {'symbol': sym},
+        {'date': 1, 'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1, **ADJ_PROJ}
     ).sort('date', 1))
+    use_adjusted(docs)   # 用還原價,否則除權息=假跌
     if len(docs) < 80:
         continue
     dk = lambda d: d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)[:10]

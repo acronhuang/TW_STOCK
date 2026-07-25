@@ -244,6 +244,15 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     reports = {}
     for role in ANALYST_ROLES:
         prompt = build_expert_prompt(role, symbol, data)
+        if role == 'value-analyst':
+            try:
+                from src.analysis.value_profile import value_profile_text
+                from pymongo import MongoClient as _MC
+                _vp = value_profile_text(_MC('localhost', 27017)['tw_stock_analysis'], symbol)
+                if _vp and _vp != '四維價值資料不足':
+                    prompt += '\n\n【四維價值畫像】' + _vp + '\n請結合此四維(ROIC財務健全、營益率穩定度=護城河、連配年數=治理一致性、DCF安全邊際=估值)綜合研判,不要只算 DCF。'
+            except Exception:
+                pass
         if role == 'technical-analyst':
             # 技術角色依「蔡森方法」分析：餵入 SenVision 型態/頸線/目標價/風報比
             prompt += "\n\n" + senvision_text(sv_pats) + \
@@ -364,6 +373,46 @@ def select_universe_all() -> list[dict]:
 
 
 # ── 存檔 / 讀檔（兩階段：phase1精簡存檔 → phase2讀檔補顧問）─────────────
+def select_universe_dailypicks(n: int = 8) -> list[dict]:
+    """當日量化選股 picks：讀最新 results/daily_picks/picks_*.json。
+    先取多策略共同推薦(cross_reference, sources>=2)，再依 因子/蔡森/謝富旭 首選補滿 n 檔。
+    找不到檔或空 picks → 回空清單(主程式優雅結束，不炋 pipeline)。"""
+    import glob, json
+    files = sorted(glob.glob(str(ROOT / "results" / "daily_picks" / "picks_*.json")))
+    if not files:
+        print("⚠️ 無 daily_picks 存檔，dailypicks 空")
+        return []
+    latest = files[-1]
+    try:
+        d = json.load(open(latest, encoding="utf-8"))
+    except Exception as e:
+        print(f"⚠️ 讀 picks 失敗 {latest}: {e}")
+        return []
+    print(f"讀當日量化 picks: {os.path.basename(latest)}")
+    out, seen = [], set()
+    def _add(sym, name, action):
+        sym = str(sym) if sym is not None else ""
+        if sym and sym not in seen:
+            seen.add(sym)
+            out.append({"symbol": sym, "name": name or "", "action": action})
+    for item in (d.get("cross_reference") or []):
+        if len(out) >= n:
+            break
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            sym, info = item[0], (item[1] or {})
+            srcs = info.get("sources", []) or []
+            if len(srcs) >= 2:
+                _add(sym, info.get("name"), f"[多策略{len(srcs)}×]")
+    for key, label in (("factor", "因子"), ("senvision", "蔡森"), ("hsieh", "謝富旭")):
+        for r in (d.get(key) or []):
+            if len(out) >= n:
+                break
+            _add(r.get("sym"), r.get("name"), f"[{label}]")
+        if len(out) >= n:
+            break
+    return out[:n]
+
+
 RESULT_DIR = ROOT / 'results' / 'team_analysis'
 
 
@@ -676,8 +725,9 @@ def main():
     ap = argparse.ArgumentParser(description='每日已查證角色團隊分析')
     ap.add_argument('--top', type=int, default=2, help='Tier1/2 取前幾檔')
     ap.add_argument('--symbols', nargs='+', help='指定個股(略過自動選股)')
-    ap.add_argument('--universe', choices=['tier', 'industry50', 'all'], default='tier',
-                    help='選股範圍：tier=謝富旭Tier1/2(預設)；industry50=各行業龍頭50；all=全市場~2000檔')
+    ap.add_argument('--universe', choices=['tier', 'industry50', 'all', 'dailypicks'], default='tier',
+                    help='選股範圍：tier=謝富旭Tier1/2(預設)；industry50=各行業龍頭50；all=全市場~2000檔；dailypicks=當日量化選股')
+    ap.add_argument('--picks-n', type=int, default=8, help='dailypicks 取前幾檔(預設8)')
     ap.add_argument('--quick', action='store_true', help='精簡：略過投資顧問整合(較快)')
     ap.add_argument('--phase2', action='store_true', help='第二階段：讀今日精簡存檔，只補跑顧問整合')
     ap.add_argument('--date', help='存讀檔日期 YYYYMMDD（預設今天）；phase1 跨午夜或 phase2 補跑舊存檔時指定')
@@ -729,6 +779,9 @@ def main():
     elif args.universe == 'industry50':
         print("選取 各行業龍頭 + 成交額補滿50...")
         targets = select_universe_50(50)
+    elif args.universe == 'dailypicks':
+        print("選取 當日量化選股 picks...")
+        targets = select_universe_dailypicks(args.picks_n)
     else:
         print("選取 Tier1/2 名單...")
         targets = get_tier_symbols(args.top)

@@ -95,7 +95,11 @@ class FinMindClient:
                     return []
             
             elif response.status_code == 400:  # HTTP Bad Request - 不需要重試
-                self.logger.error(f"HTTP 400: 請求參數錯誤（可能不支持此股票代碼）")
+                # 不要猜原因 —— 直接印 FinMind 的回應。
+                # 舊版寫死「可能不支持此股票代碼」,實際上是參數名寫成 stock_id
+                # 導致被當成全市場查詢、免費層拒絕,這個猜測讓問題查了很久查不到。
+                self.logger.error(
+                    f"HTTP 400: {response.text[:300]} | dataset={dataset} params={params}")
                 return []
                     
             else:

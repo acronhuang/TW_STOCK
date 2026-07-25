@@ -30,8 +30,17 @@ $PY scripts/twse_openapi_sync.py --heal || echo "  heal 非零退出（續）"
 step "3/9 重算因子 + 蔡森掃描（在補齊後的價上）"
 bash scripts/daily_senvision.sh || echo "  senvision 失敗（續）"
 
+step "3b PE/PB/EY 回填（因子重算後補上,修每日缺口）"
+$PY scripts/backfill_pe_pb_factors.py || echo "  pe/pb 回填失敗（續）"
+
+step "3c 估值因子（DCF合理價/安全邊際）"
+$PY scripts/backfill_valuation_factors.py || echo "  估值因子失敗（續）"
+
 step "4/9 北大四大法則日檢"
 $PY scripts/daily_alert_check.py || echo "  alert_check 失敗（續）"
+
+step "4b 持倉風控合議（MoE 續抱/減碼/出場）"
+$PY scripts/risk_deliberation.py || echo "  風控合議失敗（續）"
 
 step "5/9 每日選股推薦"
 $PY scripts/daily_recommendations.py || echo "  recommendations 失敗（續）"
@@ -43,6 +52,9 @@ $PY scripts/obv_bottom_divergence_scan.py || echo "  obv 失敗（續）"
 step "7/9 主力散戶籌碼 / 雙訊號"
 $PY scripts/chip_score_scan.py || echo "  chip 失敗（續）"
 $PY scripts/dual_signal_scan.py || echo "  dual 失敗（續）"
+
+step "8a 當日量化picks團隊合議（dailypicks×8）"
+$PY scripts/team_daily_verified.py --universe dailypicks --picks-n 8 || echo "  dailypicks 失敗（續）"
 
 step "8/9 團隊分析（Phase1+2）"
 bash scripts/team_daily_50.sh || echo "  team 失敗（續）"

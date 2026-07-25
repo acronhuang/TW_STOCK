@@ -9,6 +9,31 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
 
+# 日線→週線沿用既有轉換器（W-FRI 週五收盤），不另寫一份重採樣
+from pattern_recognition.timeframe_converter import TimeframeConverter
+
+
+def load_holders(db, symbol, start_date, end_date):
+    """大戶持股（shareholding，每週一筆）：回傳含 date/big_pct/big400_pct/total_holders 的 DataFrame。
+
+    資料本質為「週」快照 —— 集保與 norway 皆無每日版本，故日線圖上只能是離散的
+    週點（畫成帶點的折線，不做日內插值以免暗示有每日資料）。
+    2023-03 以前無資料（norway 歷史起點）。
+
+    total_holders（總股東人數）與 big_pct 天生反向：人數增加＝籌碼分散到散戶手上。
+    它是三年歷史上唯一可得的散戶動向代理（retail_pct 僅 TDCC 起算後才有）。
+    """
+    cur = db.shareholding.find(
+        {'stock_id': symbol, 'date': {'$gte': start_date, '$lte': end_date}},
+        {'_id': 0, 'date': 1, 'big_pct': 1, 'big400_pct': 1, 'total_holders': 1}
+    ).sort('date', 1)
+    rows = [d for d in cur if d.get('big_pct') is not None]
+    if not rows:
+        return pd.DataFrame()
+    hdf = pd.DataFrame(rows)
+    hdf['date'] = pd.to_datetime(hdf['date'])
+    return hdf
+
 
 def calculate_ma(df, window):
     """計算移動平均線"""
@@ -131,18 +156,31 @@ def show():
             start_date = datetime.combine(start_date, datetime.min.time())
             end_date = datetime.combine(end_date, datetime.min.time())
         
+        # K線週期：週/月線由日線重採樣（W-FRI / 月底），指標一併改以該週期計算
+        timeframe_label = st.sidebar.radio(
+            "K線週期", options=['日線', '週線', '月線'], index=0, horizontal=True,
+            help="週線＝重採樣至週五收盤，月線＝月底收盤；所有技術指標將改用該週期計算"
+        )
+        TF = {'日線': ('D', '日'), '週線': ('W', '週'), '月線': ('M', '月')}
+        tf_code, unit = TF[timeframe_label]
+        needs_resample = tf_code != 'D'
+
         # 技術指標選擇
         st.sidebar.markdown("### 📈 技術指標")
         show_ma = st.sidebar.checkbox("移動平均線 (MA)", value=True)
         if show_ma:
             ma_windows = st.sidebar.multiselect(
-                "MA 週期",
+                f"MA 週期（單位：{unit}）",
                 options=[5, 10, 20, 30, 60, 120, 240],
                 default=[5, 20, 60]
             )
-        
+            if needs_resample:
+                st.sidebar.caption(f"⚠️ {timeframe_label}下 MA5 ＝ 5 **{unit}**，非 5 日")
+
         show_bb = st.sidebar.checkbox("布林通道 (Bollinger Bands)", value=False)
         show_volume = st.sidebar.checkbox("成交量", value=True)
+        show_holders = st.sidebar.checkbox("大戶持股 (千張大戶%)", value=False,
+                                           help="集保股權分散表，每週一筆；2023-03 起")
         show_rsi = st.sidebar.checkbox("相對強弱指標 (RSI)", value=True)
         show_macd = st.sidebar.checkbox("MACD", value=False)
         
@@ -186,7 +224,15 @@ def show():
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = df[col].apply(safe_float)
-        
+
+        # 週/月線重採樣（必須在 Decimal128→float 之後：resample 的 max/sum 無法運算 Decimal128）
+        if needs_resample:
+            df = TimeframeConverter().convert_timeframe(df, tf_code)
+            if df.empty or len(df) < 2:
+                st.warning(f"⚠️ {selected_symbol} 在此範圍內的{timeframe_label}資料不足"
+                           f"（僅 {len(df)} 根），請拉長時間範圍")
+                return
+
         # 顯示基本資訊
         col1, col2, col3, col4, col5 = st.columns(5)
         
@@ -220,9 +266,28 @@ def show():
             _pe = safe_float(_sf.get('pe_ratio')) if _sf else None
             st.metric("本益比", f"{_pe:.2f}" if _pe else "-")
         
+        # 週/月線時 MA5 意為 5 週/5 月，標籤須隨之改變（圖例與下方數值表共用同一組標籤）
+        def ma_label(w):
+            return f'MA{w}{unit}' if needs_resample else f'MA{w}'
+
+        # 大戶持股：先取資料，沒有就不佔一列子圖（避免畫出空白格）
+        hdf = load_holders(db, selected_symbol, start_date, end_date) if show_holders else pd.DataFrame()
+        # 月線時把週快照抽稀成「每月最後一筆」。
+        # 注意這是抽稀不是聚合：大戶佔比是「時點存量」，取月底那筆才有意義，取月平均沒有。
+        # 且刻意用 groupby+idxmax 而非 resample('ME')：後者會把索引重貼成月底，
+        # 使 07-09 的快照被標成 07-31（未來日期、集保根本沒這天的資料）→ hover 謊報資料日。
+        # 這裡保留每筆的真實集保資料日，寧可與月 K 棒略微錯開，也不偽造日期。
+        if needs_resample and tf_code == 'M' and not hdf.empty:
+            hdf = hdf.loc[hdf.groupby(hdf['date'].dt.to_period('M'))['date'].idxmax()]
+        plot_holders = show_holders and not hdf.empty
+        if show_holders and hdf.empty:
+            st.info(f"ℹ️ {selected_symbol} 在此範圍內無大戶持股資料（集保股權分散表自 2023-03 起，且每週一筆）")
+
         # 創建圖表
         num_subplots = 1  # K線圖
         if show_volume:
+            num_subplots += 1
+        if plot_holders:
             num_subplots += 1
         if show_rsi:
             num_subplots += 1
@@ -237,22 +302,31 @@ def show():
             subplot_height = remaining_height / additional_plots
             row_heights.extend([subplot_height] * additional_plots)
         
-        # 創建子圖
-        subplot_titles = ['價格走勢']
+        # 創建子圖（指標週期單位隨 K 線週期改變，標題一併標示）
+        subplot_titles = [f'價格走勢（{timeframe_label}）']
         if show_volume:
             subplot_titles.append('成交量')
+        if plot_holders:
+            # 標題誠實反映實際點數：來源恆為每週，月線下只是抽稀成每月最後一筆
+            hnote = '集保，每週' if tf_code != 'M' else '集保，每月取最後一筆週資料'
+            subplot_titles.append(f'千張大戶持股比例 %（左）× 總股東人數（右）｜{hnote}')
         if show_rsi:
-            subplot_titles.append('RSI')
+            subplot_titles.append(f'RSI(14{unit})')
         if show_macd:
-            subplot_titles.append('MACD')
+            subplot_titles.append(f'MACD(12/26/9 {unit})')
         
+        # 大戶子圖需要右軸（股東人數的單位是「人」，與左軸的「%」量級差 6 個數量級，
+        # 共用一軸會讓大戶佔比被壓成一條直線）。secondary_y 必須在建圖時宣告，
+        # 故先算出大戶落在第幾列。
+        holder_row = (2 + (1 if show_volume else 0)) if plot_holders else None
         fig = make_subplots(
             rows=num_subplots,
             cols=1,
             shared_xaxes=True,
             vertical_spacing=0.03,
             row_heights=row_heights,
-            subplot_titles=subplot_titles
+            subplot_titles=subplot_titles,
+            specs=[[{"secondary_y": (r == holder_row)}] for r in range(1, num_subplots + 1)],
         )
         
         # K線圖
@@ -270,7 +344,7 @@ def show():
             row=1, col=1
         )
         
-        # 移動平均線
+        # 移動平均線（週線下標籤加「週」，避免 MA5 被誤讀為 5 日線）
         if show_ma and ma_windows:
             colors = ['blue', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive']
             for i, window in enumerate(ma_windows):
@@ -279,7 +353,7 @@ def show():
                     go.Scatter(
                         x=df['date'],
                         y=ma,
-                        name=f'MA{window}',
+                        name=ma_label(window),
                         line=dict(color=colors[i % len(colors)], width=1)
                     ),
                     row=1, col=1
@@ -334,7 +408,53 @@ def show():
                 row=current_row, col=1
             )
             current_row += 1
-        
+
+        # 大戶持股（每週一筆）
+        if plot_holders:
+            # 帶點折線：點＝實際的週快照。刻意不做日內插值／不填滿，
+            # 讓「這是每週一筆」在視覺上就看得出來，避免誤以為有每日資料。
+            fig.add_trace(
+                go.Scatter(
+                    x=hdf['date'],
+                    y=hdf['big_pct'],
+                    name='千張大戶%',
+                    mode='lines+markers',
+                    marker=dict(size=4),
+                    line=dict(color='darkviolet', width=2),
+                    hovertemplate='%{x|%Y-%m-%d}<br>千張大戶 %{y:.2f}%<extra></extra>'
+                ),
+                row=current_row, col=1
+            )
+            if 'big400_pct' in hdf.columns and hdf['big400_pct'].notna().any():
+                fig.add_trace(
+                    go.Scatter(
+                        x=hdf['date'],
+                        y=hdf['big400_pct'],
+                        name='400張+%',
+                        mode='lines',
+                        line=dict(color='rgba(148, 0, 211, 0.45)', width=1, dash='dot'),
+                        hovertemplate='%{x|%Y-%m-%d}<br>400張+ %{y:.2f}%<extra></extra>'
+                    ),
+                    row=current_row, col=1
+                )
+            # 總股東人數（右軸）：與大戶佔比天生反向 —— 兩線交叉張開＝籌碼由大戶流向散戶。
+            if 'total_holders' in hdf.columns and hdf['total_holders'].notna().any():
+                fig.add_trace(
+                    go.Scatter(
+                        x=hdf['date'],
+                        y=hdf['total_holders'],
+                        name='總股東人數',
+                        mode='lines',
+                        line=dict(color='rgba(255, 140, 0, 0.9)', width=1.5),
+                        hovertemplate='%{x|%Y-%m-%d}<br>股東 %{y:,.0f} 人<extra></extra>'
+                    ),
+                    row=current_row, col=1, secondary_y=True
+                )
+                fig.update_yaxes(title_text="股東人數", row=current_row, col=1,
+                                 secondary_y=True, showgrid=False)
+            fig.update_yaxes(title_text="持股 %", row=current_row, col=1, secondary_y=False)
+            current_row += 1
+
         # RSI
         if show_rsi:
             rsi = calculate_rsi(df)
@@ -395,7 +515,7 @@ def show():
         
         # 更新圖表佈局
         fig.update_layout(
-            title=f'{selected_symbol} 技術分析圖表',
+            title=f'{selected_symbol} {name_map.get(selected_symbol, "")} 技術分析圖表（{timeframe_label}）',
             height=800,
             showlegend=True,
             xaxis_rangeslider_visible=False,
@@ -425,7 +545,7 @@ def show():
         if show_ma and ma_windows:
             for window in ma_windows:
                 ma_val = calculate_ma(df, window).iloc[-1]
-                indicators_data[f'MA{window}'] = f"${ma_val:.2f}" if not pd.isna(ma_val) else "-"
+                indicators_data[ma_label(window)] = f"${ma_val:.2f}" if not pd.isna(ma_val) else "-"
         
         if show_rsi:
             rsi_val = calculate_rsi(df).iloc[-1]

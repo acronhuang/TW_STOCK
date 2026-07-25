@@ -42,6 +42,14 @@ sys.path.insert(0, str(ROOT))
 INST_FLOOR = 100   # 法人淨買賣達此張數才算主力有動作
 MGN_FLOOR = 50     # 融資增減達此張數才算散戶有動作
 
+# 大戶集中度加分（僅排序加權，不決定 tag 方向）。依據回測 backtest_holder_incremental.py
+# （3 年 153 期、每期約 1200 檔）：|大戶佔比週變化| 在控制法人×外資×量比×波動×動能後
+# 仍 t=4.92、殘存 59%，且與各既有訊號近乎零相關 → 帶獨立資訊。但方向無預測力（t=0.22）
+# 故只取|幅度|；又僅多頭有效、淨超額薄，故僅溫和加分（量級比照 streak），不喧賓奪主。
+BIG_CHG_FLOOR = 0.5    # |週變化|達此%才加分（低於此為雜訊：Q4 均 0.34% 幾無效、Q5 均 1.78% 才顯著）
+BIG_CHG_CAP = 3.0      # 加分封頂的|變化|%（避免極端值主導排序）
+BIG_CHG_WEIGHT = 6     # 每 1% 幅度的加分（|變化|=1.78 給 ~11 分，與 streak 每天 8 分相當）
+
 
 def _tof(v):
     if isinstance(v, Decimal128):
@@ -138,7 +146,12 @@ def read_inst_streak(db, ref_date, lookback_days=12):
 def read_holder_conc(db):
     """大戶集中度（集保股權分散，TDCC 每週）：{symbol: (big_pct, big_chg)}。
     big_pct = 千張大戶（級15）佔比；big_chg = 對比上一週快照的變化（≥2 週快照才有，否則 None）。
-    大戶佔比週增 = 籌碼集中/主力吸籌的第三方確認（獨立於法人/融資）。"""
+
+    注意：big_chg 目前僅供 LINE 顯示（見 line_msg，已改顯示|異動幅度|不顯示方向），
+    **未進入評分**。原假設「大戶佔比週增=吸籌確認」經回測推翻——方向無預測力
+    （4 週超額 +0.02%、t=0.22）；有預測力的是|變化|幅度（t=5.87，且與法人/量價近乎
+    零相關），但那更像「活躍股」特徵而非吸籌訊號。詳見 scripts/backtest_holder_conc.py
+    與 tdcc_shareholding_sync.py 檔頭。要接進 judge() 前請先跑增量測試複驗。"""
     dates = sorted(db.shareholding.distinct('date'))[-2:]
     if not dates:
         return {}
@@ -271,13 +284,23 @@ def resonance(r, tag):
             and (r.get('volume_ratio') or 0) >= 1.2)
 
 
+def big_bonus(r):
+    """大戶集中度加分（僅供排序，不影響 tag/score）。取|幅度|、封頂、低於門檻不給。見常數註解。"""
+    bc = r.get('big_chg')
+    if bc is None or abs(bc) < BIG_CHG_FLOOR:
+        return 0.0
+    return round(min(abs(bc), BIG_CHG_CAP) * BIG_CHG_WEIGHT, 1)
+
+
 def build(rows):
     for r in rows:
         r['tag'], r['score'] = judge(r)
         r['reson'] = resonance(r, r['tag'])
-    # 排名把「連買天數」納入加權（連續性 = 主力吸籌確立度，專業籌碼分析共識）
+        r['big_bonus'] = big_bonus(r)         # 存起來供 CSV/除錯檢視排序依據
+    # 排名加權：連買天數（吸籌確立度）＋ 大戶集中度異動幅度（獨立訊號，見 big_bonus）。
+    # 皆只影響「同 tag 內的排序」，不改變方向判定（tag 仍純由法人×融資決定）。
     def w(r):
-        return r['score'] + max(0, r.get('streak', 0)) * 8
+        return r['score'] + max(0, r.get('streak', 0)) * 8 + r.get('big_bonus', 0)
     accum = sorted([r for r in rows if r['tag'] == '主力吸籌·散戶退'], key=lambda r: -w(r))
     distr = sorted([r for r in rows if r['tag'] == '主力出貨·散戶接'], key=lambda r: r['score'])
     reson = sorted([r for r in rows if r['reson']], key=lambda r: -w(r))
@@ -311,9 +334,14 @@ def line_msg(ref, m_date, rows, accum, distr, reson, top):
         s = r.get('streak', 0)
         streak = f" 連買{s}" if s >= 2 else (f" 連賣{-s}" if s <= -2 else "")
         trust = " 投信買" if r.get('trust', 0) >= 100 else ""
+        # 顯示「異動幅度」而非增減方向：原本的 大戶+0.3% 暗示「增＝吸籌＝看好」，
+        # 但該直覺經回測推翻（scripts/backtest_holder_conc.py，3 年 154 週）：
+        #   方向（增/減）  → 4 週超額 +0.02%、t=0.22 ＝ 無預測力
+        #   幅度（|變化|）→ 4 週超額 +1.00%、t=5.87；控制量比/波動/動能後仍 t=5.08，
+        #                   且與量比(-0.06)、法人(-0.03) 幾乎零相關 ＝ 獨立資訊
+        # 門檻 0.5：Q4 平均 0.34%、Q5 平均 1.78%，低於此的異動屬雜訊（同外資的 0.2 門檻）。
         bc = r.get('big_chg')
-        big = f" 大戶{bc:+.1f}%" if bc is not None else (
-            f" 大戶{r['big_pct']:.0f}%" if r.get('big_pct') is not None else "")
+        big = f" 大戶異動{abs(bc):.1f}%" if (bc is not None and abs(bc) >= 0.5) else ""
         fc = r.get('fh_chg')
         fh = f" 外資{fc:+.1f}%" if (fc is not None and abs(fc) >= 0.2) else ""
         return (f"  {r['symbol']} {r['name']} {r['close']:.1f} {chg} "

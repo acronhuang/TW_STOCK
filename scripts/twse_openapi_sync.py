@@ -35,6 +35,7 @@ import json
 import logging
 import os
 import sys
+import time
 import warnings
 from datetime import datetime, timezone, timedelta, date as _date
 
@@ -520,6 +521,51 @@ TABLE_CHECKS = {
     "margin_suspension":           (  10, 4),
 }
 
+# 每週更新的表：TABLE_CHECKS 不適用（其 lag 以「交易日」計並假設每交易日更新，
+# 週表放進去會天天誤報），故獨立一條檢查路徑，lag 改以「日曆天」計。
+#   collection: (最低筆數, 容許資料日落後今日的日曆天數)
+#
+# shareholding（集保股權分散，cron 每週二 09:00）落後天數怎麼抓：
+#   TDCC 資料日約每 6–7 天推進一次，我們週二才抓 → 資料日在下次週二前最舊約 11–12 天
+#   （實例：資料日 07-09，週二 07-14 抓入，直到 07-21 才會換新 → 屆時已 12 天）。
+#   設 15 天＝容忍正常週期，但「整整漏掉一輪」必報。
+# 注意：本表刻意**不**進 TABLE_CHECKS，因 _reference_day 會掃該字典——週表的資料日
+# 天生落後，不該參與「參考交易日」的認定。
+WEEKLY_TABLE_CHECKS = {
+    "shareholding": (3000, 15),
+}
+
+# 週表的基準/計數過濾：只認「當前同步來源」寫的列。
+# shareholding 的歷史列由 norway_shareholding_backfill.py 一次性回補（涵蓋 ~2356 檔，
+# 天生少於 TDCC 全市場 4003 檔）——混入會把中位數拉低到自適應門檻形同虛設，
+# 且「最新資料日」也該衡量 TDCC 這條每週管線本身，而非任何來源的任一列。
+_WEEKLY_BASELINE_FILTER = {
+    "shareholding": {"data_source": "TDCC"},
+}
+
+# 週表自適應門檻：同 _ADAPTIVE_TABLES 的精神（靜態門檻只是地板，近期中位數把它往上抬），
+# 但改以「快照期數」為窗。缺這層時 4003 檔掉到 3400 仍在靜態 3000 之上 → 不會告警。
+# 樣本以 TDCC 每週累積，滿 _WEEKLY_ADAPT_MIN_SAMPLES 期後自動生效（在此之前退回靜態）。
+_WEEKLY_ADAPT_RATIO = 0.85
+_WEEKLY_ADAPT_WINDOW = 8
+_WEEKLY_ADAPT_MIN_SAMPLES = 4
+
+
+def _weekly_adaptive_min(col, static_min: int, flt: dict) -> tuple[int, int | None]:
+    """回 (有效門檻, 近期中位數)。快照期數不足時退回靜態門檻、中位數 None。
+    排除最新一期本身，避免『這期壞掉』把自己的門檻拉低。"""
+    dates = [g["_id"] for g in col.aggregate([
+        {"$match": flt or {"date": {"$exists": True}}},
+        {"$group": {"_id": "$date"}}, {"$sort": {"_id": -1}},
+        {"$limit": _WEEKLY_ADAPT_WINDOW + 1},
+    ])]
+    prior = dates[1:]
+    if len(prior) < _WEEKLY_ADAPT_MIN_SAMPLES:
+        return static_min, None
+    counts = sorted(col.count_documents({"date": d, **flt}) for d in prior)
+    median = counts[len(counts) // 2]
+    return max(static_min, int(median * _WEEKLY_ADAPT_RATIO)), median
+
 # 參考交易日本身允許落後「今日」的最大日曆天數（涵蓋週末／連假）。
 # 超過 → 連 stock_price 都沒更新，代表整條 pipeline 停擺。
 PIPELINE_STALE_DAYS = 5
@@ -637,10 +683,51 @@ def _to_date(v) -> _date | None:
     return None
 
 
+def _check_weekly_tables(db, today: _date) -> tuple[list[str], list[str]]:
+    """每週更新的表（WEEKLY_TABLE_CHECKS）：以「日曆天」判落後，非交易日。
+
+    與 TABLE_CHECKS 分開的理由：那條路徑的 lag 以交易日計、且假設每交易日都更新，
+    週表放進去會天天誤報（同 institutional_flow 曾踩過的門檻誤報型態）。
+    也不參與 _reference_day 的認定 —— 週表資料日天生落後，不是交易日的真相錨。
+    """
+    ok, fail = [], []
+    for col_name, (min_count, max_lag_days) in WEEKLY_TABLE_CHECKS.items():
+        col = db[col_name]
+        flt = _WEEKLY_BASELINE_FILTER.get(col_name, {})
+        doc = _latest_date_doc(col, flt)
+        if not doc:
+            fail.append(f"❌ {col_name}: 查無 date 欄位資料")
+            continue
+        latest = _to_date(doc["date"])
+        count = col.count_documents({"date": doc["date"], **flt})
+        eff_min, median = _weekly_adaptive_min(col, min_count, flt)
+
+        problems = []
+        if latest is not None:
+            lag = (today - latest).days
+            if lag > max_lag_days:
+                problems.append(
+                    f"最新資料日 {latest} 落後今日 {lag} 個日曆天 (容許 ≤{max_lag_days})")
+        if count < eff_min:
+            if median is not None and eff_min > min_count:
+                problems.append(
+                    f"筆數 {count} < 門檻 {eff_min}（近{_WEEKLY_ADAPT_WINDOW}期中位 {median}×{_WEEKLY_ADAPT_RATIO}）")
+            else:
+                problems.append(f"筆數 {count} < 預期 {eff_min}")
+
+        if problems:
+            fail.append(f"❌ {col_name}: " + "；".join(problems))
+        else:
+            hint = f"（門檻{eff_min}｜中位{median}）" if median is not None else f"（門檻{eff_min}｜期數不足，用靜態）"
+            ok.append(f"✅ {col_name}: {count} 筆 @ {latest}（每週更新）{hint}")
+    return ok, fail
+
+
 def check_integrity(db) -> tuple[list[str], list[str]]:
     """
     檢查各資料表的完整度，回傳 (ok_list, fail_list)。
     每張表同時驗「最新日期是否落後」與「最新日筆數是否足夠」，兩者互補。
+    每日表走 TABLE_CHECKS（交易日 lag）；每週表走 WEEKLY_TABLE_CHECKS（日曆天 lag）。
     """
     ok_list = []
     fail_list = []
@@ -744,6 +831,11 @@ def check_integrity(db) -> tuple[list[str], list[str]]:
                 hint += f" 值檢✓（{val_bad} 異常）" if val_bad else " 值檢✓"
             ok_list.append(f"✅ {col_name}: {check_count} 筆 @ {check_date} {hint}".rstrip())
 
+    # 每週更新的表（日曆天 lag，見 WEEKLY_TABLE_CHECKS）
+    w_ok, w_fail = _check_weekly_tables(db, today)
+    ok_list.extend(w_ok)
+    fail_list.extend(w_fail)
+
     return ok_list, fail_list
 
 
@@ -843,6 +935,29 @@ def _run_script(argv: list, timeout: int = 1800) -> str:
         return f"ERR:{e}"
 
 
+# 這些表的「筆數不足」最可能是上游（TWSE/TPEX 盤後）在 job 執行當下尚未出齊，
+# 而非系統性錯誤 —— 等一下上游出齊、重跑 heal 即可補齊。落後天數/值合理性/時區/
+# pipeline 停擺等不列入：那些等再久也沒用（或本就不自癒），延遲只是空等徒增 job 時長。
+_DELAY_RETRY_COLLS = {
+    "stock_price", "stock_factors", "institutional_flow",
+    "margin_purchase_short_sale", "day_trading_targets", "securities_lending",
+    "after_hours_trading", "odd_lot_trading",
+}
+
+
+def _delay_worth_retry(fail_list: list) -> bool:
+    """殘留失敗是否『可能因上游延遲、值得等一下重試』。
+    僅當每一項都是可自癒表的『筆數不足』（上游未出齊的典型徵狀）才回 True；
+    只要有一項是落後天數/值合理性/時區/停擺/查無資料等，即回 False（延遲無益）。"""
+    if not fail_list:
+        return False
+    for f in fail_list:
+        coll = _fail_collection(f)
+        if coll not in _DELAY_RETRY_COLLS or "筆數" not in f:
+            return False
+    return True
+
+
 def run_heal(db, fail_list: list) -> tuple[list, list]:
     """對 fail_list 逐項自癒。回 (actions, escalated)。
     actions = [(描述, 結果)]；escalated = 不可自癒、需人工的失敗字串。"""
@@ -870,6 +985,11 @@ def run_heal(db, fail_list: list) -> tuple[list, list]:
         elif coll == "institutional_flow":
             r = _run_script(["scripts/twse_daily_update.py", "--no-tpex", "--no-peratio"])
             actions.append(("institutional_flow → twse_daily_update", r))
+        elif coll == "shareholding":
+            # 每週表：重跑 TDCC 同步（冪等 upsert）。注意 TDCC 只供當週，若上游尚未
+            # 換新資料日，重跑只會寫回同一天 —— 此時複檢仍紅屬正常，會升級人工。
+            r = _run_script(["scripts/tdcc_shareholding_sync.py"])
+            actions.append(("shareholding → tdcc_shareholding_sync", r))
         elif coll in _COLL_TO_SYNC:            # 補充表：同進程呼叫 sync 函式
             key = _COLL_TO_SYNC[coll]
             try:
@@ -953,6 +1073,10 @@ def main():
                         help="只做完整度檢查，不下載資料")
     parser.add_argument("--heal", action="store_true",
                         help="完整度檢查 → 自動修復可補項 → 再檢查 → 仍失敗才升級告警")
+    parser.add_argument("--heal-retry-delay", type=int, default=10,
+                        help="自癒後若殘留『疑似上游延遲』（筆數不足），等此分鐘再重試一次（預設 10）")
+    parser.add_argument("--no-delay-retry", action="store_true",
+                        help="關閉上述延遲重試（測試用，或確定不想等）")
     args = parser.parse_args()
 
     client = MongoClient("localhost", 27017)
@@ -980,6 +1104,25 @@ def main():
         ok2, fail2 = check_integrity(db)
         for item in ok2 + fail2:
             print(f"  {item}")
+
+        # 上游延遲防呆：backfill 依賴的上游（TWSE/TPEX 盤後）偶爾在 job 執行當下尚未出齊，
+        # 使 heal 補不到量、複檢假紅燈（2026-07-17 實例：20:04 stock_price 僅 2131，稍後
+        # 上游出齊自動補至 5955，卻已誤發「需人工」）。故殘留若全屬「筆數不足」型，延遲
+        # 一次再重跑 heal+複檢，用第二次結果決定是否升級——把假紅燈擋在告警之前。
+        if fail2 and not args.no_delay_retry and _delay_worth_retry(fail2):
+            wait = args.heal_retry_delay
+            print(f"\n  ⏳ 殘留 {len(fail2)} 項疑似上游延遲（筆數不足）→ 等 {wait} 分鐘後重試自癒…")
+            time.sleep(wait * 60)
+            actions2, escalated2 = run_heal(db, fail2)
+            for a, r in actions2:
+                print(f"    🔧(重試) {a}：{r}")
+            actions += actions2
+            escalated = [e for e in escalated if e not in escalated2] + escalated2
+            print("\n  ── 延遲重試後複檢 ──")
+            ok2, fail2 = check_integrity(db)
+            for item in ok2 + fail2:
+                print(f"  {item}")
+
         if fail2:
             print(f"\n  🚨 自癒後仍 {len(fail2)} 項異常，需人工")
         else:

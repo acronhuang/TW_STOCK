@@ -19,6 +19,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pandas as pd
+from _adj_price import ADJ_PROJ, use_adjusted_df  # noqa: E402
 import numpy as np
 from pymongo import MongoClient
 from datetime import datetime, timedelta
@@ -60,13 +61,14 @@ class PatternBacktester:
                 'stock_id': stock_id,
                 'date': {'$gte': start_date, '$lte': end_date}
             },
-            {'_id': 0, 'date': 1, 'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1}
+            {'_id': 0, 'date': 1, 'open': 1, 'high': 1, 'low': 1, 'close': 1,
+             'volume': 1, **ADJ_PROJ}
         ).sort('date', 1))
         
         if not data:
             return None
         
-        df = pd.DataFrame(data)
+        df = use_adjusted_df(pd.DataFrame(data))   # 用還原價,否則除權息=假跌
         df['date'] = pd.to_datetime(df['date'])
         df.set_index('date', inplace=True)
         

@@ -80,6 +80,18 @@ def _to_dec(val: str) -> Optional[Decimal128]:
         return None
 
 
+def _sum_dec(*vals: str) -> Optional[Decimal128]:
+    """多個字串數值相加 → Decimal128（全部無效時回 None）"""
+    total = 0.0
+    seen = False
+    for v in vals:
+        d = _to_dec(v)
+        if d is not None:
+            total += float(str(d.to_decimal()))
+            seen = True
+    return Decimal128(str(total)) if seen else None
+
+
 # ── TWSE（上市）────────────────────────────────────────────────────────────────
 
 def fetch_twse() -> List[Dict]:
@@ -229,15 +241,25 @@ def fetch_twse_institutional(date_str: Optional[str] = None) -> List[Dict]:
     except ValueError:
         resp_dt = dt_obj
 
-    # 欄位索引（固定順序）：
-    # 0  證券代號  1  證券名稱
-    # 2  外陸資買進  3  外陸資賣出  4  外陸資淨買超
-    # 5  投信買進    6  投信賣出    7  投信淨買超
-    # 8  自行買賣淨  9  避險淨      10 自營商淨買超
-    # 11 三大法人合計淨買超
+    # 欄位索引（TWSE T86 實際 19 欄，2026-07-19 以官方 API 逐欄核對）：
+    # 0  證券代號                  1  證券名稱
+    # 2  外陸資買進(不含外資自營商)  3  外陸資賣出           4  外陸資淨買超
+    # 5  外資自營商買進             6  外資自營商賣出        7  外資自營商淨買超
+    # 8  投信買進                  9  投信賣出             10 投信淨買超
+    # 11 自營商淨買超
+    # 12 自營商買進(自行買賣)       13 自營商賣出(自行買賣)  14 自營商淨(自行買賣)
+    # 15 自營商買進(避險)          16 自營商賣出(避險)      17 自營商淨(避險)
+    # 18 三大法人合計淨買超
+    #
+    # 2026-07-19 修正欄位錯位：原程式誤以為外陸資之後直接接投信，漏掉中間整組
+    # 「外資自營商」(5/6/7)，導致 trust_net 存到外資自營商(故 97% 為 0)、
+    # dealer_net 存到投信、total_net 存到自營商淨額而非三大法人合計。
+    # 上市股 910,564 筆全數受影響；TPEX 走具名欄位不受影響。
+    # foreign_net 定義為「外陸資 + 外資自營商」，與 institutional_investors_wide 一致。
     records = []
     for row in raw.get('data', []):
-        if len(row) < 12:
+        # 需完整 19 欄才能安全取值；欄位數不符寧可略過也不要錯位寫入
+        if len(row) < 19:
             continue
 
         stock_id = str(row[0]).strip()
@@ -247,10 +269,15 @@ def fetch_twse_institutional(date_str: Optional[str] = None) -> List[Dict]:
         records.append({
             'stock_id':    stock_id,
             'date':        resp_dt,
-            'foreign_net': _to_dec(row[4]),    # 外陸資淨買超股數
-            'trust_net':   _to_dec(row[7]),    # 投信淨買超股數
-            'dealer_net':  _to_dec(row[10]),   # 自營商淨買超股數
-            'total_net':   _to_dec(row[11]),   # 三大法人合計淨買超股數
+            'foreign_net': _sum_dec(row[4], row[7]),  # 外陸資 + 外資自營商
+            'trust_net':   _to_dec(row[10]),   # 投信淨買超股數
+            'dealer_net':  _to_dec(row[11]),   # 自營商淨買超股數（自行買賣＋避險）
+            'total_net':   _to_dec(row[18]),   # 三大法人合計淨買超股數
+            # 保留原始分項，日後要改分組不必重抓
+            'foreign_investor_net':    _to_dec(row[4]),
+            'foreign_dealer_self_net': _to_dec(row[7]),
+            'dealer_self_net':         _to_dec(row[14]),
+            'dealer_hedging_net':      _to_dec(row[17]),
             'data_source': 'TWSE_T86',
             'updated_at':  datetime.now(),
         })

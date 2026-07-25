@@ -66,6 +66,15 @@ BALANCE_MAP = {
     'PropertyPlantAndEquipment':          'ppe',
 }
 
+# 現金流量表重要科目（FinMind TaiwanStockCashFlowsStatement）— 供真 FCF/ROIC
+CASHFLOW_MAP = {
+    'CashFlowsFromOperatingActivities':          'operating_cash_flow',
+    'PropertyAndPlantAndEquipment':              'capex',   # 取得不動產廠房設備(通常負值)
+    'Depreciation':                              'depreciation',
+    'CashProvidedByInvestingActivities':         'investing_cash_flow',
+    'CashFlowsProvidedFromFinancingActivities':  'financing_cash_flow',
+}
+
 
 def date_to_season(date_str: str) -> Optional[tuple[int, int]]:
     """
@@ -131,7 +140,7 @@ def _pivot_by_date(rows: list[dict], type_map: dict) -> dict[str, dict]:
 
 def fetch_quarterly(symbol: str, start_date: str, end_date: str,
                     session: requests.Session, token: str = '',
-                    with_balance: bool = True) -> list[dict]:
+                    with_balance: bool = True, with_cashflow: bool = True) -> list[dict]:
     """
     下載單支股票損益表（＋資產負債表），返回標準化 list[dict]。
     """
@@ -149,8 +158,15 @@ def fetch_quarterly(symbol: str, start_date: str, end_date: str,
                                      symbol, start_date, end_date, token)
         balance_by_dt = _pivot_by_date(bal_rows, BALANCE_MAP)
 
+    # 現金流量表（真 FCF 用）
+    cashflow_by_dt: dict[str, dict] = {}
+    if with_cashflow:
+        cf_rows        = _finmind_get(session, 'TaiwanStockCashFlowsStatement',
+                                      symbol, start_date, end_date, token)
+        cashflow_by_dt = _pivot_by_date(cf_rows, CASHFLOW_MAP)
+
     # 合併所有出現的日期
-    all_dates = set(income_by_dt) | set(balance_by_dt)
+    all_dates = set(income_by_dt) | set(balance_by_dt) | set(cashflow_by_dt)
     records   = []
     for date_str in all_dates:
         ys = date_to_season(date_str)
@@ -179,13 +195,19 @@ def fetch_quarterly(symbol: str, start_date: str, end_date: str,
         if net_inc and eq and eq != 0:
             bal['roe'] = round(net_inc / eq * 100, 2)
 
+        cashflow = dict(cashflow_by_dt.get(date_str, {}))
+        ocf  = cashflow.get('operating_cash_flow')
+        capx = cashflow.get('capex')
+        if ocf is not None:
+            cashflow['fcf'] = ocf + (capx if capx is not None else 0)   # capex為負→相加=營CF-資本支出
+
         records.append({
             'symbol':      symbol,
             'year':        year,
             'season':      season,
             'income':      income,
             'balance':     bal,
-            'cashflow':    {},
+            'cashflow':    cashflow,
             'report_type': '合併',
             'data_source': src,
             'updated_at':  datetime.now(timezone.utc).replace(tzinfo=None),
@@ -202,12 +224,12 @@ def upsert_records(records: list[dict], coll) -> tuple[int, int]:
             {'symbol': r['symbol'], 'year': r['year'], 'season': r['season']},
             {
                 '$setOnInsert': {
-                    'cashflow':    {},
                     'report_type': '合併',
                 },
                 '$set': {
                     'income':      r['income'],
                     'balance':     r.get('balance', {}),
+                    'cashflow':    r.get('cashflow', {}),
                     'data_source': r['data_source'],
                     'updated_at':  r['updated_at'],
                 },
@@ -232,6 +254,8 @@ def main():
                         help='略過 quarterly_earnings 已有任何資料的股票')
     parser.add_argument('--no-balance', action='store_true',
                         help='略過資產負債表（只下載損益表，節省 API 次數）')
+    parser.add_argument('--no-cashflow', action='store_true',
+                        help='略過現金流量表')
     parser.add_argument('--symbols', nargs='+', default=None,
                         help='只下載指定股票（空白分隔）')
     parser.add_argument('--limit',   type=int, default=None,
@@ -243,7 +267,8 @@ def main():
     # 若只查損益表 (--no-balance)：600股/小時 → 每股 6 秒
     if args.delay is None:
         if args.token:
-            args.delay = 12.0 if not args.no_balance else 6.0
+            n_ds = 1 + (0 if args.no_balance else 1) + (0 if args.no_cashflow else 1)
+            args.delay = 6.0 * n_ds   # 600次/hr → 每請求6秒
         else:
             args.delay = 2.0
 
@@ -274,10 +299,12 @@ def main():
         logger.info(f"全部代碼 {len(all_syms)} 支 → 一般股票 {len(symbols)} 支（排除 ETF/權證）")
 
     if args.resume:
-        already = set(coll.distinct('symbol'))
+        # 只跳過「已回填到起始年附近」的股票(有2022+舊資料但缺早年的不算完成→續跑)
+        start_year = int(str(start_date)[:4])
+        already = set(coll.distinct('symbol', {'year': {'$lte': start_year + 1}}))
         before  = len(symbols)
         symbols = [s for s in symbols if s not in already]
-        logger.info(f"--resume: 跳過 {before - len(symbols)} 支已有資料的股票")
+        logger.info(f"--resume: 跳過 {before - len(symbols)} 支已回填早年(<= {start_year+1})資料的股票")
 
     if args.limit:
         symbols = symbols[:args.limit]
@@ -294,7 +321,8 @@ def main():
     for i, symbol in enumerate(symbols, 1):
         records = fetch_quarterly(symbol, start_date, end_date, session,
                                   token=args.token,
-                                  with_balance=not args.no_balance)
+                                  with_balance=not args.no_balance,
+                                  with_cashflow=not args.no_cashflow)
         if records:
             ins, mod = upsert_records(records, coll)
             total_ins += ins

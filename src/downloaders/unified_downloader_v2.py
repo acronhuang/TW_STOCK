@@ -254,7 +254,7 @@ class SmartDownloadCoordinator(DownloadCoordinator):
                         continue
                     
                     # 下載數據
-                    symbol_params = {**params, "stock_id": symbol}
+                    symbol_params = {**params, "data_id": symbol}   # FinMind 參數名為 data_id;傳 stock_id 會被忽略→變成全市場查詢→免費層 400
                     data = self.api_client.fetch_data(dataset, symbol_params)
                     
                     if data:

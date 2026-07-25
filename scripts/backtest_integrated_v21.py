@@ -30,6 +30,21 @@ from strategy.integrated_strategy_v21 import IntegratedStrategyV21
 from strategy.multi_factor_strategy import MultiFactorStrategy
 
 
+def _q(date) -> datetime:
+    """日期（字串或 datetime）→ UTC 午夜 datetime，供 MongoDB 查詢使用。
+
+    2026-07-19 修：本檔原本把 'YYYY-MM-DD' 字串直接丟進 Mongo 查 stock_price.date，
+    但該欄位是 Date 型別 → 查詢恆回 0 筆，交易日數為 0，
+    最終在 calculate_performance_metrics 以 KeyError: 'value' 崩潰。
+    也就是說這支回測從未成功執行過。
+
+    修法刻意最小化：**只在查詢邊界轉型**，內部一律維持字串表示，
+    因此 `date in rebalance_dates`、`get_price(sid, date)`、交易紀錄等呼叫端全不受影響。
+    """
+    ts = pd.to_datetime(date)
+    return datetime(ts.year, ts.month, ts.day)
+
+
 class BacktestV21:
     """v2.1 策略回測器"""
     
@@ -37,7 +52,14 @@ class BacktestV21:
         self,
         db_connection,
         initial_capital: float = 10_000_000,
-        rebalance_frequency: str = 'monthly'
+        rebalance_frequency: str = 'monthly',
+        fee_rate: float = 0.001425,
+        fee_discount: float = 0.6,
+        tax_rate: float = 0.003,
+        min_fee: float = 20.0,
+        quality_source: str = 'none',   # none / fundamental / legacy
+        entry_lag: int = 1,
+        stale_exit_days: int = 20
     ):
         """
         初始化
@@ -54,8 +76,43 @@ class BacktestV21:
         # 初始化策略
         self.strategy_v21 = IntegratedStrategyV21(db_connection)
         self.strategy_v20 = MultiFactorStrategy(db_connection)
+
+        for strat in (self.strategy_v21.factor_strategy, self.strategy_v20):
+            if quality_source == 'none':
+                strat.update_config({'quality': None})     # 移除並自動正規化權重
+            else:
+                strat.quality_source = quality_source
+        if quality_source == 'none':
+            print(f"⚠️  已移除 quality 因子,權重重新分配: "
+                  f"{ {k: round(v['weight'], 3) for k, v in
+                       self.strategy_v20.factor_config.items()} }")
+        elif quality_source == 'legacy':
+            print("⚠️  quality 使用 stock_factors 常數值 —— 有前視偏誤,僅供對照")
+        else:
+            print("✓ quality 取自 fundamental_factors(以 available_from 落後)")
         
         # 回測狀態
+        # 台股交易成本:手續費 0.1425%(雙邊,常見 6 折,最低 20 元)
+        # 證交稅 0.3% —— 僅賣出課徵
+        self.fee_rate = fee_rate
+        self.fee_discount = fee_discount
+        self.tax_rate = tax_rate
+        self.min_fee = min_fee
+        self.total_fees = 0.0
+        self.total_taxes = 0.0
+
+        # --- 偏誤控制 ---
+        # quality 因子(roe/roa/profit_margin/debt_ratio)在 stock_factors 是常數,
+        # 等於把近期財報回頭貼到歷史每一天 → 純前視偏誤,預設關閉。
+        self.quality_source = quality_source
+        # 因子以當日收盤算出,不可能在當日收盤成交 → 延後 N 個交易日進場。
+        self.entry_lag = entry_lag
+        # 連續無報價達此天數視為下市/長期停牌,以最後已知價強制出場。
+        self.stale_exit_days = stale_exit_days
+        self.last_price = {}      # {stock_id: 最後已知收盤}
+        self.stale_days = {}      # {stock_id: 連續無報價天數}
+        self.forced_exits = 0
+
         self.capital = initial_capital
         self.positions = {}  # {stock_id: {'shares': 1000, 'entry_price': 580, 'entry_date': '2024-01-01'}}
         self.trades = []
@@ -103,9 +160,9 @@ class BacktestV21:
         for i in range(10):  # 最多往後找 10 天
             check_date = (current + timedelta(days=i)).strftime('%Y-%m-%d')
             
-            # 檢查是否有交易數據
+            # 檢查是否有交易數據（date 為 Date 型別，須轉型查詢）
             has_data = self.db['stock_price'].find_one({
-                'date': check_date
+                'date': _q(check_date)
             })
             
             if has_data:
@@ -117,10 +174,21 @@ class BacktestV21:
         """獲取股價"""
         data = self.db['stock_price'].find_one({
             'stock_id': stock_id,
-            'date': date
+            'date': _q(date)
         })
-        
-        return data['close'] if data else None
+
+        if not data:
+            return None
+        # 價格欄位為 Decimal128（見記憶 ssh-access-166），需轉 float 才能參與運算
+        # 還原價優先;adj_close 為空代表 close 本身就缺值(全庫 23 筆)
+        px = data.get('adj_close')
+        if px is None:
+            px = data.get('close')
+        if px is None:
+            return None
+        val = float(str(px))
+        self.last_price[stock_id] = val      # 供無報價時沿用
+        return val
     
     def rebalance(self, date: str, selections: List):
         """
@@ -130,67 +198,123 @@ class BacktestV21:
             date: 再平衡日期
             selections: 選股結果（StockRanking 列表）
         """
-        # 1. 賣出不在新名單中的持倉
-        current_holdings = list(self.positions.keys())
-        new_holdings = [s.stock_id for s in selections]
-        
-        for stock_id in current_holdings:
-            if stock_id not in new_holdings:
-                # 賣出
-                position = self.positions[stock_id]
-                sell_price = self.get_price(stock_id, date)
-                
-                if sell_price:
-                    sell_value = position['shares'] * sell_price
-                    self.capital += sell_value
-                    
-                    # 記錄交易
-                    self.trades.append({
-                        'date': date,
-                        'stock_id': stock_id,
-                        'action': 'sell',
-                        'price': sell_price,
-                        'shares': position['shares'],
-                        'value': sell_value,
-                        'return_pct': (sell_price - position['entry_price']) / position['entry_price']
-                    })
-                    
-                    del self.positions[stock_id]
-        
-        # 2. 買入新名單中的股票
+        # 2026-07-19 重寫。原實作有兩個獨立的會計錯誤：
+        #
+        # (1) 資金配置基數在迴圈內縮小：
+        #     target_value = self.capital * weight  且迴圈內 self.capital -= buy_value
+        #     → 第 n 檔的基數是第 1 檔的 0.9^(n-1)。實測 2023-07-03 十檔買單為
+        #       991,200 → 897,600 → 790,350 →…（公比 0.9），約 1/3 資金從未進場。
+        #
+        # (2) 已持有且仍在名單內的股票，不賣舊部位就直接覆蓋 self.positions[stock_id]
+        #     → 股數憑空蒸發。實測 1608 從 42,000 股被覆蓋成 17,000 股，
+        #       25,000 股消失而現金照扣。這是漏帳，也是 -71% 報酬的主因。
+        #
+        # 改為標準的目標權重再平衡：以「總資產」為基數一次算定 → 先賣後買 → 按差額調整。
+        # 成本基礎改用加權平均，使加碼後的 return_pct 仍有意義。
+
+        # 0) 配置基數：總資產（現金 + 持股市值），在迴圈外一次算定
+        total_value = self.calculate_portfolio_value(date)
+
+        # 1) 算出每檔的目標股數（整張）
+        targets = {}
         for selection in selections:
-            stock_id = selection.stock_id
-            target_weight = selection.position_weight
-            buy_price = self.get_price(stock_id, date)
-            
-            if not buy_price:
+            price = self.get_price(selection.stock_id, date)
+            if not price:
                 continue
-            
-            # 計算目標倉位
-            target_value = self.capital * target_weight
-            target_shares = int(target_value / buy_price / 1000) * 1000  # 整張
-            
-            if target_shares > 0:
-                buy_value = target_shares * buy_price
-                self.capital -= buy_value
-                
-                # 記錄交易
-                self.trades.append({
-                    'date': date,
-                    'stock_id': stock_id,
-                    'action': 'buy',
-                    'price': buy_price,
-                    'shares': target_shares,
-                    'value': buy_value,
-                    'weight': target_weight
-                })
-                
-                # 更新持倉
-                self.positions[stock_id] = {
-                    'shares': target_shares,
-                    'entry_price': buy_price,
-                    'entry_date': date
-                }
+            shares = int(total_value * selection.position_weight / price / 1000) * 1000
+            targets[selection.stock_id] = {
+                'shares': shares,
+                'price': price,
+                'weight': selection.position_weight,
+            }
+
+        # 2) 先賣：不在名單內的全數出清；仍在名單內但超過目標的減碼
+        for stock_id in list(self.positions.keys()):
+            price = self.get_price(stock_id, date)
+            if not price:
+                continue  # 無報價當日不動作，避免以錯誤價格成交
+            held = self.positions[stock_id]['shares']
+            want = targets[stock_id]['shares'] if stock_id in targets else 0
+            if want < held:
+                self._execute_sell(stock_id, date, price, held - want)
+
+        # 3) 再買：不足目標的加碼（此時現金已到位）
+        for stock_id, t in targets.items():
+            held = self.positions.get(stock_id, {}).get('shares', 0)
+            qty = t['shares'] - held
+            if qty <= 0:
+                continue
+            # 整張化與價格變動可能造成微幅超支，以現有現金為上限截斷
+            cost_mult = 1.0 + self.fee_rate * self.fee_discount
+            if qty * t['price'] * cost_mult > self.capital:
+                qty = int(self.capital / (t['price'] * cost_mult) / 1000) * 1000
+            if qty > 0:
+                self._execute_buy(stock_id, date, t['price'], qty, t['weight'])
+
+    def _fee(self, value: float) -> float:
+        """手續費:價金 × 費率 × 折扣,不低於最低收費。"""
+        return max(self.min_fee, value * self.fee_rate * self.fee_discount)
+
+    def _execute_sell(self, stock_id: str, date: str, price: float, shares: int):
+        """賣出指定股數（可為部分減碼）。"""
+        position = self.positions[stock_id]
+        entry = position['entry_price']
+        value = shares * price
+        fee = self._fee(value)
+        tax = value * self.tax_rate          # 證交稅只在賣出課徵
+        self.capital += value - fee - tax
+        self.total_fees += fee
+        self.total_taxes += tax
+
+        self.trades.append({
+            'date': date,
+            'stock_id': stock_id,
+            'action': 'sell',
+            'price': price,
+            'shares': shares,
+            'value': value,
+            'fee': fee,
+            'tax': tax,
+            'return_pct': (price - entry) / entry if entry else 0.0,
+        })
+
+        remaining = position['shares'] - shares
+        if remaining > 0:
+            position['shares'] = remaining      # 減碼：成本基礎不變
+        else:
+            del self.positions[stock_id]
+
+    def _execute_buy(self, stock_id: str, date: str, price: float,
+                     shares: int, weight: float):
+        """買進指定股數（可為加碼），成本基礎以加權平均更新。"""
+        value = shares * price
+        fee = self._fee(value)
+        self.capital -= value + fee
+        self.total_fees += fee
+
+        self.trades.append({
+            'date': date,
+            'stock_id': stock_id,
+            'action': 'buy',
+            'price': price,
+            'shares': shares,
+            'value': value,
+            'fee': fee,
+            'weight': weight,
+        })
+
+        pos = self.positions.get(stock_id)
+        if pos:
+            old_shares = pos['shares']
+            total_shares = old_shares + shares
+            pos['entry_price'] = (pos['entry_price'] * old_shares + value) / total_shares
+            pos['shares'] = total_shares
+        else:
+            self.positions[stock_id] = {
+                'shares': shares,
+                'entry_price': price,
+                'entry_date': date,
+            }
     
     def check_daily_exits(self, date: str):
         """
@@ -238,6 +362,23 @@ class BacktestV21:
                 
                 del self.positions[stock_id]
     
+    def _handle_stale_positions(self, date: str):
+        """連續無報價超過門檻者,以最後已知價強制出場並計入交易紀錄。"""
+        for stock_id in list(self.positions.keys()):
+            if self.get_price(stock_id, date) is not None:
+                self.stale_days[stock_id] = 0
+                continue
+            n = self.stale_days.get(stock_id, 0) + 1
+            self.stale_days[stock_id] = n
+            if n < self.stale_exit_days:
+                continue
+            px = self.last_price.get(stock_id)
+            if px is None:
+                del self.positions[stock_id]     # 從無報價,無法估值
+                continue
+            self._execute_sell(stock_id, date, px, self.positions[stock_id]['shares'])
+            self.forced_exits += 1
+
     def calculate_portfolio_value(self, date: str) -> float:
         """
         計算投資組合總價值
@@ -252,6 +393,10 @@ class BacktestV21:
         
         for stock_id, position in self.positions.items():
             current_price = self.get_price(stock_id, date)
+            if not current_price:
+                # 無報價不代表市值為 0 —— 沿用最後已知價,否則會製造假的淨值坑洞,
+                # 且下市股的虧損會永遠不入帳(舊版就是這樣把勝率灌高的)。
+                current_price = self.last_price.get(stock_id)
             if current_price:
                 portfolio_value += position['shares'] * current_price
         
@@ -293,16 +438,29 @@ class BacktestV21:
         print(f"再平衡日期數: {len(rebalance_dates)}")
         
         # 獲取所有交易日
-        all_trading_days = list(self.db['stock_price'].distinct(
-            'date',
-            {'date': {'$gte': start_date, '$lte': end_date}}
-        ))
+        # date 為 Date 型別 → 以 datetime 查詢，取回後轉回字串以維持內部表示一致
+        all_trading_days = [
+            d.strftime('%Y-%m-%d') for d in self.db['stock_price'].distinct(
+                'date',
+                {'date': {'$gte': _q(start_date), '$lte': _q(end_date)}}
+            )
+        ]
         all_trading_days.sort()
         
         print(f"交易日數: {len(all_trading_days)}\n")
         
         # 執行回測
+        pending = None      # (選股日, selections) —— 延後到下一個交易日才成交
         for date in tqdm(all_trading_days, desc="回測進度"):
+            # 先處理上一輪待成交的再平衡(T+1 進場,避免用當日收盤算的訊號在當日收盤成交)
+            if pending is not None:
+                sel_date, sel = pending
+                pending = None
+                self.rebalance(date, sel)
+
+            # 長期無報價的持股強制出場
+            self._handle_stale_positions(date)
+
             # 再平衡日
             if date in rebalance_dates:
                 print(f"\n再平衡日: {date}")
@@ -330,8 +488,11 @@ class BacktestV21:
                         )
                         selections.append(ranking)
                 
-                # 再平衡
-                self.rebalance(date, selections)
+                # 再平衡:延後 entry_lag 個交易日成交(0 表示維持同日,僅供對照)
+                if self.entry_lag > 0:
+                    pending = (date, selections)
+                else:
+                    self.rebalance(date, selections)
             
             # 每日檢查出場訊號（僅 v2.1）
             if strategy_version == 'v2.1':
@@ -401,7 +562,11 @@ class BacktestV21:
             'completed_trades': len(trades_df),
             'win_rate': win_rate,
             'avg_win': avg_win,
-            'avg_loss': avg_loss
+            'avg_loss': avg_loss,
+            'total_fees': self.total_fees,
+            'total_taxes': self.total_taxes,
+            'cost_drag_pct': (self.total_fees + self.total_taxes) / self.initial_capital,
+            'forced_exits': self.forced_exits
         }
         
         return metrics
@@ -439,7 +604,8 @@ def print_performance_report(results_v20: Dict, results_v21: Dict):
     print(f"{'夏普比率':<25} {m20['sharpe_ratio']:>15.3f} {m21['sharpe_ratio']:>15.3f} "
           f"{pct_sharpe:>14.2%}" if pct_sharpe != float('inf') else f"{'N/A':>15}")
     
-    pct_dd = safe_pct_change(m21['max_drawdown'], abs(m20['max_drawdown']))
+    # 回撤為負值,取絕對值比較幅度(負號代表回撤變小=改善)
+    pct_dd = -safe_pct_change(abs(m21['max_drawdown']), abs(m20['max_drawdown']))
     print(f"{'最大回撤':<25} {m20['max_drawdown']:>14.2%} {m21['max_drawdown']:>14.2%} "
           f"{pct_dd:>14.2%}" if pct_dd != float('inf') else f"{'N/A':>15}")
     
@@ -452,12 +618,18 @@ def print_performance_report(results_v20: Dict, results_v21: Dict):
     print(f"{'平均獲利':<25} {m20['avg_win']:>14.2%} {m21['avg_win']:>14.2%} "
           f"{pct_avg_win:>14.2%}" if pct_avg_win != float('inf') else f"{'N/A':>15}")
     
-    pct_avg_loss = safe_pct_change(m21['avg_loss'], abs(m20['avg_loss']))
+    # 平均虧損為負值,同上取絕對值
+    pct_avg_loss = -safe_pct_change(abs(m21['avg_loss']), abs(m20['avg_loss']))
     print(f"{'平均虧損':<25} {m20['avg_loss']:>14.2%} {m21['avg_loss']:>14.2%} "
           f"{pct_avg_loss:>14.2%}" if pct_avg_loss != float('inf') else f"{'N/A':>15}")
     
     print(f"{'總交易次數':<25} {m20['total_trades']:>15} {m21['total_trades']:>15} "
           f"{m21['total_trades'] - m20['total_trades']:>15}")
+
+    for lbl, key in (('手續費合計', 'total_fees'), ('證交稅合計', 'total_taxes'),
+                     ('強制出場次數', 'forced_exits')):
+        if key in m20 or key in m21:
+            print(f"{lbl:<25} {m20.get(key, 0):>15,.0f} {m21.get(key, 0):>15,.0f}")
     
     print(f"\n{'='*80}\n")
 
@@ -470,8 +642,29 @@ def main():
     parser.add_argument('--initial-capital', type=float, default=10_000_000, help='初始資金')
     parser.add_argument('--rebalance-frequency', type=str, default='monthly', help='再平衡頻率')
     parser.add_argument('--output', type=str, default='backtest_v21_results.json', help='輸出檔案')
+    parser.add_argument('--fee-rate', type=float, default=0.001425, help='手續費率(公定 0.1425%%)')
+    parser.add_argument('--fee-discount', type=float, default=0.6, help='手續費折扣(6 折=0.6)')
+    parser.add_argument('--tax-rate', type=float, default=0.003, help='證交稅率(賣出 0.3%%)')
+    parser.add_argument('--no-cost', action='store_true', help='關閉所有交易成本(對照用)')
+    parser.add_argument('--quality-source', choices=['none', 'fundamental', 'legacy'],
+                        default='none',
+                        help='quality 因子來源:none=不用 / fundamental=財報落後後的真序列 '
+                             '/ legacy=stock_factors 常數(有前視,僅對照)')
+    parser.add_argument('--entry-lag', type=int, default=1,
+                        help='進場延後幾個交易日(0=同日成交,有同棒前視)')
+    parser.add_argument('--stale-exit-days', type=int, default=20,
+                        help='連續無報價幾日後強制出場')
     
     args = parser.parse_args()
+    
+    cost_kw = dict(fee_rate=args.fee_rate, fee_discount=args.fee_discount,
+                   tax_rate=args.tax_rate,
+                   quality_source=args.quality_source,
+                   entry_lag=args.entry_lag,
+                   stale_exit_days=args.stale_exit_days)
+    if args.no_cost:
+        cost_kw.update(fee_rate=0.0, fee_discount=0.0, tax_rate=0.0, min_fee=0.0)
+        print('⚠️  已關閉交易成本(--no-cost),結果不可作為決策依據')
     
     # 連接資料庫
     print("連接 MongoDB...")
@@ -483,7 +676,8 @@ def main():
     backtester_v20 = BacktestV21(
         db,
         initial_capital=args.initial_capital,
-        rebalance_frequency=args.rebalance_frequency
+        rebalance_frequency=args.rebalance_frequency,
+        **cost_kw
     )
     results_v20 = backtester_v20.run(args.start_date, args.end_date, strategy_version='v2.0')
     
@@ -492,7 +686,8 @@ def main():
     backtester_v21 = BacktestV21(
         db,
         initial_capital=args.initial_capital,
-        rebalance_frequency=args.rebalance_frequency
+        rebalance_frequency=args.rebalance_frequency,
+        **cost_kw
     )
     results_v21 = backtester_v21.run(args.start_date, args.end_date, strategy_version='v2.1')
     

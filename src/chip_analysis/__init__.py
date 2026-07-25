@@ -14,8 +14,21 @@
 from typing import Dict, List, Tuple, Optional
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
+
+
+def _to_utc_midnight(d) -> datetime:
+    """日期（字串或 datetime）→ UTC 午夜 datetime。
+
+    本專案 shareholding / institutional_investors_wide / stock_price 的 date
+    一律存 UTC 午夜 Date 型別，用字串查詢會查不到任何資料且不會報錯
+    （見記憶 date-field-three-representations）。
+    """
+    if isinstance(d, datetime):
+        return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+    ts = pd.to_datetime(d)
+    return datetime(ts.year, ts.month, ts.day, tzinfo=timezone.utc)
 
 
 @dataclass
@@ -58,8 +71,12 @@ class ChipAnalyzer:
             db_connection: MongoDB 連接
         """
         self.db = db_connection
-        self.holdings_col = self.db['institutional_holdings']
-        self.trading_col = self.db['institutional_trading']
+        # 2026-07-19 修正資料源。原本指向 institutional_holdings（0 筆）與
+        # institutional_trading（470 檔殘骸，且欄位名為 buy/sell/name，
+        # 與本模組期待的 Foreign_Investor_Net 等欄位完全不符）→ 兩個 analyze
+        # 方法無論輸入什麼股票都恆回 0，且被 `if ... in df.columns else 0` 靜默吞掉。
+        self.holdings_col = self.db['shareholding']                    # TDCC 集保大戶
+        self.trading_col = self.db['institutional_investors_wide']     # 重建的法人買賣寬表
     
     def analyze_institutional_holdings(
         self,
@@ -78,30 +95,37 @@ class ChipAnalyzer:
         Returns:
             大戶持股分析結果
         """
-        lookback_date = (pd.to_datetime(end_date) - timedelta(weeks=lookback_weeks)).strftime('%Y-%m-%d')
-        
-        # 獲取持股數據
+        # shareholding.date 為 UTC 午夜 Date 型別，須用 datetime 查詢（字串查不到）
+        end_dt = _to_utc_midnight(end_date)
+        start_dt = end_dt - timedelta(weeks=lookback_weeks)
+
+        # 獲取持股數據（TDCC 每週一期）
         data = list(self.holdings_col.find({
             'stock_id': stock_id,
-            'date': {'$gte': lookback_date, '$lte': end_date}
+            'date': {'$gte': start_dt, '$lte': end_dt}
         }).sort('date', 1))
-        
+
         if not data:
             return {
                 'holding_400_plus': 0,
                 'holding_change_4w': 0,
                 'trend': 'unknown'
             }
-        
-        df = pd.DataFrame(data)
-        
-        # 計算 400 張以上持股比例
-        holding_400_plus = df[df['level'] >= 400]['percent'].sum() if len(df) > 0 else 0
-        
-        # 計算變化率
-        if len(df) >= 2:
-            latest = df[df['date'] == end_date]['percent'].sum()
-            earliest = df[df['date'] == lookback_date]['percent'].sum()
+
+        # big400_pct 即「400 張以上持股比例」，不需再依 level 彙總
+        pcts = [float(d['big400_pct']) for d in data if d.get('big400_pct') is not None]
+        if not pcts:
+            return {
+                'holding_400_plus': 0,
+                'holding_change_4w': 0,
+                'trend': 'unknown'
+            }
+
+        holding_400_plus = pcts[-1]          # 最新一期
+
+        # 計算變化率（維持原本的「相對變化」定義，門檻語意不變）
+        if len(pcts) >= 2:
+            latest, earliest = pcts[-1], pcts[0]
             change_4w = (latest - earliest) / earliest if earliest > 0 else 0
         else:
             change_4w = 0
@@ -137,14 +161,16 @@ class ChipAnalyzer:
         Returns:
             法人買賣分析結果
         """
-        lookback_date = (pd.to_datetime(end_date) - timedelta(days=lookback_days)).strftime('%Y-%m-%d')
-        
-        # 獲取法人買賣數據
-        data = list(self.trading_col.find({
-            'stock_id': stock_id,
-            'date': {'$gte': lookback_date, '$lte': end_date}
-        }).sort('date', 1))
-        
+        # institutional_investors_wide.date 為 UTC 午夜 Date 型別
+        end_dt = _to_utc_midnight(end_date)
+        start_dt = end_dt - timedelta(days=lookback_days)
+
+        # 獲取法人買賣數據（欄位：foreign_net / trust_net / dealer_net，單位為股數）
+        data = list(self.trading_col.find(
+            {'stock_id': stock_id, 'date': {'$gte': start_dt, '$lte': end_dt}},
+            {'date': 1, 'foreign_net': 1, 'trust_net': 1, 'dealer_net': 1}
+        ).sort('date', 1))
+
         if not data:
             return {
                 'foreign_net_buy': 0,
@@ -152,23 +178,30 @@ class ChipAnalyzer:
                 'trust_net_buy': 0,
                 'dealer_net_buy': 0
             }
-        
-        df = pd.DataFrame(data)
-        
-        # 計算淨買超
-        foreign_net_buy = df['Foreign_Investor_Net'].sum() if 'Foreign_Investor_Net' in df.columns else 0
-        trust_net_buy = df['Investment_Trust_Net'].sum() if 'Investment_Trust_Net' in df.columns else 0
-        dealer_net_buy = df['Dealer_Net'].sum() if 'Dealer_Net' in df.columns else 0
-        
-        # 計算外資連續買超天數
+
+        def _n(d, k):
+            v = d.get(k)
+            return 0 if v is None else float(v)
+
+        # institutional_investors_wide 的單位是「股」，但 ChipSignal 宣告的是「張」
+        # （見本檔 ChipSignal.foreign_net_buy 註解，及 scripts/chip_score_scan.py 的
+        # read_institutional：「法人 total_net 單位為股 → /1000」）。
+        # 未換算會讓 detect_main_force 的 >1000 / >500 門檻恆成立 → 外資項恆滿分。
+        SHARES_PER_LOT = 1000
+
+        foreign_series = [_n(d, 'foreign_net') for d in data]
+        foreign_net_buy = sum(foreign_series) / SHARES_PER_LOT
+        trust_net_buy = sum(_n(d, 'trust_net') for d in data) / SHARES_PER_LOT
+        dealer_net_buy = sum(_n(d, 'dealer_net') for d in data) / SHARES_PER_LOT
+
+        # 計算外資連續買超天數（由最新往回數）
         foreign_continuous_days = 0
-        if 'Foreign_Investor_Net' in df.columns:
-            for i in range(len(df) - 1, -1, -1):
-                if df.iloc[i]['Foreign_Investor_Net'] > 0:
-                    foreign_continuous_days += 1
-                else:
-                    break
-        
+        for v in reversed(foreign_series):
+            if v > 0:
+                foreign_continuous_days += 1
+            else:
+                break
+
         return {
             'foreign_net_buy': int(foreign_net_buy),
             'foreign_continuous_days': foreign_continuous_days,

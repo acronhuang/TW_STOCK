@@ -5,6 +5,7 @@ import sys, os, warnings
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 warnings.filterwarnings('ignore')
 import numpy as np
+from _adj_price import ADJ_PROJ, use_adjusted  # noqa: E402
 import pandas as pd
 from pymongo import MongoClient
 from src.utils.backtest import tof, dkey, HORIZONS, print_baseline, make_reporter
@@ -38,8 +39,10 @@ base = {h: [] for h in HORIZONS}
 
 for sym in syms:
     docs = list(db.stock_price.find(
-        {'symbol': sym}, {'date': 1, 'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1}
+        {'symbol': sym},
+        {'date': 1, 'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1, **ADJ_PROJ}
     ).sort('date', 1))
+    use_adjusted(docs)   # 用還原價,否則除權息=假跌
     if len(docs) < 250:
         continue
     close = np.array([tof(d.get('close')) or np.nan for d in docs])

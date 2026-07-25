@@ -32,13 +32,15 @@ class TimeframeConverter:
     }
 
     # 重採樣規則
+    # 註：M/Q/Y/6M 於 pandas 2.2 起改名為 ME/QE/YE/6ME（舊名已 deprecated，pandas 3.0 移除）。
+    # 語意不變（皆為期末），2026-07-17 更新以免升級後整批多週期分析直接壞掉。
     RESAMPLE_RULES = {
         'D': 'D',
         'W': 'W-FRI',     # 週五收盤
-        'M': 'M',         # 月底收盤
-        'Q': 'Q',         # 季末收盤
-        '6M': '6M',       # 半年末收盤
-        'Y': 'Y'          # 年底收盤
+        'M': 'ME',        # 月底收盤
+        'Q': 'QE',        # 季末收盤
+        '6M': '6ME',      # 半年末收盤
+        'Y': 'YE'         # 年底收盤
     }
 
     def __init__(self):

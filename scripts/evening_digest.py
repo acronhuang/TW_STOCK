@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT))
 # 主題路由：命中任一關鍵字（比對訊息前 120 字）即歸入該主題。順序即輸出順序。
 THEMES = [
     ("🧭 持倉/風險", [
-        "北大四大法則", "止損檢查", "今日警報摘要", "價格跌破", "資料完整度",
+        "北大四大法則", "持倉風控", "止損檢查", "今日警報摘要", "價格跌破", "資料完整度",
         "資料自癒", "自癒後", "自癒完成",
     ]),
     ("💡 選股機會", [
@@ -43,7 +43,7 @@ THEMES = [
 ]
 
 PER_SOURCE_LINES = 10      # 每則來源濃縮保留的內容行數（表頭另計）
-MSG_CAP = 4600             # 單則 LINE 上限（保守，<5000）
+MSG_CAP = 4900             # 單則 LINE 上限（保守，<5000）
 
 
 def _route(body: str) -> int:
@@ -67,6 +67,15 @@ def _condense(body: str) -> str:
     return "\n".join(out)
 
 
+MERGE = [[0, 1], [2]]   # 持倉風險 + 選股機會 併一則；量價/籌碼 獨立（3 則→2 則降量）
+
+
+def _cap(body):
+    if len(body) > MSG_CAP:
+        return body[:MSG_CAP - 20].rstrip() + "\n…（超出略，見 :8501）"
+    return body
+
+
 def build_digests(entries: list[dict]) -> list[str]:
     buckets: list[list[str]] = [[] for _ in THEMES]
     misc: list[str] = []
@@ -79,26 +88,27 @@ def build_digests(entries: list[dict]) -> list[str]:
 
     date_str = datetime.now().strftime("%m/%d")
     msgs = []
-    for (title, _), blocks in zip(THEMES, buckets):
-        if not blocks:
+    for group in MERGE:
+        secs = [(THEMES[i][0] + "\n" + "\u2500" * 18 + "\n" + "\n\n".join(buckets[i]))
+                for i in group if buckets[i]]
+        if not secs:
             continue
-        header = f"{title}  收盤彙整 {date_str}\n" + "─" * 18
-        body = header + "\n" + ("\n\n".join(blocks))
-        if len(body) > MSG_CAP:
-            body = body[:MSG_CAP - 20].rstrip() + "\n…（超出略，見 :8501）"
-        msgs.append(body)
-    if misc:
-        body = f"🔹 其他  {date_str}\n" + "─" * 18 + "\n" + "\n\n".join(misc)
-        if len(body) > MSG_CAP:
-            body = body[:MSG_CAP - 20].rstrip() + "\n…（超出略，見 :8501）"
-        # 併入最後一則以控制在 ≤3-4 則；若無主題訊息則自成一則
-        if msgs:
-            merged = msgs[-1] + "\n\n" + body
-            msgs[-1] = merged if len(merged) <= MSG_CAP else msgs[-1]
-            if len(merged) > MSG_CAP:
-                msgs.append(body)
+        if len(secs) > 1:
+            combined = "\U0001f4ee 收盤彙整 " + date_str + "\n\n" + "\n\n".join(secs)
+            if len(combined) <= MSG_CAP:
+                msgs.append(combined)          # 正常：併成一則
+            else:
+                for sec in secs:               # 爆量：拆回各主題,避免截掉 dailypicks 等
+                    msgs.append(_cap(date_str + " 收盤彙整\n\n" + sec))
         else:
-            msgs.append(body)
+            msgs.append(_cap(date_str + " 收盤彙整\n\n" + secs[0]))
+
+    if misc:
+        mbody = "\U0001f539 其他  " + date_str + "\n" + "\u2500" * 18 + "\n" + "\n\n".join(misc)
+        if msgs and len(msgs[-1]) + len(mbody) + 2 <= MSG_CAP:
+            msgs[-1] = msgs[-1] + "\n\n" + mbody
+        else:
+            msgs.append(_cap(mbody))
     return msgs
 
 

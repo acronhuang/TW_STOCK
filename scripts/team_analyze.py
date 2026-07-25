@@ -60,6 +60,24 @@ def fetch_all_data(symbol: str) -> dict:
     return data
 
 
+def _position_hint(price, capital: int = 100_000, weight: float = 0.15) -> str:
+    """程式端算好部位張數,避免 LLM 自行心算算錯(台股 1 張=1000 股)。"""
+    try:
+        price = float(price)
+    except (TypeError, ValueError):
+        price = 0.0
+    if price <= 0:
+        return "【部位試算】無現價,無法試算張數。"
+    cost_per_lot = price * 1000
+    max_lots    = int(capital // cost_per_lot)              # 全押上限
+    target_lots = int((capital * weight) // cost_per_lot)   # 單檔 15% 權重
+    if max_lots < 1:
+        return (f"【部位試算(程式,勿改算)】現價約{price:.1f}元,一張需{cost_per_lot:,.0f}元;"
+                f"10萬資金買不起 1 張(<1 張)→建議零股或跳過。")
+    return (f"【部位試算(程式,勿改算)】現價約{price:.1f}元,一張{cost_per_lot:,.0f}元;"
+            f"10萬資金單檔 15% 權重約 {target_lots} 張(全押最多 {max_lots} 張)。")
+
+
 def build_expert_prompt(role: str, symbol: str, data: dict) -> str:
     """為每個專家準備專屬提示詞 + 數據"""
     if role == 'macro-analyst':
@@ -80,7 +98,10 @@ def build_expert_prompt(role: str, symbol: str, data: dict) -> str:
         return f"分析 {symbol} 籌碼：\n近10日法人: {json.dumps(data['institutional'], ensure_ascii=False)}\n\n用 3 行內回答：法人在買還是賣？主力意圖？"
 
     if role == 'risk-manager':
-        return f"評估 {symbol} 風險：\n{json.dumps(data['risk'], ensure_ascii=False)}\n\n用 5 行內回答：風險等級？10萬資金建議部位/張數/停損？"
+        _price = (data.get('factors') or {}).get('close') or (data.get('valuation') or {}).get('current_price')
+        _hint  = _position_hint(_price)
+        return (f"評估 {symbol} 風險：\n{json.dumps(data['risk'], ensure_ascii=False)}\n{_hint}\n\n"
+                "用 5 行內回答：風險等級？建議部位/張數(務必採用上方【部位試算】的數字,不得自行重算)/停損？")
 
     if role == 'investment-advisor':
         # 把前 6 個專家的報告當輸入
@@ -100,7 +121,7 @@ def build_expert_prompt(role: str, symbol: str, data: dict) -> str:
 
 ⚠️ 輸出規則（務必遵守）：
 第一行只輸出評級標籤，固定格式：`評級：<X>`，X 五選一【強力買進 / 買進 / 觀望 / 減碼 / 賣出】，不得加註其他字。
-第二行起才寫理由與具體操作（張數/進場價/停損價/目標價/持有期）。
+第二行起才寫理由與具體操作（張數/進場價/停損價/目標價/持有期）。張數務必沿用【風險】報告中「部位試算」的程式數字,嚴禁自行心算(台股 1 張=1000 股)。
 評級需呼應蔡森技術型態方向（一致性要求）：
   • 偏空型態(M-Top/HS-Top/Triple-Top/Failed-Breakout)且無強力利多催化 → 不給買進/強力買進。
   • 偏多型態(W-Bottom/HS-Bottom/Triple-Bottom/Failed-Breakdown)且無強烈利空 → 不給賣出/減碼。

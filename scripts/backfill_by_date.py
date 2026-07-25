@@ -8,17 +8,20 @@
   backfill_by_date.py --date 20260708            # dry-run，只報告
   backfill_by_date.py --date 20260708 --apply    # 實際 upsert
   backfill_by_date.py --date 20260708 --market twse|tpex|both   # 預設 both
+
+TLS：兩個端點皆使用**正常憑證驗證**，請勿加回 `verify=False`。
+原本帶有 `verify=False` + `urllib3.disable_warnings(...)`，2026-07-19 實測確認並無必要
+（MI_INDEX 246KB、TPEX otc 3.9MB 皆 200 OK），已移除——那只是關掉中間人攻擊的防護，
+換不到任何東西。若日後真的遇到憑證錯誤，正解是更新 CA 憑證庫，不是關驗證。
 """
 import argparse
 import sys
 from datetime import datetime
 
 import requests
-import urllib3
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def _to_dec(v):
@@ -38,7 +41,7 @@ def fetch_twse(date_str: str):
     """TWSE MI_INDEX 按日期。date_str=YYYYMMDD。回 list[doc]。"""
     url = (f"https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
            f"?response=json&date={date_str}&type=ALLBUT0999")
-    r = requests.get(url, timeout=30, verify=False)
+    r = requests.get(url, timeout=30)
     r.raise_for_status()
     raw = r.json()
     if raw.get("stat") != "OK":
@@ -79,7 +82,7 @@ def fetch_tpex(date_str: str):
     roc = f"{dt.year}/{dt.month:02d}/{dt.day:02d}"
     url = (f"https://www.tpex.org.tw/www/zh-tw/afterTrading/otc"
            f"?date={roc}&type=EW&response=json")
-    r = requests.get(url, timeout=30, verify=False)
+    r = requests.get(url, timeout=30)
     r.raise_for_status()
     rows = (r.json().get("tables") or [{}])[0].get("data") or []
     out = []

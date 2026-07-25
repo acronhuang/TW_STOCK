@@ -31,21 +31,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# 真實持股（券商成交均價，不扣股利）。股數/NAV 讀 portfolio_positions(供 VaR)。
-HOLDINGS = {
-    '00679B': 29.97, '00687B': 30.59, '00710B': 18.65, '00919':  22.49,
-    '1229':   46.74, '1402':   27.80, '1722':   51.90, '1723':   99.00,
-    '2603':  213.00, '2706':   12.70, '2812':   19.45, '2845':   12.50,
-    '2892':   28.70, '2903':   22.90, '5871':  127.96, '7705':   53.75,
-    '8422':   30.38,
-    # 6884 海柏特 零成本(抽籤/贈與)→ 不設止損(house money)，僅計入 NAV
-}
+# 持倉單一真相來源：portfolio_positions（可由網頁「🛡️ 持倉風控」頁編輯）。
+# 讀成相容既有邏輯的 HOLDINGS / BOND_ETFS / HOLD_LONG，故下方檢查邏輯完全不動。
+def _load_positions():
+    from pymongo import MongoClient
+    _db = MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017"))["tw_stock_analysis"]
+    hold, bond, long_ = {}, set(), set()
+    for _d in _db.portfolio_positions.find(
+            {}, {"symbol": 1, "avg_cost": 1, "category": 1, "no_stop_loss": 1, "long_hold": 1}):
+        _s = _d["symbol"]
+        hold[_s] = _d.get("avg_cost") or 0
+        if _d.get("category") == "債券ETF":
+            bond.add(_s)
+        elif _d.get("no_stop_loss") or _d.get("long_hold"):
+            long_.add(_s)   # 零成本/零股/長期存股 → 不套波段硬止損
+    return hold, bond, long_
 
-# 債券 ETF 不適用 5% 止損
-BOND_ETFS = {'00679B', '00687B', '00710B'}
 
-# 帳戶分流(心理帳戶)：存股/長期領息標的不適用波段硬性止損。
-HOLD_LONG = set()  # 例：{'00919', '2892'} ← 視為長期存股，不硬性止損
+HOLDINGS, BOND_ETFS, HOLD_LONG = _load_positions()
 
 
 def run_pku_rules_check(notifier) -> str:

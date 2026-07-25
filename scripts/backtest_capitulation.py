@@ -6,6 +6,7 @@ import sys, os, warnings
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 warnings.filterwarnings('ignore')
 import numpy as np
+from _adj_price import ADJ_PROJ, use_adjusted  # noqa: E402
 from pymongo import MongoClient
 from src.factors.volume_factors import VolumeFactors
 from src.utils.backtest import tof, HORIZONS, print_baseline, report, make_reporter
@@ -47,7 +48,9 @@ cap_naked = {h: [] for h in HORIZONS}   # 裸絕望量(進場=絕望量當日)
 
 for sym in syms:
     docs = list(db.stock_price.find(
-        {'symbol': sym}, {'date': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1}).sort('date', 1))
+        {'symbol': sym},
+        {'date': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1, **ADJ_PROJ}).sort('date', 1))
+    use_adjusted(docs)   # 用還原價,否則除權息=假跌
     if len(docs) < 90:
         continue
     dk = lambda d: d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)[:10]

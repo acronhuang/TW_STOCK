@@ -77,9 +77,19 @@ download_data() {
     log_info "開始下載: $category"
 
     # 執行下載 — 只寫入日誌檔，不輸出到 stdout
-    if python3 "$PROJECT_DIR/src/downloaders/unified_downloader.py" \
+    #
+    # 2026-07-19 修：原本寫成 `if python3 ... | head -500 >> LOG; then`，
+    # 但 pipeline 的結束狀態取自最後一個指令（head），head 幾乎永遠成功
+    # → download_data() 恆回 0 → 永遠走 log_success、永遠不觸發 notify_failure.sh。
+    # 實測每次執行有 287~435 個 ERROR 仍回報「OK 下載完成」，
+    # 這是本專案多起「靜默失效」能長期不被發現的共同機制。
+    # 改用 PIPESTATUS[0] 取 python 自己的結束碼。
+    python3 "$PROJECT_DIR/src/downloaders/unified_downloader.py" \
         --categories "$category" \
-        2>&1 | head -500 >> "$LOG_FILE"; then
+        2>&1 | head -500 >> "$LOG_FILE"
+    local rc=${PIPESTATUS[0]}
+
+    if [ "$rc" -eq 0 ]; then
 
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
@@ -130,7 +140,9 @@ cleanup_old_logs() {
     local max_bytes=$((LOG_MAX_SIZE_MB * 1024 * 1024))
     while IFS= read -r f; do
         local size
-        size=$(stat -f%z "$f" 2>/dev/null || echo 0)
+        # stat -c%s 為 GNU/Linux 語法，-f%z 為 BSD/macOS；本專案由 macOS 移機至 Ubuntu，
+        # 原本只有 BSD 版 → 在 Linux 恆回 0，日誌輪替靜默失效（2026-07-19 修）
+        size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
         if [ "$size" -gt "$max_bytes" ]; then
             log_warn "刪除異常大的日誌: $(basename "$f") ($(( size / 1024 / 1024 ))MB)"
             rm -f "$f" && ((deleted++))
@@ -139,7 +151,9 @@ cleanup_old_logs() {
 
     while IFS= read -r f; do
         local size
-        size=$(stat -f%z "$f" 2>/dev/null || echo 0)
+        # stat -c%s 為 GNU/Linux 語法，-f%z 為 BSD/macOS；本專案由 macOS 移機至 Ubuntu，
+        # 原本只有 BSD 版 → 在 Linux 恆回 0，日誌輪替靜默失效（2026-07-19 修）
+        size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
         if [ "$size" -gt "$max_bytes" ]; then
             log_warn "刪除異常大的日誌: $(basename "$f") ($(( size / 1024 / 1024 ))MB)"
             rm -f "$f" && ((deleted++))
@@ -151,7 +165,9 @@ cleanup_old_logs() {
     for f in "$LOG_BASE"/launchd_*.log; do
         [ -f "$f" ] || continue
         local size
-        size=$(stat -f%z "$f" 2>/dev/null || echo 0)
+        # stat -c%s 為 GNU/Linux 語法，-f%z 為 BSD/macOS；本專案由 macOS 移機至 Ubuntu，
+        # 原本只有 BSD 版 → 在 Linux 恆回 0，日誌輪替靜默失效（2026-07-19 修）
+        size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
         if [ "$size" -gt "$launchd_max_bytes" ]; then
             tail -2000 "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
             log_info "已截斷 $(basename "$f") (原 $(( size / 1024 / 1024 ))MB)"
@@ -210,7 +226,9 @@ main() {
 
     SUCCESS_COUNT=0
     FAILED_COUNT=0
+    FAILED_LIST=""
     CURRENT_INDEX=0
+    STATE_FILE="$LOG_BASE/.hourly_notify_state"
 
     # 逐一下載各類別
     for category in "${CATEGORIES[@]}"; do
@@ -224,6 +242,7 @@ main() {
             ((SUCCESS_COUNT++))
         else
             ((FAILED_COUNT++))
+            FAILED_LIST="${FAILED_LIST}${category} "
             log_warn "繼續處理下一個類別..."
         fi
 
@@ -243,10 +262,34 @@ main() {
     # 最終狀態
     if [ $FAILED_COUNT -eq 0 ]; then
         log_success "所有類別下載完成！"
+        rm -f "$STATE_FILE"
         exit 0
     else
         log_warn "部分類別下載失敗，請檢查日誌"
-        bash "$SCRIPT_DIR/notify_failure.sh" "⚠️ 每小時資料更新：${FAILED_COUNT}/${TOTAL_CATEGORIES} 類別失敗（成功 ${SUCCESS_COUNT}）"
+
+        # 通知節流（2026-07-19 加）。
+        # 背景：download_data() 先前因 `| head` 遮蔽結束碼而恆回成功，失敗從不通知；
+        # 修好之後若照原樣每次都發，會變成「每小時一則 LINE」的噪音
+        # （見記憶 evening-digest-noise-reduction：曾特意把 ~15 則降到 2-3 則）。
+        # 規則：同一組失敗類別，每 12 小時最多通知一次；失敗組合改變則立即通知。
+        local sig="${FAILED_COUNT}:${FAILED_LIST}"
+        local now_ts=$(date +%s)
+        local last_sig="" last_ts=0
+        if [ -f "$STATE_FILE" ]; then
+            last_sig=$(sed -n 1p "$STATE_FILE")
+            last_ts=$(sed -n 2p "$STATE_FILE")
+        fi
+
+        if [ "$sig" != "$last_sig" ] || [ $((now_ts - last_ts)) -ge 43200 ]; then
+            bash "$SCRIPT_DIR/notify_failure.sh" \
+                "⚠️ 每小時資料更新：${FAILED_COUNT}/${TOTAL_CATEGORIES} 類別失敗（成功 ${SUCCESS_COUNT}）
+失敗類別：${FAILED_LIST}
+（相同失敗每 12 小時最多通知一次）"
+            printf '%s\n%s\n' "$sig" "$now_ts" > "$STATE_FILE"
+            log_info "已發送失敗通知"
+        else
+            log_info "失敗組合與上次相同且未逾 12 小時，略過通知（sig=$sig）"
+        fi
         exit 1
     fi
 }

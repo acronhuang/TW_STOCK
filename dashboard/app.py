@@ -62,7 +62,12 @@ page = st.sidebar.radio(
         "⚖️ 策略比較工具",
         "🔔 實時數據監控",
         "🗳️ 團隊分析",
-        "🏛️ 每日選股推薦"
+        "💬 每日決策問答",
+        "🛡️ 持倉風控",
+        "🏛️ 每日選股推薦",
+        "🧲 大戶籌碼×量價勢",
+        "🔎 專案知識庫檢索",
+        "📊 個股股權分散趨勢"
     ]
 )
 
@@ -91,9 +96,24 @@ elif page == "🔔 實時數據監控":
 elif page == "🗳️ 團隊分析":
     from pages import team
     team.show()
+elif page == "💬 每日決策問答":
+    from pages import decision_qa
+    decision_qa.show()
+elif page == "🛡️ 持倉風控":
+    from pages import risk_page
+    risk_page.show()
 elif page == "🏛️ 每日選股推薦":
     from pages import picks
     picks.show()
+elif page == "🧲 大戶籌碼×量價勢":
+    from pages import holder_volprice
+    holder_volprice.show()
+elif page == "🔎 專案知識庫檢索":
+    from pages import rag_page
+    rag_page.show()
+elif page == "📊 個股股權分散趨勢":
+    from pages import holder_trend
+    holder_trend.show()
 
 # 頁腳
 st.sidebar.markdown("---")

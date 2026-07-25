@@ -51,7 +51,11 @@ def show():
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            stock_count = db.stock_price.distinct('symbol').__len__()
+            # 排除 6 碼純數字權證(如 705037);stock_price 內約 13,650 檔權證會把「股票數量」
+            # 從 ~2,449 灌到 15,910,嚴重誤導。保留 4/5 碼股票、ETF、債/槓桿 ETF、特別股。
+            stock_count = len(db.stock_price.distinct(
+                'symbol', {'symbol': {'$not': {'$regex': '^[0-9]{6}$'}}}
+            ))
             st.metric("股票數量", f"{stock_count}", "支")
         
         with col2:

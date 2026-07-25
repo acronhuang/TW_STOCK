@@ -51,3 +51,8 @@ charts/
 reports/
 *.pid
 server.pid
+
+# scratch 備份檔(勿入版控)
+*.bak
+*.bak_*
+*.bak.*

@@ -86,7 +86,15 @@ def check_current_coverage():
     
     # 計算預期記錄數：應該基於實際有價格數據的記錄數
     # 而不是 股票數 × 交易日數（因為不是所有股票都在所有交易日有交易）
-    price_records = db.stock_price.count_documents({})
+    #
+    # 分母**只算 4 碼主板**（2026-07-19 修正）：stock_factors 的母體是主板股票，
+    # 但 stock_price 還含權證（~360k 列）與 ETF（~456k 列），它們**永遠不會有因子**。
+    # 把它們算進分母，覆蓋率會被結構性壓低，於是每次執行都印「未達 80% 目標」的假警告：
+    #   修正前 3,689,908 / 5,129,379 = 71.94%（假性不足）
+    #   修正後 3,689,908 / 4,285,063 = 86.11%（實際早已超標）
+    # 同「分母不得混入範圍外標的」原則，參見 history_continuity_check.py 的收集範圍宣告。
+    _MAIN_BOARD = {'stock_id': {'$regex': r'^[1-9]\d{3}$'}}
+    price_records = db.stock_price.count_documents(_MAIN_BOARD)
     
     # 計算實際記錄數
     actual_total = db.stock_factors.count_documents({})

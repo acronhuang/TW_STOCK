@@ -19,9 +19,17 @@
   retail_pct  散戶（級1–2，<5 張）佔比
   total_holders 總股東數（級17 人數）
 
-判讀（與 chip_score_scan 的法人/融資互補）：
-  大戶佔比↑ + 散戶佔比↓ = 籌碼集中、主力吸籌（最強）
-  大戶佔比↓ + 散戶佔比↑ = 籌碼渙散、主力出貨給散戶（見頂）
+判讀 —— 注意：以下直覺**經回測後不成立**，勿據以加分。
+  原假設：大戶佔比↑ + 散戶佔比↓ = 主力吸籌（最強）；反之為出貨（見頂）。
+  2026-07-17 以 3 年、154 週、約 2000 檔實測（scripts/backtest_holder_conc.py，
+  進場設在資料日後第一個週二收盤以避免未來函數）：
+    · 純方向（大戶佔比增減）      → 4 週超額 +0.02%，t=0.22   ＝ 無預測力
+    · 雙重確認（大戶↑且股東人數↓）→ 4 週超額 +0.23%，t=1.68   ＝ 弱，未達顯著且不耐敏感度檢驗
+    · 純幅度（|大戶佔比變化|）    → 4 週超額 +1.00%，t=5.87   ＝ 強，但延後 2 週進場幾乎不衰減
+      → 代表它不是事件訊號，而是「活躍波動股」的特徵代理（Q5 成交量為 Q1 的 7 倍、
+        年化波動 43% vs 33%），且僅在市場上漲期有效（下跌期價差 +0.03%，t=0.12）。
+  結論：本表目前用於人工判讀與圖表（dashboard K線圖大戶子圖），未進入 chip_score_scan
+  評分。要接之前請重跑回測 —— 屆時已有更多 TDCC 原生資料，不必倚賴 norway 回補。
 
 用法：
     python3 scripts/tdcc_shareholding_sync.py            # 抓最新週 + 寫入
@@ -34,6 +42,7 @@ import csv
 import io
 import os
 import sys
+import time
 from datetime import datetime
 
 import requests
@@ -42,6 +51,12 @@ from pymongo import ASCENDING, DESCENDING, MongoClient, UpdateOne
 URL = "https://opendata.tdcc.com.tw/getOD.ashx?id=1-5"
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
 
+# 重試：本 job 每週只跑一次，且 TDCC id=1-5 **只提供當週**——單次失敗＝該週永久遺失
+# （無法事後回補，歷史只能靠 norway_shareholding_backfill.py 一次性補到 2023-03）。
+# 故單發請求不可接受，抓 2.3MB 遇網路抖動須退避重試。
+RETRIES = 3
+RETRY_BACKOFF = 5   # 秒，指數退避基數
+
 BIG_1000 = {'15'}                       # 千張大戶
 BIG_400 = {'12', '13', '14', '15'}      # 400 張以上
 RETAIL = {'1', '2'}                     # 散戶（<5 張）
@@ -49,9 +64,35 @@ TOTAL = '17'
 
 
 def fetch():
-    r = requests.get(URL, timeout=90, headers=UA)
-    r.raise_for_status()
-    return r.content.decode('utf-8-sig', 'replace')
+    last = None
+    for i in range(RETRIES):
+        try:
+            r = requests.get(URL, timeout=90, headers=UA)
+            r.raise_for_status()
+            return r.content.decode('utf-8-sig', 'replace')
+        except Exception as e:      # noqa: BLE001 - 連線層各種例外一律退避重試
+            last = e
+            if i < RETRIES - 1:
+                wait = RETRY_BACKOFF * (2 ** i)
+                print(f"  ⚠️ 抓取失敗（第 {i+1}/{RETRIES} 次）：{e}｜{wait}s 後重試")
+                time.sleep(wait)
+    raise RuntimeError(f"TDCC 抓取失敗（已重試 {RETRIES} 次）：{last}")
+
+
+def _write_heartbeat(db, status: str, stocks: int, ddate):
+    """記錄本次同步已執行（system_heartbeat，_id='tdcc_shareholding'），供 watchdog.py 比對。
+
+    每週一次的 job 若靜默停掉，資料面要到下一輪（最長約兩週）才看得出落後；
+    心跳讓 watchdog 在當天就能發現「這週二根本沒跑」。"""
+    try:
+        db.system_heartbeat.update_one(
+            {"_id": "tdcc_shareholding"},
+            {"$set": {"last_run": datetime.now(), "status": status,
+                      "stocks": stocks, "data_date": ddate}},
+            upsert=True,
+        )
+    except Exception as e:          # noqa: BLE001 - 心跳失敗不應讓同步本身失敗
+        print(f"  ⚠️ 心跳寫入失敗：{e}")
 
 
 def parse(text):
@@ -117,6 +158,7 @@ def main():
         res = col.bulk_write(ops, ordered=False)
         print(f"✅ 寫入 shareholding：upsert {res.upserted_count} / 更新 {res.modified_count}"
               f"（共 {len(ops)} 檔 @ {ddate:%Y-%m-%d}）")
+    _write_heartbeat(db, 'ok', len(summary), ddate)
 
 
 if __name__ == '__main__':

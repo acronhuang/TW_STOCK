@@ -28,6 +28,7 @@ from pymongo import MongoClient
 # 被監控的 job：排程窗定義（給 last_expected 判「上次應執行時刻」）。
 #   hour          該 job 每日排定的小時
 #   weekdays_only 只在週一~五排（週末不算漏）
+#   weekdays      指定星期集合（0=週一）；每週一次的 job 用，優先於 weekdays_only
 #   grace_h       允許 job 執行到 hour+grace_h 才算數（跑很久的 job 緩衝）
 #   overdue_h     心跳比「上次應執行時刻」還舊超過這麼多小時 → 判逾期
 WATCHED = {
@@ -35,18 +36,34 @@ WATCHED = {
                   "grace_h": 2, "overdue_h": 1},
     "health":    {"name": "資料健康快照",   "hour": 22, "weekdays_only": True,
                   "grace_h": 2, "overdue_h": 1},
+    # 集保股權分散：cron `0 9 * * 2`（每週二 09:00）。
+    # 為何非有不可：TDCC id=1-5 只供當週，這輪沒抓到＝該週資料永久遺失（補不回來）。
+    # 而週表的資料面檢查最長要兩週才看得出落後，心跳能當天就抓到「這週二沒跑」。
+    "tdcc_shareholding": {"name": "集保股權分散同步", "hour": 9, "weekdays_only": False,
+                          "weekdays": {1}, "grace_h": 2, "overdue_h": 2},
+    # 歷史連續性檢查：cron `0 5 * * 0`（每週日 05:00）。偵測各表「中間缺日」型破洞
+    # （TABLE_CHECKS 只驗最新日、掃不到歷史洞）。非即時關鍵，故 grace/overdue 較寬鬆。
+    "continuity": {"name": "歷史連續性檢查", "hour": 5, "weekdays_only": False,
+                   "weekdays": {6}, "grace_h": 3, "overdue_h": 3},
 }
 REALERT_HOURS = 12  # 同一 job 兩次告警至少間隔（去重，避免每輪都吵）
 DISK_WARN_PCT = 85  # 根檔案系統使用率超過此值即告警（曾因 runaway log 逼近磁碟滿）
 DISK_PATH = "/"
 
 
-def last_expected(now, hour, weekdays_only, grace_h):
+def last_expected(now, hour, weekdays_only, grace_h, weekdays=None):
     """從 now 往回找『最近一個已過 (hour+grace_h) 的排定日』的 hour:00。
-    週末/非排程日跳過。找不到（理論上不會）回 None。"""
+    週末/非排程日跳過。找不到（理論上不會）回 None。
+
+    weekdays: 允許的星期集合（0=週一）。給定時優先於 weekdays_only，供每週一次的
+              job 使用（如 TDCC 每週二）。回看 14 天足以涵蓋每週一次的前一輪。"""
     probe = now
     for _ in range(14):
-        if (not weekdays_only) or probe.weekday() < 5:
+        if weekdays is not None:
+            day_ok = probe.weekday() in weekdays
+        else:
+            day_ok = (not weekdays_only) or probe.weekday() < 5
+        if day_ok:
             sched = probe.replace(hour=hour, minute=0, second=0, microsecond=0)
             if now >= sched + timedelta(hours=grace_h):
                 return sched
@@ -80,7 +97,8 @@ def main():
 
     overdue = []
     for job, cfg in WATCHED.items():
-        exp = last_expected(now, cfg["hour"], cfg["weekdays_only"], cfg["grace_h"])
+        exp = last_expected(now, cfg["hour"], cfg["weekdays_only"], cfg["grace_h"],
+                            cfg.get("weekdays"))
         doc = hb.get(job)
         last_run = doc.get("last_run") if doc else None
         # 判逾期：從沒跑過，或上次執行早於「上次應執行時刻 - overdue 容忍」

@@ -4,6 +4,7 @@ import sys, os, warnings
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 warnings.filterwarnings('ignore')
 import numpy as np
+from _adj_price import ADJ_PROJ, use_adjusted  # noqa: E402
 from pymongo import MongoClient
 from src.utils.backtest import tof, dkey as dk, HORIZONS, print_baseline, make_reporter
 
@@ -16,7 +17,9 @@ print(f"回測 {len(syms)} 檔，窗 {WIN_START}~{WIN_END} ...")
 samples = []; base = {h: [] for h in HORIZONS}
 
 for sym in syms:
-    px = list(db.stock_price.find({'symbol': sym}, {'date':1,'close':1,'volume':1}).sort('date',1))
+    px = list(db.stock_price.find(
+        {'symbol': sym}, {'date': 1, 'close': 1, 'volume': 1, **ADJ_PROJ}).sort('date', 1))
+    use_adjusted(px)   # 用還原價,否則除權息=假跌
     if len(px) < 80: continue
     closes = np.array([tof(p.get('close')) or np.nan for p in px])
     vols = np.array([tof(p.get('volume')) or 0.0 for p in px])

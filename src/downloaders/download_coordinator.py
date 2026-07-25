@@ -13,6 +13,9 @@ from .table_config import get_all_tables, get_tables_by_category
 from .data_validator import DataValidator
 
 
+DEFAULT_START_DATE = "2015-01-01"   # table_config 未指定時的起始日
+
+
 class DownloadCoordinator:
     """下載協調器"""
     
@@ -199,7 +202,11 @@ class DownloadCoordinator:
                         result['skipped_records'] += 1
                         continue
                     
-                    symbol_params = {**params, "stock_id": symbol}
+                    symbol_params = {**params, "data_id": symbol}   # FinMind 參數名為 data_id;傳 stock_id 會被忽略→變成全市場查詢→免費層 400
+                    # 部分 table_config 的 params 是空的({} 共 11 個),
+                    # FinMind 會回 400 "start_date parameter is missing"。
+                    # 在此統一補預設,避免日後新增設定又漏掉。
+                    symbol_params.setdefault("start_date", DEFAULT_START_DATE)
                     data = self.api_client.fetch_data(dataset, symbol_params)
                     
                     if data:
@@ -224,6 +231,8 @@ class DownloadCoordinator:
                     result['status'] = 'skipped'
                     return result
                 
+                params = {**params}
+                params.setdefault('start_date', DEFAULT_START_DATE)
                 data = self.api_client.fetch_data(dataset, params)
                 
                 if data:
@@ -374,18 +383,38 @@ class DownloadCoordinator:
             query = {}
             if symbol:
                 query['stock_id'] = symbol
-            
-            # 檢查是否有今天或昨天的資料
+
             today = datetime.now().strftime("%Y-%m-%d")
+
+            # 2026-07-19 修：只比對「長得像日期」的值。
+            #
+            # 原本直接拿 sort(date,-1) 的第一筆做字串比較，結果被髒資料鎖死：
+            # taiwan_stock_info 有 32 列類股指數（無上市日）的 date 被寫成字串 "None"，
+            # 而 ASCII 'N'(0x4E) > '2'(0x32) → "None" 在遞減排序中排在所有日期之上，
+            # 於是 "None" >= "2026-07-19" 為 True → 整張表被判定「已是最新」而
+            # 永久跳過下載。該表因此停在 2026-02-20 達五個月，缺 71 檔（含 0050）。
+            #
+            # 故改為：只認「Date 型別」或「YYYY-MM-DD 字串」，其餘一律忽略。
+            # 注意本專案 date 欄位有兩種表示法（見記憶 date-field-three-representations）：
+            # stock_price / institutional_flow 等為 Date 型別，taiwan_stock_info 為字串。
+            # 兩者都要涵蓋，否則 Date 型別的表會匹配不到而被判定「不新」→ 每小時全量重抓，
+            # 會直接燒光 FinMind 配額。
+            query['$or'] = [
+                {'date': {'$type': 'date'}},
+                {'date': {'$regex': r'^\d{4}-\d{2}-\d{2}'}},
+            ]
             latest = collection.find_one(query, sort=[('date', -1)])
-            
-            if latest and 'date' in latest:
-                latest_date = latest['date']
-                # 如果最新資料是今天或昨天，認為是最新的
-                return latest_date >= datetime.now().strftime("%Y-%m-%d")
-            
+
+            if latest:
+                d = latest.get('date')
+                if isinstance(d, datetime):
+                    return d.strftime("%Y-%m-%d") >= today
+                if isinstance(d, str):
+                    return d[:10] >= today
+
+            # 找不到合法日期 → 視為不新，寧可多抓一次也不要被髒資料鎖死
             return False
-            
+
         except Exception:
             return False
     

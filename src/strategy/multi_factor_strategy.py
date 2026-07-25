@@ -32,6 +32,50 @@ class MultiFactorStrategy:
     5. 等權重持有，每月調倉
     """
     
+    def _fundamental_quality(self, date):
+        """取 available_from <= date 的最近一期品質因子。
+
+        必須用 available_from(法定公告期限)而非 period_end —— 用 period_end
+        等於在財報還沒公告時就知道數字,那只是換個方式重蹈前視偏誤。
+        """
+        from datetime import datetime as _dt
+        if isinstance(date, str):
+            date = _dt.strptime(date[:10], "%Y-%m-%d")
+
+        rows = self.db.fundamental_factors.aggregate([
+            {"$match": {"available_from": {"$lte": date}}},
+            {"$sort": {"stock_id": 1, "available_from": -1}},
+            {"$group": {"_id": "$stock_id", "d": {"$first": "$$ROOT"}}},
+        ])
+        out = {}
+        for r in rows:
+            d = r["d"]
+            out[str(r["_id"])] = {k: d.get(k) for k in
+                                  ("roe", "roa", "profit_margin", "debt_ratio")}
+        return out
+
+    def update_config(self, factor_config: dict):
+        """套用外部因子設定。
+
+        integrated_strategy_v21.py:120 會呼叫本方法,但此方法過去並不存在 ——
+        只因該處預設 factor_config=None 才沒被觸發(AttributeError 潛伏)。
+
+        傳入的類別會覆蓋既有設定;若各類別權重總和不為 1,會自動正規化,
+        避免呼叫端只調整部分類別時得到未預期的縮放。
+        """
+        if not factor_config:
+            return
+        for name, cfg in factor_config.items():
+            if cfg is None:
+                self.factor_config.pop(name, None)      # 傳 None 代表移除該類別
+            else:
+                self.factor_config[name] = cfg
+
+        total = sum(c.get('weight', 0) for c in self.factor_config.values())
+        if total > 0 and abs(total - 1.0) > 1e-9:
+            for c in self.factor_config.values():
+                c['weight'] = c.get('weight', 0) / total
+
     def __init__(self, 
                  mongo_uri_or_db = "mongodb://localhost:27017/",
                  db_name: str = "tw_stock_analysis"):
@@ -52,6 +96,10 @@ class MultiFactorStrategy:
             self.client = None
         
         # 因子配置
+        # quality 因子來源:'legacy'=stock_factors(常數,有前視偏誤)
+        #                  'fundamental'=fundamental_factors(以 available_from 落後,正確)
+        self.quality_source = 'legacy'
+
         self.factor_config = {
             # 動能因子（權重 50%）
             'momentum': {
@@ -166,7 +214,16 @@ class MultiFactorStrategy:
             record['symbol'] = str(record['symbol'])
         
         factors_df = pd.DataFrame(factors_data).set_index('symbol')
-        
+
+        if self.quality_source == 'fundamental':
+            # 以財報公告期限落後後的真實時間序列,覆蓋 stock_factors 裡的常數值
+            qmap = self._fundamental_quality(date)
+            for col in ('roe', 'roa', 'profit_margin', 'debt_ratio'):
+                if col in factors_df.columns:
+                    factors_df[col] = [
+                        (qmap.get(sym) or {}).get(col) for sym in factors_df.index
+                    ]
+
         # 計算每個因子的得分
         factor_scores = {}
         
@@ -197,7 +254,14 @@ class MultiFactorStrategy:
             for factor_name, factor_data in factor_scores.items():
                 score = factor_data['scores'].get(symbol, np.nan)
                 weight = factor_data['weight']
-                
+
+                # 2026-07-19 修：原本直接 factors_df.loc[symbol, factor_name]，
+                # 當該日查回來的個股全都沒有某因子時，factors_df 根本不會有這一欄
+                # → KeyError（實測 backtest_integrated_v21 跑到 2023-08 的再平衡日崩潰）。
+                # 欄位不存在 = 該因子當日不可用，應跳過而非中斷整場回測。
+                if factor_name not in factors_df.columns:
+                    continue
+
                 if not np.isnan(score) and factors_df.loc[symbol, factor_name] is not None:
                     total_score += score * weight
                     total_weight += weight
