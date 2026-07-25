@@ -63,6 +63,7 @@ page = st.sidebar.radio(
         "🔔 實時數據監控",
         "🗳️ 團隊分析",
         "💬 每日決策問答",
+        "📬 每日快訊",
         "🛡️ 持倉風控",
         "🏛️ 每日選股推薦",
         "🧲 大戶籌碼×量價勢",
@@ -99,6 +100,9 @@ elif page == "🗳️ 團隊分析":
 elif page == "💬 每日決策問答":
     from pages import decision_qa
     decision_qa.show()
+elif page == "📬 每日快訊":
+    from pages import notifications
+    notifications.show()
 elif page == "🛡️ 持倉風控":
     from pages import risk_page
     risk_page.show()

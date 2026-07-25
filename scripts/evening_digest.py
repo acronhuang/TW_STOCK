@@ -112,6 +112,51 @@ def build_digests(entries: list[dict]) -> list[str]:
     return msgs
 
 
+def build_full_sections(entries):
+    """依主題分組,保留**完整未濃縮**內容(網頁用,無字數限制)。"""
+    buckets = [[] for _ in THEMES]
+    misc = []
+    for e in entries:
+        body = (e.get("body") or "").strip()
+        if not body:
+            continue
+        idx = _route(body)
+        (buckets[idx] if idx >= 0 else misc).append(body)
+    sections = []
+    for i, (name, _) in enumerate(THEMES):
+        if buckets[i]:
+            sections.append({"theme": name, "sources": buckets[i]})
+    if misc:
+        sections.append({"theme": "\U0001f539 其他", "sources": misc})
+    return sections
+
+
+def _persist(msgs, entries, sent_ok=None):
+    """把彙整訊息落地 digest_history,供 dashboard「每日快訊」查閱(即使 LINE 發不出去)。"""
+    try:
+        from pymongo import MongoClient
+        now = datetime.now()
+        day = datetime(now.year, now.month, now.day)
+        db = MongoClient("localhost", 27017)["tw_stock_analysis"]
+        db.digest_history.update_one(
+            {"date_str": day.strftime("%Y-%m-%d")},
+            {"$set": {
+                "date": day,
+                "date_str": day.strftime("%Y-%m-%d"),
+                "generated_at": now,
+                "entry_count": len(entries),
+                "messages": [{"seq": i, "text": m, "chars": len(m)}
+                             for i, m in enumerate(msgs, 1)],
+                "full_sections": build_full_sections(entries),
+                "sent_ok": sent_ok,
+            }},
+            upsert=True,
+        )
+        print(f"📥 digest 已落地 digest_history（{day.strftime('%Y-%m-%d')}, {len(msgs)} 則）")
+    except Exception as e:
+        print(f"⚠️ digest 落地失敗（不影響推播）: {e}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="收盤後通知彙整降噪")
     ap.add_argument("--spool", default=os.getenv("LINE_SPOOL"),
@@ -140,6 +185,7 @@ def main():
 
     msgs = build_digests(entries)
     print(f"讀入 {len(entries)} 則 → 彙整成 {len(msgs)} 則")
+    _persist(msgs, entries)   # 先落地,LINE 發不出去也留存(含完整內容)
 
     if args.dry_run:
         for i, m in enumerate(msgs, 1):
@@ -158,6 +204,7 @@ def main():
         print("⚠️ LINE 未設定，改印出"); [print(m, "\n---") for m in msgs]; return
     ok = sum(1 for m in msgs if ln.send(m))
     print(f"✅ 已發送 {ok}/{len(msgs)} 則")
+    _persist(msgs, entries, sent_ok=ok)   # 更新發送結果
 
     # 歸檔 spool（保留稽核，不直接刪）
     archived = sp.with_name(sp.name + "." + datetime.now().strftime("%Y%m%d_%H%M%S") + ".done")
