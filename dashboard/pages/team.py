@@ -84,8 +84,12 @@ def show():
     if not full:
         return
     vf = full.get("verify") or {}
-    st.write(f"**復驗狀態**：{STATUS_LABEL.get(vf.get('status'), vf.get('status'))}　"
-             f"分析收盤 `{full.get('price_at_analysis')}`　權威收盤 `{vf.get('truth_close')}`")
+    _vs = vf.get("status")
+    if _vs:
+        st.write(f"**復驗狀態**：{STATUS_LABEL.get(_vs, _vs)}　"
+                 f"分析收盤 `{full.get('price_at_analysis')}`　權威收盤 `{vf.get('truth_close')}`")
+    else:
+        st.write(f"**復驗狀態**：尚未復驗　分析收盤 `{full.get('price_at_analysis')}`")
     fm = vf.get("finmind")
     if fm:
         ok = "✅ 一致" if fm.get("match") else "⚠️ 背離"
