@@ -36,11 +36,18 @@ ETF_SPLITS = [
 
 
 def _roc_to_dt(s):
-    """114/02/12 → datetime(2025,2,12)。"""
-    p = str(s).strip().split("/")
-    if len(p) != 3:
+    """114/02/12 或 7碼 1020116 → datetime。"""
+    s = str(s).strip()
+    if "/" in s:
+        p = s.split("/")
+        if len(p) != 3:
+            return None
+        y, m, d = int(p[0]), int(p[1]), int(p[2])
+    elif s.isdigit() and len(s) == 7:
+        y, m, d = int(s[:3]), int(s[3:5]), int(s[5:7])
+    else:
         return None
-    return datetime(int(p[0]) + 1911, int(p[1]), int(p[2]))
+    return datetime(y + 1911, m, d)
 
 
 def _f(x):
@@ -105,6 +112,36 @@ def fetch_tpex_reduction(session):
     return out
 
 
+def fetch_tpex_reduction_history(session, start="2013/01/01"):
+    """TPEX 上櫃減資『全歷史』(revivt 帶 startDate/endDate 斜線格式 → 281筆 2013起)。"""
+    end = datetime.now().strftime("%Y/%m/%d")
+    try:
+        r = session.get(TPEX_REVIVT, params={"startDate": start, "endDate": end},
+                        headers={"User-Agent": UA}, timeout=30)
+        j = r.json()
+    except Exception as e:
+        print(f"  TPEX 歷史取得失敗: {e}")
+        return []
+    out = []
+    for t in j.get("tables", []):
+        for row in t.get("data", []):
+            if len(row) < 10:
+                continue
+            ev = _roc_to_dt(row[0])
+            sym = str(row[1]).strip()
+            pre = _f(row[3])
+            ref = _f(row[4])
+            if not (ev and sym and pre and ref and pre > 0):
+                continue
+            out.append({
+                "symbol": sym, "event_date": ev, "type": "減資",
+                "reason": str(row[9]).strip() if len(row) > 9 else "",
+                "pre_close": pre, "ref_price": ref,
+                "ratio": round(ref / pre, 6), "source": "TPEX_revivt_history",
+            })
+    return out
+
+
 def build_etf_splits(db):
     """從 stock_price 實際相鄰交易日算 ETF 分割比例(指定日期→無斷層歧義)。"""
     from bson.decimal128 import Decimal128
@@ -152,6 +189,9 @@ def main():
     print(f"  TPEX 上櫃減資(當前窗): {len(tpex)} 筆" + (f" {[(e['symbol'], e['ratio']) for e in tpex]}" if tpex else ""))
 
     if not args.tpex_only:
+        tpex_hist = fetch_tpex_reduction_history(session)
+        events.extend(tpex_hist)
+        print(f"  TPEX 上櫃歷史減資: {len(tpex_hist)} 筆")
         for y in range(args.start_year, args.end_year + 1):
             try:
                 evs = fetch_twse_reduction(session, y)
