@@ -51,7 +51,7 @@ class MultiFactorStrategy:
         for r in rows:
             d = r["d"]
             out[str(r["_id"])] = {k: d.get(k) for k in
-                                  ("roe", "roa", "profit_margin", "debt_ratio")}
+                                  ("roe", "roa", "profit_margin", "debt_ratio", "op_margin", "fcf_margin")}
         return out
 
     def update_config(self, factor_config: dict):
@@ -98,7 +98,7 @@ class MultiFactorStrategy:
         # 因子配置
         # quality 因子來源:'legacy'=stock_factors(常數,有前視偏誤)
         #                  'fundamental'=fundamental_factors(以 available_from 落後,正確)
-        self.quality_source = 'legacy'
+        self.quality_source = 'fundamental'   # Config C:走PIT正確源(原legacy有前視偏誤)
 
         self.factor_config = {
             # 動能因子（權重 50%）
@@ -125,10 +125,11 @@ class MultiFactorStrategy:
             'quality': {
                 'weight': 0.20,
                 'factors': {
-                    'roe': {'weight': 0.35, 'direction': 1},           # ROE（正向）
-                    'roa': {'weight': 0.30, 'direction': 1},           # ROA（正向）
-                    'profit_margin': {'weight': 0.20, 'direction': 1}, # 淨利率（正向）
-                    'debt_ratio': {'weight': 0.15, 'direction': -1}    # 負債比率（反向）
+                    # Config C（2026-07 多循環+含成本回測驗證）：op_margin 最強品質因子(t+5.29,單調)，
+                    # fcf_margin 與價值正交(t+5.38)，roe 既有品質；原 roa/profit_margin/debt_ratio 較弱已汰換
+                    'op_margin': {'weight': 0.40, 'direction': 1},     # 營益率（最強品質，正向）
+                    'fcf_margin': {'weight': 0.30, 'direction': 1},    # 自由現金流率（正交補強，正向）
+                    'roe': {'weight': 0.30, 'direction': 1}            # ROE（既有品質，正向）
                 }
             }
         }

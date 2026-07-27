@@ -67,13 +67,17 @@ def sector_z(df, cols):
     return df.groupby(["date", "sector"], group_keys=False).apply(z)
 
 
-def run_config(df, weights, topq=5):
-    """weights: {factor_z_col: w}。合成分數→每日 top 分位等權→月報酬序列。"""
+ROUND_TRIP = 0.1425 / 100 * 2 + 0.3 / 100   # 手續費雙邊0.1425% + 賣出證交稅0.3% = 0.585%
+
+
+def run_config(df, weights, topq=5, cost=True):
+    """weights: {factor_z_col: w}。合成分數→每日 top 分位等權→月報酬序列。
+    cost=True 扣交易成本:每期 turnover × 往返成本(0.585%);turnover 由前後持股集合算。"""
     d = df.copy()
     d["score"] = sum(w * d[c].fillna(0) for c, w in weights.items())
-    # 需要有值的因子:至少價值分數在
     d = d.dropna(subset=[c.replace("_z", "") for c in weights])
     rets = []
+    prev_set = None
     for dt, g in d.groupby("date"):
         if len(g) < 30:
             continue
@@ -83,10 +87,20 @@ def run_config(df, weights, topq=5):
         except ValueError:
             continue
         top = g[g["q"] == topq]
-        # winsorize 前瞻報酬 1/99 再等權
+        cur_set = set(top["symbol"])
         lo, hi = top["fwd"].quantile([0.01, 0.99])
-        rets.append((dt, top["fwd"].clip(lo, hi).mean(), len(top)))
-    ser = pd.Series({dt: r for dt, r, _ in rets}).sort_index()
+        gross = top["fwd"].clip(lo, hi).mean()
+        # turnover:相對前一期換掉的比例(單邊);往返成本近似 turnover×ROUND_TRIP
+        if prev_set is None:
+            turn = 1.0
+        else:
+            turn = len(cur_set - prev_set) / max(len(cur_set), 1)
+        net = gross - (turn * ROUND_TRIP if cost else 0.0)
+        rets.append((dt, net, gross, turn))
+        prev_set = cur_set
+    ser = pd.Series({dt: n for dt, n, _, _ in rets}).sort_index()
+    turns = [t for _, _, _, t in rets]
+    ser.attrs["avg_turnover"] = float(np.mean(turns)) if turns else 0.0
     return ser
 
 
@@ -99,8 +113,9 @@ def metrics(ser, name):
     eq = (1 + ser).cumprod()
     mdd = (eq / eq.cummax() - 1).min()
     hit = (ser > 0).mean()
+    turn = ser.attrs.get("avg_turnover", 0.0)
     return (f"{name:<28} 年化{ann*100:+6.1f}% | Sharpe{sharpe:+.2f} | MDD{mdd*100:6.1f}% | "
-            f"月勝率{hit*100:.0f}% | {n}期")
+            f"月勝率{hit*100:.0f}% | 週轉{turn*100:.0f}% | {n}期")
 
 
 def main():
