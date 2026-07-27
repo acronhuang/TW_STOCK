@@ -66,6 +66,9 @@ def main():
         done = set(col.distinct("stock_id", {"date": {"$lte": datetime(2015, 12, 31)}}))
         syms = [s for s in syms if s not in done]
     syms = syms[:args.limit]
+    # 索引先建(否則每筆 upsert 掃全表 O(N²) 會極慢)
+    col.create_index([("stock_id", 1), ("date", 1)])
+    col.create_index([("date", 1)])
     print(f"外資持股回填 {len(syms)} 檔 (start={start}{' daily' if args.daily else ''})")
     tot = 0
     for i, sid in enumerate(syms, 1):
