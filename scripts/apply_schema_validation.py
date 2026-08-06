@@ -73,12 +73,100 @@ VALIDATORS = {
             },
         }
     },
+    "financial_statement_detail": {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["stock_id", "date", "type"],
+            "properties": {
+                "stock_id": {"bsonType": "string"},
+                "date": {"bsonType": "date"},
+                "type": {"bsonType": "string"},
+            },
+        }
+    },
+    "balance_sheet_detail": {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["stock_id", "date", "type"],
+            "properties": {
+                "stock_id": {"bsonType": "string"},
+                "date": {"bsonType": "date"},
+                "type": {"bsonType": "string"},
+            },
+        }
+    },
+    "cash_flows_detail": {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["stock_id", "date", "type"],
+            "properties": {
+                "stock_id": {"bsonType": "string"},
+                "date": {"bsonType": "date"},
+                "type": {"bsonType": "string"},
+            },
+        }
+    },
+    "monthly_revenue": {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["symbol", "year_month"],
+            "properties": {
+                "symbol": {"bsonType": "string"},
+                "year_month": {"bsonType": "string"},
+            },
+        }
+    },
+    "margin_purchase_short_sale": {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["code", "date"],
+            "properties": {
+                "code": {"bsonType": "string"},
+                "date": {"bsonType": "date"},
+            },
+        }
+    },
+    "foreign_shareholding": {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["stock_id", "date"],
+            "properties": {
+                "stock_id": {"bsonType": "string"},
+                "date": {"bsonType": "date"},
+            },
+        }
+    },
+    "noticed_stocks": {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["stock_id", "date"],
+            "properties": {
+                "stock_id": {"bsonType": "string"},
+                "date": {"bsonType": "date"},
+                "source": {"enum": ["twse", "tpex"]},
+            },
+        }
+    },
+    "adjustment_factors": {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["stock_id", "ex_date"],
+            "properties": {
+                "stock_id": {"bsonType": "string"},
+                "ex_date": {"bsonType": "date"},
+            },
+        }
+    },
 }
 
 
-def apply(db, coll, validator):
+# 已確認乾淨、要強制的表設 error(不合就拒寫);其餘 warn 觀察
+ACTIONS = {"stock_price": "error"}
+
+
+def apply(db, coll, validator, action="warn"):
     db.command("collMod", coll, validator=validator,
-               validationLevel="moderate", validationAction="warn")
+               validationLevel="moderate", validationAction=action)
 
 
 def count_violations(db, coll, validator):
@@ -107,8 +195,9 @@ def main():
     for coll, validator in VALIDATORS.items():
         viol = count_violations(db, coll, validator)
         if args.apply:
-            apply(db, coll, validator)
-            print(f"✅ {coll:22} 已套用（warn/moderate）；既有不符文件: {viol}")
+            act = ACTIONS.get(coll, "warn")
+            apply(db, coll, validator, act)
+            print(f"✅ {coll:22} 已套用（{act}/moderate）；既有不符文件: {viol}")
         else:
             req = validator["$jsonSchema"]["required"]
             print(f"{coll:22} required={req}  既有不符文件: {viol}")
