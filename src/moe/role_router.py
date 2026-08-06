@@ -50,7 +50,7 @@ ROLE_TO_MODEL = {
 
     # 快速規則/趨勢（輕模型 3b @ .28）
     'risk-manager':             'qwen2.5-3b:latest',
-    'macro-analyst':            'qwen2.5-3b:latest',
+    'macro-analyst':            'qwen2.5-14b:latest',  # 2026-08-01 3b→14b:3b會捏造指標(把VIX chg%貼成券資報酬率)+讀反大盤
 
     # 工具型（按需）
     # 註：原 'vision'(看圖 LLM) 已移除——「看圖/型態」改用 SenVision 蔡森演算法(精準、不幻覺)，

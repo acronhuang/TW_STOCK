@@ -76,6 +76,13 @@ def build_context(sym, pos, market_desc):
     lines.append(f"技術/factor: 波動30d={_f(f.get('volatility_30d'))} 近1月={_f(f.get('return_1m'))}% "
                  f"近3月={_f(f.get('return_3m'))}% rsi={_f(f.get('rsi_14'))} ma20乖離={_f(f.get('ma_bias_20'))}")
     lines.append(f"法人近10日外資淨={fnet:+.0f}張")
+    try:
+        from src.analysis.rolling_unwind import context_line as _roll_line
+        _rl = _roll_line(DB, sym, cost, px)
+        if _rl:
+            lines.append(_rl)
+    except Exception:
+        pass
     if cat != "波段":
         lines.append(f"註：此為「{cat}」,不適用波段 5% 硬止損,請以長期/領息角度評估。")
     return "\n".join(lines), pnl, stop.get("action")
@@ -86,7 +93,7 @@ def deliberate(ctx):
         "你是持倉風控委員,評估一檔【手上已持有】的部位現在該怎麼處理。\n"
         "三選一：續抱(繼續持有) / 減碼(賣一部分降低風險) / 出場(全部賣出、停損或停利)。\n"
         "考量：是否觸5%止損、均線趨勢、主力階段、帳面損益、波動、法人動向;分類非波段者以長期/領息看。\n"
-        "規則：第一行只寫「續抱」或「減碼」或「出場」三選一,第二行用一句話說明理由。\n\n"
+        "規則：第一行只寫「續抱」或「減碼」或「出場」三選一,第二行用一句話說明理由。 套牢處理:拒絕死扛與盲目補倉——若上方有「套牢評估」,評估『建議停損』(結構轉壞)→傾向出場;評估『可滾動解套』(箱型/跌深有撐+籌碼穩)→續抱並照參考價高拋低吸降成本,勿死抱等回本。\n\n"
         "【部位風險資料】\n" + ctx + "\n\n【你的判定】\n")
     votes = []
     for m in COMMITTEE:
