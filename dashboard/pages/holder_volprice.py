@@ -272,17 +272,23 @@ def show():
     st.markdown("---")
     st.markdown("### 🔍 個股股權分散趨勢")
     st.caption("**直接點上表任一列**即可帶入該檔;或用下方選單。看它的總股東人數與大股東持有率歷史走勢。")
-    opts = out["代號"].tolist()
+    # drill 選單改用全市場(df,含未通過排行榜篩選者,如大戶減碼的股);排行榜(out)維持只列選股結果
+    name_map = dict(zip(df["代號"], df["名稱"]))
+    opts = sorted(df["代號"].tolist())
     if opts:
         # row-click drill:點主表的列 -> 帶入該檔(只在點選變動時同步,避免蓋掉手動選單)
         sel = event.selection.rows if getattr(event, "selection", None) else []
         clicked = out.iloc[sel[0]]["代號"] if sel else None
         if clicked and clicked != st.session_state.get("_last_drill_click"):
             st.session_state["_last_drill_click"] = clicked
-            st.session_state["drill_pick"] = clicked
+            st.session_state["_drill_stock"] = clicked
+        # 用獨立 state 驅動 selectbox 的 index(避免「設 session_state[key] 後又拿同 key 當 widget」的 Streamlit 陷阱)
+        cur = st.session_state.get("_drill_stock")
+        idx = opts.index(cur) if cur in opts else 0
         dsel = st.selectbox(
-            "選一檔（或直接點上表任一列）", opts,
-            format_func=lambda s: f"{s} {out.loc[out['代號'] == s, '名稱'].iloc[0]}",
-            key="drill_pick")
+            "選一檔（全市場任一檔，不受排行榜篩選；或直接點上表任一列）", opts, index=idx,
+            format_func=lambda s: f"{s} {name_map.get(s, '')}",
+            key="drill_sel")
+        st.session_state["_drill_stock"] = dsel
         from pages.holder_trend import render_trend
         render_trend(dsel, kp="drill_")

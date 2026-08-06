@@ -66,7 +66,7 @@ def show():
         rows.append({
             "代號": d["symbol"], "名稱": d.get("name", ""),
             "定案": v or "—",
-            "買": t.get("買進", ""), "持": t.get("持有", ""), "賣": t.get("賣出", ""),
+            "買": t.get("買進") or 0, "持": t.get("持有") or 0, "賣": t.get("賣出") or 0,
             "分析收盤": d.get("price_at_analysis"),
             "權威收盤": (d.get("verify") or {}).get("truth_close"),
             "復驗": STATUS_LABEL.get(s, s),

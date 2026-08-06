@@ -33,12 +33,28 @@ def _f(x):
 @st.cache_data(ttl=3600, show_spinner=False)
 def stock_options():
     db = MongoClient("mongodb://localhost:27017/")["tw_stock_analysis"]
-    ids = [s for s in db.shareholding.distinct("stock_id")
-           if len(s) == 4 and not s.startswith("00")]
+    ids0 = [s for s in db.shareholding.distinct("stock_id")
+            if len(s) == 4 and not s.startswith("00")]
+    # 只留近1年有交易資料者(濾掉集保納入但無交易的標的:特別股/TDR/受益證券等,它們也無中文名)
+    from datetime import timedelta as _td
+    _lat = db.stock_price.find_one({"date": {"$type": "date"}}, sort=[("date", -1)])
+    if _lat:
+        _tradable = set(db.stock_price.distinct("stock_id", {"date": {"$gte": _lat["date"] - _td(days=365)}}))
+        ids = [s for s in ids0 if s in _tradable]
+    else:
+        ids = ids0
     names = {}
-    for r in db.stock_price.find({"stock_id": {"$in": ids}},
+    # 只取「有名字」的最新一筆(近期價格列常缺 name 欄,原本 setdefault 會被空名蓋掉 → 1402 等顯示成空名)
+    for r in db.stock_price.find({"stock_id": {"$in": ids}, "name": {"$nin": ["", None]}},
                                  {"_id": 0, "stock_id": 1, "name": 1}).sort("date", -1):
-        names.setdefault(r["stock_id"], r.get("name") or "")
+        names.setdefault(r["stock_id"], r["name"])
+    # 補救:仍缺名者查 taiwan_stock_info
+    missing = [s for s in ids if not names.get(s)]
+    if missing:
+        for r in db.taiwan_stock_info.find({"stock_id": {"$in": missing}},
+                                           {"_id": 0, "stock_id": 1, "stock_name": 1}):
+            if r.get("stock_name"):
+                names[r["stock_id"]] = r["stock_name"]
     return sorted(ids), names
 
 

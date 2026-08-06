@@ -68,7 +68,16 @@ page = st.sidebar.radio(
         "🏛️ 每日選股推薦",
         "🧲 大戶籌碼×量價勢",
         "🔎 專案知識庫檢索",
-        "📊 個股股權分散趨勢"
+        "📊 個股股權分散趨勢",
+        "📐 費波納契×支撐壓力",
+        "💰 融資融券(單股)",
+        "💰 融資融券(全市場榜)",
+        "🔔 排程警報",
+        "📈 月營收",
+        "📊 量價型態",
+        "📑 財報深度分析",
+        "🎯 2560戰法",
+        "🏆 核心池"
     ]
 )
 
@@ -118,6 +127,33 @@ elif page == "🔎 專案知識庫檢索":
 elif page == "📊 個股股權分散趨勢":
     from pages import holder_trend
     holder_trend.show()
+elif page == "📐 費波納契×支撐壓力":
+    from pages import tech_lines_page
+    tech_lines_page.show()
+elif page == "💰 融資融券(單股)":
+    from pages import margin_page
+    margin_page.show()
+elif page == "💰 融資融券(全市場榜)":
+    from pages import margin_market_page
+    margin_market_page.show()
+elif page == "🔔 排程警報":
+    from pages import schedule_alerts_page
+    schedule_alerts_page.show()
+elif page == "📈 月營收":
+    from pages import revenue_page
+    revenue_page.show()
+elif page == "📊 量價型態":
+    from pages import volprice_pattern_page
+    volprice_pattern_page.show()
+elif page == "📑 財報深度分析":
+    from pages import financials_deep_page
+    financials_deep_page.show()
+elif page == "🎯 2560戰法":
+    from pages import strategy_2560_page
+    strategy_2560_page.show()
+elif page == "🏆 核心池":
+    from pages import core_pool_page
+    core_pool_page.show()
 
 # 頁腳
 st.sidebar.markdown("---")
