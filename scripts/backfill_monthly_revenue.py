@@ -46,7 +46,7 @@ def build(sid, rows):
         rev = d.get("revenue")
         if not (y and m) or rev is None:
             continue
-        by_ym[f"{int(y):04d}-{int(m):02d}"] = float(rev)
+        by_ym[f"{int(y):04d}-{int(m):02d}"] = float(rev) / 1000  # 元→千元(對齊 sync_monthly_revenue/TWSE_OpenAPI;2026-08-01修:原本漏除,造成23.7萬列×1000)
 
     out = []
     for ym, rev in sorted(by_ym.items()):
