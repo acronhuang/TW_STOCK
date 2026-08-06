@@ -19,7 +19,6 @@ class SafeCollectionOptimizer:
         self.critical_collections = {
             'stocks',                    # 下載程式使用
             'stock_price',              # 下載程式使用
-            'institutional_investors',   # 下載程式使用
             'technical_indicators',      # 技術指標
             'tickers',                   # NestJS API 使用
             'dividends',                 # 股利數據
@@ -95,7 +94,6 @@ class SafeCollectionOptimizer:
         
         index_recommendations = {
             'stock_price': [('symbol', 1), ('date', -1)],
-            'institutional_investors': [('symbol', 1), ('date', -1)],
             'technical_indicators': [('symbol', 1), ('date', -1)],
             'dividends': [('symbol', 1)],
             'monthly_revenue': [('symbol', 1), ('year_month', -1)],

@@ -95,37 +95,26 @@ BOT_FX_6M = 'https://rate.bot.com.tw/xrt/flcsv/0/L6M/USD'
 
 
 def fetch_bot_usd():
-    """台銀牌告匯率(Big5)：回傳 (今日即期賣出, 約30天前即期賣出) USD/TWD。失敗回 (None,None)。
-    6M CSV 格式：資料日期,幣別,匯率(本行買入/賣出),現金,即期,遠期...。取『本行賣出』的『即期』。"""
+    """USD/TWD 即期賣出:回傳 (今日即期賣出, 約30天前即期賣出)。失敗回 (None,None)。
+    2026-06-29 起台銀免費 CSV(rate.bot.com.tw/xrt/flcsv)被 bot 挑戰(Challenge Validation)擋,
+    server 端 requests 過不了 → 改用 FinMind TaiwanExchangeRate(同『本行賣出的即期』=spot_sell 語意)。"""
+    token = os.getenv('FINMIND_API_TOKEN')
+    start_date = (datetime.now() - timedelta(days=45)).strftime('%Y-%m-%d')
     try:
-        r = requests.get(BOT_FX_6M, timeout=20)
-        text = r.content.decode('utf-8-sig', errors='ignore')   # 台銀 CSV 為 UTF-8 with BOM
+        r = requests.get('https://api.finmindtrade.com/api/v4/data', params={
+            'dataset': 'TaiwanExchangeRate', 'data_id': 'USD',
+            'start_date': start_date, 'token': token}, timeout=20)
+        rows = r.json().get('data', [])
     except Exception:
         return None, None
-    lines = text.splitlines()
-    if not lines:
+    series = [(d['date'], d.get('spot_sell')) for d in rows if d.get('spot_sell')]
+    if not series:
         return None, None
-    header = lines[0].split(',')
-    try:
-        i_spot = header.index('即期')      # 即期匯率欄
-    except ValueError:
-        i_spot = 4
-    # 同日可能有本行買入/賣出兩列 → 取即期、同日平均
-    by_date: dict[str, list[float]] = {}
-    for l in lines[1:]:
-        c = l.split(',')
-        if len(c) > i_spot and c[1].strip() == 'USD':
-            try:
-                by_date.setdefault(c[0].strip().replace('/', ''), []).append(float(c[i_spot]))
-            except ValueError:
-                pass
-    if not by_date:
-        return None, None
-    spot = sorted(((d, sum(v) / len(v)) for d, v in by_date.items()), reverse=True)  # 日期新→舊
-    today = round(spot[0][1], 4)
-    cutoff = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
-    older = [v for d, v in spot if d <= cutoff]
-    month_ago = round(older[0], 4) if older else None
+    series.sort(reverse=True)  # 日期新→舊
+    today = round(float(series[0][1]), 4)
+    cutoff = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    older = [v for d, v in series if d <= cutoff]
+    month_ago = round(float(older[0]), 4) if older else None
     return today, month_ago
 
 
@@ -156,7 +145,7 @@ def main():
         })
         done.append(f"匯率 USD/TWD={usd} (月變 {change_1m})")
     else:
-        done.append("⚠️ 匯率抓取失敗(台銀)")
+        done.append("⚠️ 匯率抓取失敗(FinMind)")
 
     # ── [存值] 月頻指標：有 --set 用之，否則若 DB 無則 seed ──────
     def ensure(indicator, data, cadence_days, override):
