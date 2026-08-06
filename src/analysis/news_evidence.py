@@ -43,7 +43,7 @@ def major_news_for(code: str, days: int = 14, limit: int = 5) -> list[str]:
     """該股近 days 天的 TWSE 官方重大訊息（subject + 摘要）。"""
     since = datetime.now() - timedelta(days=days)
     docs = list(_get_db().major_news.find(
-        {"code": code, "date": {"$gte": since}},
+        {"stock_id": code, "date": {"$gte": since}},
         {"subject": 1, "detail": 1, "date": 1}).sort("date", -1).limit(limit))
     out = []
     for d in docs:
@@ -86,7 +86,7 @@ def google_news_for(name: str, max_items: int = 4, timeout: int = 6) -> list[str
 
 def media_news_for(code: str, max_items: int = 4, fresh_days: int = 8) -> list[str]:
     """讀 media_news 預抓快取的媒體標題（fresh_days 內才算新鮮，配合週抓節奏）。"""
-    doc = _get_db().media_news.find_one({"code": code})
+    doc = _get_db().media_news.find_one({"stock_id": code})
     if not doc:
         return []
     ts = doc.get("fetched_at")

@@ -109,20 +109,20 @@ def sync_day_trading(db):
     if not data:
         return 0
     col = db["day_trading_targets"]
-    col.create_index([("code", ASCENDING), ("date", DESCENDING)])
+    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
     dt = roc_to_date(data[0].get("Date", ""))
     if not dt:
         return 0
     inserted = 0
     for row in data:
         doc = {
-            "code": row.get("Code", ""),
+            "stock_id": row.get("Code", ""),
             "name": row.get("Name", ""),
             "date": dt,
             "suspension": row.get("Suspension", ""),
             "updated_at": NOW,
         }
-        col.update_one({"code": doc["code"], "date": dt}, {"$set": doc}, upsert=True)
+        col.update_one({"stock_id": doc["stock_id"], "date": dt}, {"$set": doc}, upsert=True)
         inserted += 1
     log.info(f"  日期: {dt.strftime('%Y-%m-%d')}  筆數: {inserted}")
     return inserted
@@ -160,12 +160,12 @@ def sync_punish(db):
     if not data:
         return 0
     col = db["punished_stocks"]
-    col.create_index([("code", ASCENDING), ("date", DESCENDING)])
+    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
     inserted = 0
     for row in data:
         dt = roc_to_date(row.get("Date", ""))
         doc = {
-            "code": row.get("Code", ""),
+            "stock_id": row.get("Code", ""),
             "name": row.get("Name", ""),
             "date": dt,
             "reason": row.get("ReasonsOfDisposition", ""),
@@ -174,39 +174,67 @@ def sync_punish(db):
             "detail": row.get("Detail", ""),
             "updated_at": NOW,
         }
-        if doc["code"]:
-            col.update_one({"code": doc["code"], "date": dt}, {"$set": doc}, upsert=True)
+        if doc["stock_id"]:
+            col.update_one({"stock_id": doc["stock_id"], "date": dt}, {"$set": doc}, upsert=True)
             inserted += 1
     log.info(f"  筆數: {inserted}")
     return inserted
 
 
 def sync_notice(db):
-    """注意股票 — notice"""
-    log.info("[4/13] 注意股票 (notice)...")
-    data = fetch("/announcement/notice")
-    if not data:
-        return 0
-    col = db["noticed_stocks"]
-    col.create_index([("code", ASCENDING), ("date", DESCENDING)])
+    """注意股票 — 上市(TWSE RWD) + 上櫃(TPEX bulletin)。
+    兩源皆恆回「當前快照」(忽略 date 參數);含權證(下游可依 len(stock_id)==4 過濾)。
+    doc 加 source 欄('twse'/'tpex')。原 OpenAPI /announcement/notice 已死故改 RWD。"""
+    log.info("[4/13] 注意股票 (notice: 上市+上櫃)...")
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    inserted = 0
-    for row in data:
-        code = row.get("Code", "").strip()
+    col = db["noticed_stocks"]
+    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
+
+    def _roc(s, sep):
+        p = str(s).strip().split(sep)
+        if len(p) == 3:
+            try:
+                return datetime(int(p[0]) + 1911, int(p[1]), int(p[2]))
+            except ValueError:
+                pass
+        return today
+
+    def _save(code, name, cnt, info, dt, close, pe, source):
+        code = str(code).strip()
         if not code:
-            continue
-        doc = {
-            "code": code,
-            "name": row.get("Name", ""),
-            "date": today,
-            "announcement_count": safe_int(row.get("NumberOfAnnouncement", "0")),
-            "attention_info": row.get("TradingInfoForAttention", ""),
-            "closing_price": safe_float(row.get("ClosingPrice", "0")),
-            "pe": safe_float(row.get("PE", "0")),
-            "updated_at": NOW,
-        }
-        col.update_one({"code": doc["code"], "date": today}, {"$set": doc}, upsert=True)
-        inserted += 1
+            return 0
+        info = str(info).replace("<br>", " ").replace("<br/>", " ").replace("<br />", " ")
+        col.update_one(
+            {"stock_id": code, "date": dt},
+            {"$set": {"stock_id": code, "name": name, "date": dt,
+                      "announcement_count": safe_int(cnt), "attention_info": info,
+                      "closing_price": safe_float(close), "pe": safe_float(pe),
+                      "source": source, "updated_at": NOW}},
+            upsert=True)
+        return 1
+
+    inserted = 0
+    # 上市 TWSE (RWD)  欄位: 編號,證券代號,證券名稱,累計次數,注意交易資訊,日期,收盤價,本益比
+    try:
+        u = ("https://www.twse.com.tw/rwd/zh/announcement/notice"
+             f"?date={today.strftime('%Y%m%d')}&response=json")
+        r = requests.get(u, timeout=30, verify=False)
+        r.raise_for_status()
+        for row in (r.json().get("data") or []):
+            inserted += _save(row[1], row[2], row[3], row[4], _roc(row[5], "."), row[6], row[7], "twse")
+    except Exception as e:
+        log.error(f"  TWSE notice 失敗: {e}")
+    # 上櫃 TPEX (bulletin/attention)  欄位: 編號,證券代號,證券名稱,累計,注意交易資訊,公告日期,收盤價,本益比,link
+    try:
+        u = ("https://www.tpex.org.tw/www/zh-tw/bulletin/attention"
+             f"?date={today.strftime('%Y/%m/%d')}&response=json")
+        r = requests.get(u, timeout=30, verify=False)
+        r.raise_for_status()
+        tbls = r.json().get("tables") or []
+        for row in (tbls[0].get("data", []) if tbls else []):
+            inserted += _save(row[1], row[2], row[3], row[4], _roc(row[5], "/"), row[6], row[7], "tpex")
+    except Exception as e:
+        log.error(f"  TPEX notice 失敗: {e}")
     log.info(f"  筆數: {inserted}")
     return inserted
 
@@ -218,12 +246,12 @@ def sync_major_news(db):
     if not data:
         return 0
     col = db["major_news"]
-    col.create_index([("code", ASCENDING), ("date", DESCENDING)])
+    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
     inserted = 0
     for row in data:
         dt = roc_to_date(row.get("發言日期", ""))
         doc = {
-            "code": row.get("公司代號", ""),
+            "stock_id": row.get("公司代號", ""),
             "name": row.get("公司名稱", ""),
             "date": dt,
             "time": row.get("發言時間", ""),
@@ -233,8 +261,8 @@ def sync_major_news(db):
             "detail": row.get("說明", ""),
             "updated_at": NOW,
         }
-        if doc["code"]:
-            col.update_one({"code": doc["code"], "date": dt, "subject": doc["subject"]},
+        if doc["stock_id"]:
+            col.update_one({"stock_id": doc["stock_id"], "date": dt, "subject": doc["subject"]},
                            {"$set": doc}, upsert=True)
             inserted += 1
     log.info(f"  筆數: {inserted}")
@@ -248,18 +276,18 @@ def sync_major_shareholders(db):
     if not data:
         return 0
     col = db["major_shareholders"]
-    col.create_index([("code", ASCENDING)])
+    col.create_index([("stock_id", ASCENDING)])
     inserted = 0
     for row in data:
         doc = {
-            "code": row.get("公司代號", ""),
+            "stock_id": row.get("公司代號", ""),
             "name": row.get("公司名稱", ""),
             "shareholder": row.get("大股東名稱", ""),
             "report_date": roc_to_date(row.get("出表日期", "")),
             "updated_at": NOW,
         }
-        if doc["code"]:
-            col.update_one({"code": doc["code"], "shareholder": doc["shareholder"]},
+        if doc["stock_id"]:
+            col.update_one({"stock_id": doc["stock_id"], "shareholder": doc["shareholder"]},
                            {"$set": doc}, upsert=True)
             inserted += 1
     log.info(f"  筆數: {inserted}")
@@ -274,12 +302,12 @@ def sync_foreign_top20(db):
         return 0
     col = db["foreign_top20"]
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    col.create_index([("code", ASCENDING), ("date", DESCENDING)])
+    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
     inserted = 0
     for row in data:
         doc = {
             "rank": safe_int(row.get("Rank", "0")),
-            "code": row.get("Code", ""),
+            "stock_id": row.get("Code", ""),
             "name": row.get("Name", ""),
             "shares_held": safe_int(row.get("SharesHeld", "0")),
             "shares_held_pct": safe_float(row.get("SharesHeldPer", "0")),
@@ -287,7 +315,7 @@ def sync_foreign_top20(db):
             "date": today,
             "updated_at": NOW,
         }
-        col.update_one({"code": doc["code"], "date": today}, {"$set": doc}, upsert=True)
+        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
         inserted += 1
     log.info(f"  筆數: {inserted}")
     return inserted
@@ -300,7 +328,7 @@ def sync_after_hours(db):
     if not data:
         return 0
     col = db["after_hours_trading"]
-    col.create_index([("code", ASCENDING), ("date", DESCENDING)])
+    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     inserted = 0
     for row in data:
@@ -308,7 +336,7 @@ def sync_after_hours(db):
         if not code:
             continue
         doc = {
-            "code": code,
+            "stock_id": code,
             "name": row.get("Name", row.get("股票名稱", "")),
             "volume": safe_int(row.get("TradeVolume", row.get("成交股數", "0"))),
             "value": safe_int(row.get("TradeValue", row.get("成交金額", "0"))),
@@ -316,7 +344,7 @@ def sync_after_hours(db):
             "date": today,
             "updated_at": NOW,
         }
-        col.update_one({"code": doc["code"], "date": today}, {"$set": doc}, upsert=True)
+        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
         inserted += 1
     log.info(f"  筆數: {inserted}")
     return inserted
@@ -357,7 +385,7 @@ def sync_odd_lot(db):
     if not data:
         return 0
     col = db["odd_lot_trading"]
-    col.create_index([("code", ASCENDING), ("date", DESCENDING)])
+    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     inserted = 0
     for row in data:
@@ -365,7 +393,7 @@ def sync_odd_lot(db):
         if not code:
             continue
         doc = {
-            "code": code,
+            "stock_id": code,
             "name": row.get("Name", row.get("股票名稱", "")),
             "volume": safe_int(row.get("TradeVolume", row.get("成交股數", "0"))),
             "value": safe_int(row.get("TradeValue", row.get("成交金額", "0"))),
@@ -373,7 +401,7 @@ def sync_odd_lot(db):
             "date": today,
             "updated_at": NOW,
         }
-        col.update_one({"code": doc["code"], "date": today}, {"$set": doc}, upsert=True)
+        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
         inserted += 1
     log.info(f"  筆數: {inserted}")
     return inserted
@@ -386,12 +414,12 @@ def sync_insider_transfer(db):
     if not data:
         return 0
     col = db["insider_transfer"]
-    col.create_index([("code", ASCENDING), ("date", DESCENDING)])
+    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
     inserted = 0
     for row in data:
         dt = roc_to_date(row.get("出表日期", ""))
         doc = {
-            "code": row.get("公司代號", ""),
+            "stock_id": row.get("公司代號", ""),
             "name": row.get("公司名稱", ""),
             "date": dt,
             "insider_name": row.get("申報人姓名", row.get("內部人姓名", "")),
@@ -400,8 +428,8 @@ def sync_insider_transfer(db):
             "reason": row.get("轉讓原因", ""),
             "updated_at": NOW,
         }
-        if doc["code"]:
-            col.update_one({"code": doc["code"], "date": dt, "insider_name": doc["insider_name"]},
+        if doc["stock_id"]:
+            col.update_one({"stock_id": doc["stock_id"], "date": dt, "insider_name": doc["insider_name"]},
                            {"$set": doc}, upsert=True)
             inserted += 1
     log.info(f"  筆數: {inserted}")
@@ -415,7 +443,7 @@ def sync_margin_suspension(db):
     if not data:
         return 0
     col = db["margin_suspension"]
-    col.create_index([("code", ASCENDING), ("date", DESCENDING)])
+    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     inserted = 0
     for row in data:
@@ -423,13 +451,13 @@ def sync_margin_suspension(db):
         if not code:
             continue
         doc = {
-            "code": code,
+            "stock_id": code,
             "name": row.get("Name", row.get("股票名稱", "")),
             "date": today,
             "detail": json.dumps(row, ensure_ascii=False),
             "updated_at": NOW,
         }
-        col.update_one({"code": doc["code"], "date": today}, {"$set": doc}, upsert=True)
+        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
         inserted += 1
     log.info(f"  筆數: {inserted}")
     return inserted
@@ -509,7 +537,7 @@ TABLE_CHECKS = {
     "stock_price":                 (4000, 0),
     "stock_factors":               (1800, 0),
     "institutional_flow":          ( 800, 1),   # T86 法人 T+1 公布，允許落後 1 個交易日
-    "margin_purchase_short_sale":  ( 800, 0),
+    "margin_purchase_short_sale":  (1100, 0),   # 上市完整水位(上櫃允許T+1晚到,不進自適應)
     "day_trading_targets":         ( 800, 0),
     "securities_lending":          ( 800, 0),
     "after_hours_trading":         (1000, 0),
@@ -618,9 +646,13 @@ _ADAPT_MIN_SAMPLES = 6
 # 用中位數當門檻會誤報；這類表靠靜態低門檻 + 容許落後天數（lag）判斷即可。
 _ADAPTIVE_TABLES = {
     "stock_price", "stock_factors", "institutional_flow",
-    "margin_purchase_short_sale", "day_trading_targets", "securities_lending",
+    "day_trading_targets", "securities_lending",
     "after_hours_trading", "odd_lot_trading", "foreign_top20", "etf_dca_rank",
 }
+# 註:margin_purchase_short_sale 刻意不進自適應——它日筆數「雙峰」:上市(twse_openapi 17:50,
+# ~1287)當日先到、上櫃(tpex_margin_sync ~913)晚到(TPEX 常 20:13 檢查後才發布)。
+# 若進自適應,中位數含上櫃(~2079)→ 同日只有上市 1287 就誤報。改用靜態門檻(1100,上市完整水位)
+# 只驗「上市當日有沒有齊」;上櫃允許 T+1 晚到(21:00 cron + heal 補)。
 
 
 def _adaptive_min(col, static_min: int, trading_days: list, flt: dict) -> tuple[int, int | None]:
@@ -990,6 +1022,16 @@ def run_heal(db, fail_list: list) -> tuple[list, list]:
             # 換新資料日，重跑只會寫回同一天 —— 此時複檢仍紅屬正常，會升級人工。
             r = _run_script(["scripts/tdcc_shareholding_sync.py"])
             actions.append(("shareholding → tdcc_shareholding_sync", r))
+        elif coll == "margin_purchase_short_sale":
+            # margin = 上市(sync_margin_trading) + 上櫃(tpex_margin_sync)。上櫃常較晚發布,
+            # 每日 18:00 cron 可能太早抓不到 → 自癒(檢查當下)一併補上櫃,免「只有上市1287」假缺。
+            try:
+                ALL_SYNCS["margin_trading"](db)
+                actions.append(("margin → sync_margin_trading(上市)", "ok"))
+            except Exception as e:
+                actions.append(("margin → sync_margin_trading(上市)", f"ERR:{e}"))
+            r = _run_script(["scripts/tpex_margin_sync.py", "--date", ref_ymd])
+            actions.append(("margin → tpex_margin_sync(上櫃)", r))
         elif coll in _COLL_TO_SYNC:            # 補充表：同進程呼叫 sync 函式
             key = _COLL_TO_SYNC[coll]
             try:

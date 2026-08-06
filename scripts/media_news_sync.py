@@ -57,7 +57,7 @@ def main():
     ap.add_argument("--force", action="store_true", help="忽略今日已抓，全部重抓")
     args = ap.parse_args()
 
-    DB.media_news.create_index("code", unique=True)
+    DB.media_news.create_index("stock_id", unique=True)
     DB.media_news.create_index("fetched_at")
 
     targets = universe()
@@ -72,14 +72,14 @@ def main():
     fails = 0     # 連續失敗計數 → 退避
     for i, (code, name) in enumerate(targets, 1):
         if not args.force:
-            ex = DB.media_news.find_one({"code": code}, {"fetched_at": 1})
+            ex = DB.media_news.find_one({"stock_id": code}, {"fetched_at": 1})
             if ex and ex.get("fetched_at") and ex["fetched_at"].strftime("%Y-%m-%d") == today:
                 skip += 1
                 continue
         titles = google_titles(name)      # 純標題（無前綴）；抓不到回 []
         DB.media_news.update_one(
-            {"code": code},
-            {"$set": {"code": code, "name": name, "titles": titles,
+            {"stock_id": code},
+            {"$set": {"stock_id": code, "name": name, "titles": titles,
                       "fetched_at": datetime.now()}},
             upsert=True)
         if titles:
