@@ -55,29 +55,20 @@ page = st.sidebar.radio(
     "選擇功能頁面",
     [
         "🏠 系統總覽",
-        "📊 K線圖與技術指標",
-        "📈 回測結果視覺化",
-        "🧮 因子分析面板",
-        "📑 財報摘要儀表",
-        "⚖️ 策略比較工具",
-        "🔔 實時數據監控",
+        "🏆 核心池",
+        "🏛️ 每日選股推薦",
         "🗳️ 團隊分析",
         "💬 每日決策問答",
-        "📬 每日快訊",
+        "🔍 個股分析",
         "🛡️ 持倉風控",
-        "🏛️ 每日選股推薦",
-        "🧲 大戶籌碼×量價勢",
-        "🔎 專案知識庫檢索",
-        "📊 個股股權分散趨勢",
-        "📐 費波納契×支撐壓力",
-        "💰 融資融券(單股)",
-        "💰 融資融券(全市場榜)",
+        "📬 每日快訊",
+        "🔔 實時數據監控",
         "🔔 排程警報",
-        "📈 月營收",
-        "📊 量價型態",
-        "📑 財報深度分析",
+        "📈 回測結果視覺化",
+        "⚖️ 策略比較工具",
         "🎯 2560戰法",
-        "🏆 核心池"
+        "💰 融資融券(全市場榜)",
+        "🔎 專案知識庫檢索",
     ]
 )
 
@@ -85,75 +76,77 @@ page = st.sidebar.radio(
 if page == "🏠 系統總覽":
     from pages import home
     home.show()
-elif page == "📊 K線圖與技術指標":
-    from pages import charts
-    charts.show()
-elif page == "📈 回測結果視覺化":
-    from pages import backtest_viz
-    backtest_viz.show()
-elif page == "🧮 因子分析面板":
-    from pages import factors
-    factors.show()
-elif page == "📑 財報摘要儀表":
-    from pages import financials
-    financials.show()
-elif page == "⚖️ 策略比較工具":
-    from pages import strategy_compare
-    strategy_compare.show()
-elif page == "🔔 實時數據監控":
-    from pages import monitor
-    monitor.show()
+elif page == "🏆 核心池":
+    from pages import core_pool_page
+    core_pool_page.show()
+elif page == "🏛️ 每日選股推薦":
+    from pages import picks
+    picks.show()
 elif page == "🗳️ 團隊分析":
     from pages import team
     team.show()
 elif page == "💬 每日決策問答":
     from pages import decision_qa
     decision_qa.show()
-elif page == "📬 每日快訊":
-    from pages import notifications
-    notifications.show()
+elif page == "🔍 個股分析":
+    # 階段1整併:10 頁 → 兩層子選單(面向→子項),只執行選中的 show()(避 st.tabs 執行全部→撞 widget key)
+    grp = st.radio("面向", ["📈 技術面", "🧲 籌碼面", "📑 財報因子"], horizontal=True, key="ga_grp")
+    if grp == "📈 技術面":
+        sub = st.radio("子項", ["K線指標", "費波納契/支撐壓力", "量價型態"],
+                       horizontal=True, key="ga_tech", label_visibility="collapsed")
+        if sub == "K線指標":
+            from pages import charts; charts.show()
+        elif sub == "費波納契/支撐壓力":
+            from pages import tech_lines_page; tech_lines_page.show()
+        else:
+            from pages import volprice_pattern_page; volprice_pattern_page.show()
+    elif grp == "🧲 籌碼面":
+        sub = st.radio("子項", ["大戶籌碼×量價", "股權分散", "融資融券(單股)"],
+                       horizontal=True, key="ga_chip", label_visibility="collapsed")
+        if sub == "大戶籌碼×量價":
+            from pages import holder_volprice; holder_volprice.show()
+        elif sub == "股權分散":
+            from pages import holder_trend; holder_trend.show()
+        else:
+            from pages import margin_page; margin_page.show()
+    else:
+        sub = st.radio("子項", ["財報摘要", "財報深度", "月營收", "因子分析"],
+                       horizontal=True, key="ga_fin", label_visibility="collapsed")
+        if sub == "財報摘要":
+            from pages import financials; financials.show()
+        elif sub == "財報深度":
+            from pages import financials_deep_page; financials_deep_page.show()
+        elif sub == "月營收":
+            from pages import revenue_page; revenue_page.show()
+        else:
+            from pages import factors; factors.show()
 elif page == "🛡️ 持倉風控":
     from pages import risk_page
     risk_page.show()
-elif page == "🏛️ 每日選股推薦":
-    from pages import picks
-    picks.show()
-elif page == "🧲 大戶籌碼×量價勢":
-    from pages import holder_volprice
-    holder_volprice.show()
-elif page == "🔎 專案知識庫檢索":
-    from pages import rag_page
-    rag_page.show()
-elif page == "📊 個股股權分散趨勢":
-    from pages import holder_trend
-    holder_trend.show()
-elif page == "📐 費波納契×支撐壓力":
-    from pages import tech_lines_page
-    tech_lines_page.show()
-elif page == "💰 融資融券(單股)":
-    from pages import margin_page
-    margin_page.show()
-elif page == "💰 融資融券(全市場榜)":
-    from pages import margin_market_page
-    margin_market_page.show()
+elif page == "📬 每日快訊":
+    from pages import notifications
+    notifications.show()
+elif page == "🔔 實時數據監控":
+    from pages import monitor
+    monitor.show()
 elif page == "🔔 排程警報":
     from pages import schedule_alerts_page
     schedule_alerts_page.show()
-elif page == "📈 月營收":
-    from pages import revenue_page
-    revenue_page.show()
-elif page == "📊 量價型態":
-    from pages import volprice_pattern_page
-    volprice_pattern_page.show()
-elif page == "📑 財報深度分析":
-    from pages import financials_deep_page
-    financials_deep_page.show()
+elif page == "📈 回測結果視覺化":
+    from pages import backtest_viz
+    backtest_viz.show()
+elif page == "⚖️ 策略比較工具":
+    from pages import strategy_compare
+    strategy_compare.show()
 elif page == "🎯 2560戰法":
     from pages import strategy_2560_page
     strategy_2560_page.show()
-elif page == "🏆 核心池":
-    from pages import core_pool_page
-    core_pool_page.show()
+elif page == "💰 融資融券(全市場榜)":
+    from pages import margin_market_page
+    margin_market_page.show()
+elif page == "🔎 專案知識庫檢索":
+    from pages import rag_page
+    rag_page.show()
 
 # 頁腳
 st.sidebar.markdown("---")
