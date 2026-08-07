@@ -17,7 +17,7 @@ CONSENSUS_URL = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  #
 # 委員會（.27 上的通用模型；擴到 3 位讓討論更豐富、避免 2 人平手過多）。
 # 資安模型(foundation-sec/whiterabbitneo)對股票判斷弱，不納入。可用 env CONSENSUS_MODELS 覆寫（如加第 4 位 qwen2.5-7b-panel）。
 COMMITTEE = [m.strip() for m in
-             os.getenv('CONSENSUS_MODELS', 'hermes3:8b,qwen2.5:7b,qwen2.5-3b:latest').split(',')
+             os.getenv('CONSENSUS_MODELS', 'gemma2:9b,qwen2.5:7b,qwen2.5-3b:latest').split(',')
              if m.strip()]
 VOTES = ('買進', '持有', '賣出')
 # 主持人（③）：讀完討論逐字稿做綜合定案，取代純多數決。走 .28 主力節點的 14B 通才。

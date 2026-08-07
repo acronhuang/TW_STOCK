@@ -37,6 +37,8 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────
 # 台股主力 14b:env TWSTOCK_MAIN_LLM 可覆寫(回退設 qwen2.5-14b:latest)。2026-08 由使用者決定切 qwen3。
 MAIN_14B = os.getenv('TWSTOCK_MAIN_LLM', 'qwen3-14b:latest')
+# 換視角模型(value/chip 角色):env TWSTOCK_VIEW_LLM 可覆寫(回退設 hermes3:8b)。2026-08 由使用者決定 hermes3→gemma2。
+VIEW_MODEL = os.getenv('TWSTOCK_VIEW_LLM', 'gemma2:9b')
 
 ROLE_TO_MODEL = {
     # 推理 / 整合（主力 14b @ .28）
@@ -48,8 +50,8 @@ ROLE_TO_MODEL = {
     'fundamental-analyst':      MAIN_14B,
 
     # 換視角（hermes3 8b @ .27 合議節點）
-    'value-analyst':            'hermes3:8b',
-    'chip-analyst':             'hermes3:8b',
+    'value-analyst':            VIEW_MODEL,
+    'chip-analyst':             VIEW_MODEL,
 
     # 快速規則/趨勢（輕模型 3b @ .28）
     'risk-manager':             'qwen2.5-3b:latest',
@@ -103,6 +105,7 @@ MODEL_TO_URL = {
     'qwen2.5-14b:latest': OLLAMA_URL,
     'qwen2.5-3b:latest':  OLLAMA_URL,
     'hermes3:8b':         OLLAMA_URL_27,
+    'gemma2:9b':          OLLAMA_URL_27,   # gemma2 在 .27,value/chip 路由到 .27
 }
 
 
