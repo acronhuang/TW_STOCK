@@ -55,13 +55,9 @@ page = st.sidebar.radio(
     "選擇功能頁面",
     [
         "🏠 系統總覽",
-        "🏆 核心池",
-        "🏛️ 每日選股推薦",
-        "🗳️ 團隊分析",
-        "💬 每日決策問答",
+        "🎯 每日決策",
         "🔍 個股分析",
         "🛡️ 持倉風控",
-        "📬 每日快訊",
         "🔔 實時數據監控",
         "🔔 排程警報",
         "📈 回測結果視覺化",
@@ -76,20 +72,21 @@ page = st.sidebar.radio(
 if page == "🏠 系統總覽":
     from pages import home
     home.show()
-elif page == "🏆 核心池":
-    from pages import core_pool_page
-    core_pool_page.show()
-elif page == "🏛️ 每日選股推薦":
-    from pages import picks
-    picks.show()
-elif page == "🗳️ 團隊分析":
-    from pages import team
-    team.show()
-elif page == "💬 每日決策問答":
-    from pages import decision_qa
-    decision_qa.show()
+elif page == "🎯 每日決策":
+    # 階段2整併:選股鏈一條龍(核心池→選股→合議→問答→快訊),radio 子選單只執行選中頁
+    d = st.radio("決策", ["🏆 核心池", "🏛️ 每日選股", "🗳️ 團隊合議", "💬 決策問答", "📬 收盤快訊"],
+                 horizontal=True, key="dd_view", label_visibility="collapsed")
+    if d == "🏆 核心池":
+        from pages import core_pool_page; core_pool_page.show()
+    elif d == "🏛️ 每日選股":
+        from pages import picks; picks.show()
+    elif d == "🗳️ 團隊合議":
+        from pages import team; team.show()
+    elif d == "💬 決策問答":
+        from pages import decision_qa; decision_qa.show()
+    else:
+        from pages import notifications; notifications.show()
 elif page == "🔍 個股分析":
-    # 階段1整併:10 頁 → 兩層子選單(面向→子項),只執行選中的 show()(避 st.tabs 執行全部→撞 widget key)
     grp = st.radio("面向", ["📈 技術面", "🧲 籌碼面", "📑 財報因子"], horizontal=True, key="ga_grp")
     if grp == "📈 技術面":
         sub = st.radio("子項", ["K線指標", "費波納契/支撐壓力", "量價型態"],
@@ -123,9 +120,6 @@ elif page == "🔍 個股分析":
 elif page == "🛡️ 持倉風控":
     from pages import risk_page
     risk_page.show()
-elif page == "📬 每日快訊":
-    from pages import notifications
-    notifications.show()
 elif page == "🔔 實時數據監控":
     from pages import monitor
     monitor.show()
