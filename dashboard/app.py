@@ -54,26 +54,26 @@ st.sidebar.title("🎯 導航選單")
 page = st.sidebar.radio(
     "選擇功能頁面",
     [
-        "🏠 系統總覽",
+        "🏠 總覽",
         "🎯 每日決策",
         "🔍 個股分析",
-        "🛡️ 持倉風控",
-        "🔔 實時數據監控",
-        "🔔 排程警報",
-        "📈 回測結果視覺化",
-        "⚖️ 策略比較工具",
-        "🎯 2560戰法",
-        "💰 融資融券(全市場榜)",
-        "🔎 專案知識庫檢索",
+        "💼 持倉風控",
+        "📊 策略研究",
+        "📚 知識庫",
     ]
 )
 
-# 路由到不同頁面
-if page == "🏠 系統總覽":
-    from pages import home
-    home.show()
+# 路由到 6 大頁(每頁內以 radio 子選單分面向,只執行選中頁 show())
+if page == "🏠 總覽":
+    v = st.radio("總覽", ["系統總覽", "資料監控", "排程警報"],
+                 horizontal=True, key="ov_view", label_visibility="collapsed")
+    if v == "系統總覽":
+        from pages import home; home.show()
+    elif v == "資料監控":
+        from pages import monitor; monitor.show()
+    else:
+        from pages import schedule_alerts_page; schedule_alerts_page.show()
 elif page == "🎯 每日決策":
-    # 階段2整併:選股鏈一條龍(核心池→選股→合議→問答→快訊),radio 子選單只執行選中頁
     d = st.radio("決策", ["🏆 核心池", "🏛️ 每日選股", "🗳️ 團隊合議", "💬 決策問答", "📬 收盤快訊"],
                  horizontal=True, key="dd_view", label_visibility="collapsed")
     if d == "🏆 核心池":
@@ -117,28 +117,21 @@ elif page == "🔍 個股分析":
             from pages import revenue_page; revenue_page.show()
         else:
             from pages import factors; factors.show()
-elif page == "🛡️ 持倉風控":
+elif page == "💼 持倉風控":
     from pages import risk_page
     risk_page.show()
-elif page == "🔔 實時數據監控":
-    from pages import monitor
-    monitor.show()
-elif page == "🔔 排程警報":
-    from pages import schedule_alerts_page
-    schedule_alerts_page.show()
-elif page == "📈 回測結果視覺化":
-    from pages import backtest_viz
-    backtest_viz.show()
-elif page == "⚖️ 策略比較工具":
-    from pages import strategy_compare
-    strategy_compare.show()
-elif page == "🎯 2560戰法":
-    from pages import strategy_2560_page
-    strategy_2560_page.show()
-elif page == "💰 融資融券(全市場榜)":
-    from pages import margin_market_page
-    margin_market_page.show()
-elif page == "🔎 專案知識庫檢索":
+elif page == "📊 策略研究":
+    v = st.radio("研究", ["回測視覺化", "策略比較", "2560戰法", "融資融券(全市場榜)"],
+                 horizontal=True, key="sr_view", label_visibility="collapsed")
+    if v == "回測視覺化":
+        from pages import backtest_viz; backtest_viz.show()
+    elif v == "策略比較":
+        from pages import strategy_compare; strategy_compare.show()
+    elif v == "2560戰法":
+        from pages import strategy_2560_page; strategy_2560_page.show()
+    else:
+        from pages import margin_market_page; margin_market_page.show()
+elif page == "📚 知識庫":
     from pages import rag_page
     rag_page.show()
 
