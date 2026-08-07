@@ -22,7 +22,11 @@ COMMITTEE = [m.strip() for m in
 VOTES = ('買進', '持有', '賣出')
 # 主持人（③）：讀完討論逐字稿做綜合定案，取代純多數決。走 .28 主力節點的 14B 通才。
 FACILITATOR_URL = os.getenv('OLLAMA_FACILITATOR_URL', os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434'))
-FACILITATOR_MODEL = os.getenv('CONSENSUS_FACILITATOR', 'qwen2.5-14b')
+FACILITATOR_MODEL = os.getenv('CONSENSUS_FACILITATOR', 'qwen3-14b:latest')
+# 空方委員(devil's advocate):env CONSENSUS_DEVIL=1 啟用(default off,可逆)。用現有模型
+# 產出『買進』風險論點併入逐字稿供主持人權衡(不投票、不扭曲票數)。預設 qwen2.5:7b(已常駐,免 pull)。
+DEVIL_ENABLED = os.getenv('CONSENSUS_DEVIL', '0') == '1'
+DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', 'qwen2.5:7b')
 # 合議委員全走 .27 合議節點(hermes3 + qwen2.5-3b 皆 GPU；.27 qwen2.5-3b 已設 num_gpu 99 上 GPU)。
 
 
@@ -30,7 +34,7 @@ def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
     try:
         r = requests.post(f'{url or CONSENSUS_URL}/api/generate',
                           json={'model': model, 'prompt': prompt, 'stream': False,
-                                'options': {'temperature': 0.3, 'num_gpu': 99},  # 強制全層GPU
+                                'options': {'temperature': float(os.getenv('LLM_TEMPERATURE', '0')), 'num_gpu': 99, 'seed': int(os.getenv('LLM_SEED', '42'))},  # 全層GPU + 確定性(temp0/固定seed,可重現)
                                 'keep_alive': '10m'},  # ④ 委員跨輪常駐，避免多輪討論每輪重載
                           timeout=timeout)
         r.raise_for_status()
@@ -191,6 +195,17 @@ def _facilitate(symbol, name, advisor_draft, data_summary, transcript, tally, ro
     return vote, synthesis
 
 
+def _devil_brief(symbol, name, advisor_draft, data_summary, timeout=120):
+    """空方委員/魔鬼代言人:只找『買進』的最大風險與反方論點(不給買賣結論)。回文字,失敗回''。"""
+    prompt = (f"你是投資決策委員會的『空方委員/魔鬼代言人』。針對 {symbol} {name},"
+              f"你的唯一任務是找出『買進』的最大風險與反方論點,越具體越好。\n\n"
+              f"【主分析師草案】\n{advisor_draft}\n\n【關鍵數據】\n{data_summary}\n\n"
+              f"列 2-3 點最強的反方/風險論點(技術破位、籌碼鬆動、基本面惡化、估值過高、事件風險等),"
+              f"每點一句具體理由。不要下買/賣/持結論,只提出風險。")
+    resp = _ask(DEVIL_MODEL, prompt, timeout, url=CONSENSUS_URL)
+    return '' if resp.startswith('ERR:') else resp.strip()[:500]
+
+
 def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
             rounds: int = 2, timeout: int = 120, facilitate: bool = True) -> dict:
     """多輪序列討論 + 主持人綜合定案。回 {votes, tally, final, final_source, facilitator,
@@ -220,6 +235,10 @@ def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
     final, tally, n = _finalize(votes, advisor_draft)      # 多數決(fallback)
     blind_final = _finalize(round0_votes, advisor_draft)[0]  # 盲投對照定案(round0，A/B 用)
     final_source, fac_synth = 'majority', ''
+    if DEVIL_ENABLED:                                      # 空方委員:風險論點併入逐字稿供主持人權衡(default off)
+        _brief = _devil_brief(symbol, name, advisor_draft, data_summary, timeout)
+        if _brief:
+            transcript = transcript + "\n\n【空方委員(魔鬼代言人)風險提示】\n" + _brief
     if facilitate:                                         # ③ 主持人綜合定案(優先)
         fac_vote, fac_synth = _facilitate(symbol, name, advisor_draft, data_summary,
                                           transcript, tally, rounds_run, timeout)

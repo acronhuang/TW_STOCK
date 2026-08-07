@@ -35,14 +35,17 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────
 #  角色 → 模型 映射
 # ─────────────────────────────────────────────────────────
+# 台股主力 14b:env TWSTOCK_MAIN_LLM 可覆寫(回退設 qwen2.5-14b:latest)。2026-08 由使用者決定切 qwen3。
+MAIN_14B = os.getenv('TWSTOCK_MAIN_LLM', 'qwen3-14b:latest')
+
 ROLE_TO_MODEL = {
     # 推理 / 整合（主力 14b @ .28）
-    'investment-advisor':       'qwen2.5-14b:latest',
-    'stock-team-orchestrator':  'qwen2.5-14b:latest',
+    'investment-advisor':       MAIN_14B,
+    'stock-team-orchestrator':  MAIN_14B,
 
     # 需推理（主力 14b @ .28）
-    'technical-analyst':        'qwen2.5-14b:latest',
-    'fundamental-analyst':      'qwen2.5-14b:latest',
+    'technical-analyst':        MAIN_14B,
+    'fundamental-analyst':      MAIN_14B,
 
     # 換視角（hermes3 8b @ .27 合議節點）
     'value-analyst':            'hermes3:8b',
@@ -50,7 +53,7 @@ ROLE_TO_MODEL = {
 
     # 快速規則/趨勢（輕模型 3b @ .28）
     'risk-manager':             'qwen2.5-3b:latest',
-    'macro-analyst':            'qwen2.5-14b:latest',  # 2026-08-01 3b→14b:3b會捏造指標(把VIX chg%貼成券資報酬率)+讀反大盤
+    'macro-analyst':            MAIN_14B,  # 2026-08-01 3b→14b:3b會捏造指標(把VIX chg%貼成券資報酬率)+讀反大盤
 
     # 工具型（按需）
     # 註：原 'vision'(看圖 LLM) 已移除——「看圖/型態」改用 SenVision 蔡森演算法(精準、不幻覺)，
@@ -89,6 +92,9 @@ ROLE_PROMPTS = {
 }
 
 
+# 確定性:低 temperature + 固定 seed → 同輸入可重現 verdict。env 可覆寫。
+LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0'))  # 0=greedy 完全可重現;env 可調高求多樣性
+LLM_SEED = int(os.getenv('LLM_SEED', '42'))
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')       # 主力 .28
 OLLAMA_URL_27 = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議 .27
 
@@ -123,7 +129,7 @@ def ask_role(role: str,
                 'prompt': prompt,
                 'stream': False,
                 'keep_alive': '5m',
-                'options': {'num_gpu': 99},   # 強制全層GPU(不讓 Ollama 自動落 CPU)
+                'options': {'num_gpu': 99, 'temperature': LLM_TEMPERATURE, 'seed': LLM_SEED},   # 全層GPU + 確定性(低temp+固定seed,可重現)
             },
             timeout=timeout,
         )
