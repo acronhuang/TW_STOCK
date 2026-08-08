@@ -24,7 +24,6 @@ dependencies = [
     "tqdm>=4.66",
     "fastapi>=0.104",
     "uvicorn>=0.24",
-    "feedparser>=6.0",
 ]
 
 [project.optional-dependencies]
