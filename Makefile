@@ -1,7 +1,9 @@
 # 台股智能分析系統 Makefile
-PYTHON = /Users/ming/Stock/.venv/bin/python3
-PIP = /Users/ming/Stock/.venv/bin/pip
-PROJECT = /Users/ming/Stock/tw-stock-analysis
+PROJECT ?= $(shell pwd)
+VENV    ?= $(PROJECT)/../.venv
+PYTHON  ?= $(VENV)/bin/python3
+PIP     ?= $(VENV)/bin/pip
+
 
 .PHONY: help install test lint api scan recommend team backup clean
 
@@ -45,7 +47,7 @@ status:  ## 資料更新狀態
 	@$(PYTHON) -c "from dotenv import load_dotenv;load_dotenv('$(PROJECT)/.env');from pymongo import MongoClient;import os;db=MongoClient(os.getenv('MONGODB_URI'))['tw_stock_analysis'];sp=db.stock_price.find_one({},{'date':1},sort=[('date',-1)]);print(f'stock_price: {str(sp[\"date\"])[:10]}')"
 
 schedules:  ## 列出所有排程
-	@launchctl list | grep twstock
+	@crontab -l 2>/dev/null | grep -iE "stock|twstock" || echo "(無相符 cron 排程)"
 
 clean:  ## 清理日誌和快取
 	find $(PROJECT)/logs -name "*.log" -mtime +30 -delete

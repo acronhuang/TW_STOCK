@@ -153,6 +153,8 @@ def convert_signal_to_pattern(
     # FORMING 階段不應有量能確認（量能只在突破 bar 有意義）
     vol_confirmed = signal.volume_confirmation if status != PatternStatus.FORMING else False
 
+    current_price = float(df['close'].iloc[-1])
+
     return Pattern(
         stock_id=stock_id,
         pattern_type=pattern_type,

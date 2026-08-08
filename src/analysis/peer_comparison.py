@@ -397,9 +397,11 @@ if __name__ == '__main__':
                       f"{c['percentile']:>5.1f}% {c['grade']:>4}")
 
         if r['strengths']:
-            print(f"\n  ✅ 優勢: {', '.join(f'{s['metric']}({s['rank']})' for s in r['strengths'])}")
+            _str = ', '.join(f"{s['metric']}({s['rank']})" for s in r['strengths'])
+            print(f"\n  ✅ 優勢: {_str}")
         if r['weaknesses']:
-            print(f"  ⚠️ 劣勢: {', '.join(f'{w['metric']}({w['rank']})' for w in r['weaknesses'])}")
+            _wk = ', '.join(f"{w['metric']}({w['rank']})" for w in r['weaknesses'])
+            print(f"  ⚠️ 劣勢: {_wk}")
 
         if r.get('top5_peers'):
             print(f"\n  同業 Top 5:")
