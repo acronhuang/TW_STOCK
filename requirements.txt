@@ -2,6 +2,10 @@
 # 台股智能分析系統 - Python 依賴清單
 # ================================
 # 安裝: pip install -r requirements.txt
+#
+# [LEGACY] 本檔已非單一真相來源(SoT)；權威依賴宣告在 pyproject.toml。
+#   正式安裝: pip install -e ".[dev]"  (儀表板加 .[dashboard]，TEJ 加 .[tej])
+#   新增依賴請改 pyproject.toml,勿只改此檔(避免兩份再度分裂)。
 
 # ── 核心 ──
 numpy>=2.0
