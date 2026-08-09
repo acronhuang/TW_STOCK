@@ -212,7 +212,7 @@ rsync -av /opt/homebrew/var/mongodb/ user@newserver:/path/to/mongodb/
 brew services start mongodb-community
 ```
 
-> 📖 完整遷移指南請參考獨立文件: `DATABASE_MIGRATION_GUIDE.md`
+> 📖 完整遷移指南請參考獨立文件: `docs/guides/DATABASE_MIGRATION_GUIDE.md`
 
 ---
 
@@ -309,7 +309,7 @@ FinMind 只提供**原始市場數據**，所有技術分析指標都需要在�
    - 生成買賣訊號
    - 評估信心度
 
-> 📖 完整說明: `FINMIND_DATA_EXPLANATION.md`
+> 📖 完整說明: `docs/archive/FINMIND_DATA_EXPLANATION.md`
 
 ---
 
@@ -368,7 +368,7 @@ python3 scripts/check_download_status.py
 
 **A**: FinMind 只提供原始市場數據（股價、成交量、法人數據），不提供技術指標。所有 MA 線、RSI、MACD 等都需要本地計算。
 
-詳見: `FINMIND_DATA_EXPLANATION.md`
+詳見: `docs/archive/FINMIND_DATA_EXPLANATION.md`
 
 ---
 
@@ -394,7 +394,7 @@ python3 scripts/check_download_status.py
 ./restore_mongodb.sh backup.tar.gz
 ```
 
-完整指南: `DATABASE_MIGRATION_GUIDE.md`
+完整指南: `docs/guides/DATABASE_MIGRATION_GUIDE.md`
 
 ---
 
@@ -440,7 +440,7 @@ tw-stock-analysis/
 ├── restart_download.sh               # 重啟下載
 ├── download_status.json              # 下載狀態記錄
 ├── DOCUMENTATION.md                  # 📖 本文件（整合文件）
-├── DATABASE_MIGRATION_GUIDE.md       # 資料庫遷移指南
+├── docs/guides/DATABASE_MIGRATION_GUIDE.md       # 資料庫遷移指南
 └── README.md                         # 專案說明
 ```
 
@@ -486,8 +486,8 @@ tw-stock-analysis/
 
 ### 文件
 - 📖 完整文件: `DOCUMENTATION.md` (本文件)
-- 🗄️ 資料庫遷移: `DATABASE_MIGRATION_GUIDE.md`
-- 📊 FinMind 說明: `FINMIND_DATA_EXPLANATION.md`
+- 🗄️ 資料庫遷移: `docs/guides/DATABASE_MIGRATION_GUIDE.md`
+- 📊 FinMind 說明: `docs/archive/FINMIND_DATA_EXPLANATION.md`
 - 📈 下載狀態: `DOWNLOAD_STATUS_REPORT.md`
 
 ### 日誌檔案

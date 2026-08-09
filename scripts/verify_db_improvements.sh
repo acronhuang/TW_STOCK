@@ -170,7 +170,7 @@ if [ "$PASS_COUNT" -eq "$TOTAL_CHECKS" ]; then
 else
     echo -e "${YELLOW}⚠ 還有 $((TOTAL_CHECKS - PASS_COUNT)) 個項目需要處理${NC}"
     echo ""
-    echo "請參考 DATABASE_IMPROVEMENT_EXECUTION_GUIDE.md 完成剩餘改進"
+    echo "請參考 docs/guides/DATABASE_IMPROVEMENT_EXECUTION_GUIDE.md 完成剩餘改進"
 fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

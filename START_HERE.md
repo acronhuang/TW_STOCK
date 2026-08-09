@@ -95,10 +95,10 @@
 4. 完善技術文檔
 
 ### ✅ 創建文檔
-1. `FINAL_STATUS_REPORT.md` - 最終狀態報告
-2. `COMPLETE_VALIDATION_REPORT.md` - 完整驗證報告
-3. `VALIDATION_COMPLETE.md` - 驗證摘要
-4. `FILE_ORGANIZATION.md` - 文件組織說明
+1. `docs/archive/reports/FINAL_STATUS_REPORT.md` - 最終狀態報告
+2. `docs/archive/reports/COMPLETE_VALIDATION_REPORT.md` - 完整驗證報告
+3. `docs/archive/reports/VALIDATION_COMPLETE.md` - 驗證摘要
+4. `docs/archive/FILE_ORGANIZATION.md` - 文件組織說明
 5. `scripts/SCRIPTS_README.md` - 腳本說明
 
 ### ✅ 整理專案
@@ -112,9 +112,9 @@
 ## 📋 核心文件列表
 
 ### 必讀文檔 (Must Read)
-1. **FINAL_STATUS_REPORT.md** ⭐⭐⭐ - 最重要，先讀這個
-2. **FILE_ORGANIZATION.md** - 文件組織說明
-3. **VALIDATION_COMPLETE.md** - 快速指南
+1. **docs/archive/reports/FINAL_STATUS_REPORT.md** ⭐⭐⭐ - 最重要，先讀這個
+2. **docs/archive/FILE_ORGANIZATION.md** - 文件組織說明
+3. **docs/archive/reports/VALIDATION_COMPLETE.md** - 快速指南
 
 ### 核心腳本 (Core Scripts)
 1. `scripts/final_system_validation.py` - 系統驗證
@@ -186,9 +186,9 @@ python3 scripts/final_system_validation.py
 ## 📞 後續支援
 
 ### 需要幫助?
-1. 閱讀 `FINAL_STATUS_REPORT.md`
+1. 閱讀 `docs/archive/reports/FINAL_STATUS_REPORT.md`
 2. 執行 `python3 scripts/final_system_validation.py`
-3. 查看 `FILE_ORGANIZATION.md`
+3. 查看 `docs/archive/FILE_ORGANIZATION.md`
 
 ### 日常維護
 ```bash

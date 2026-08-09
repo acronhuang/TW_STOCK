@@ -6,7 +6,7 @@
 - `pyproject.toml` — Python 標準套件設定
 - `Makefile` — 一鍵指令（test/api/scan/backup）
 - `Dockerfile` + `.dockerignore` — 容器化部署
-- `INSTALL.md` — 完整安裝教學
+- `docs/archive/INSTALL.md` — 完整安裝教學
 - `ARCHITECTURE.md` — 系統架構文件（DDD）
 - `API.md` — REST API 端點文件
 - `CHANGELOG.md` — 本文件

@@ -1,6 +1,6 @@
 #!/bin/bash
 # P2 腳本清理 - 移動重複腳本到 deprecated 目錄
-# 根據 CODE_REFACTOR_EXECUTION_PLAN.md 和 REFACTOR_AUDIT_REPORT.md
+# 根據 docs/archive/CODE_REFACTOR_EXECUTION_PLAN.md 和 docs/archive/reports/REFACTOR_AUDIT_REPORT.md
 
 set -e
 
