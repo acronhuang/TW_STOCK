@@ -4,8 +4,10 @@
 不依賴具體 DB（透過 Repository 介面）。
 """
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import List, Optional
+
 from ..models.valuation import ValuationResult
 
 
@@ -27,7 +29,7 @@ class ScreeningResult:
     name: str
     price: float
     total_score: float
-    pe: Optional[float]
+    pe: float | None
     upside_pct: float
     sharpe: float
     risk_level: str
@@ -54,7 +56,7 @@ def classify_tier(sharpe: float, upside: float) -> str:
         return 'consider'
 
 
-def apply_pku_rules(cost: float, current: float, ma60: Optional[float],
+def apply_pku_rules(cost: float, current: float, ma60: float | None,
                     ma_trend: str) -> str:
     """北大法則判斷（純業務邏輯，不含 DB 查詢）
 
@@ -63,9 +65,7 @@ def apply_pku_rules(cost: float, current: float, ma60: Optional[float],
     pnl_pct = (current - cost) / cost * 100 if cost > 0 else 0
     below_ma60 = current < ma60 if ma60 else None
 
-    if pnl_pct < -5 and below_ma60:
-        return '止損出場'
-    elif pnl_pct < -5:
+    if (pnl_pct < -5 and below_ma60) or pnl_pct < -5:
         return '止損出場'
     elif below_ma60 and pnl_pct < -3:
         return '減碼觀察'

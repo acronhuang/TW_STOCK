@@ -12,15 +12,16 @@ P1: 調整後收盤價 (Adjusted Close) 計算器
     python3 src/calculators/adj_close_calculator.py --all --execute  # 計算所有股票
 """
 
-import sys
 import argparse
 import logging
-from pathlib import Path
+import sys
 from datetime import datetime, timedelta
 from decimal import Decimal
-from pymongo import MongoClient
+from pathlib import Path
+from typing import Dict, List
+
 from bson.decimal128 import Decimal128
-from typing import List, Dict
+from pymongo import MongoClient
 
 # 設定路徑
 project_root = Path(__file__).parent.parent.parent
@@ -77,7 +78,7 @@ class AdjustedCloseCalculator:
         """將 float 轉為 Decimal128"""
         return Decimal128(Decimal(str(round(value, 4))))
     
-    def get_dividend_events(self, stock_id: str) -> List[Dict]:
+    def get_dividend_events(self, stock_id: str) -> list[dict]:
         """
         獲取股票的除權息事件
         
@@ -144,7 +145,7 @@ class AdjustedCloseCalculator:
         
         return events
     
-    def calculate_adjusted_close(self, stock_id: str, dry_run: bool = True) -> Dict:
+    def calculate_adjusted_close(self, stock_id: str, dry_run: bool = True) -> dict:
         """
         計算單一股票的調整後收盤價
         
@@ -268,7 +269,7 @@ class AdjustedCloseCalculator:
         
         return stats
     
-    def calculate_all(self, dry_run: bool = True, limit: int = None) -> Dict:
+    def calculate_all(self, dry_run: bool = True, limit: int = None) -> dict:
         """計算所有股票的調整後收盤價"""
         self.logger.info("\n" + "="*80)
         self.logger.info("🚀 開始計算調整後收盤價 (Adjusted Close)")
@@ -316,7 +317,7 @@ class AdjustedCloseCalculator:
             'details': all_stats
         }
     
-    def _print_summary(self, all_stats: List, success: int, errors: int, dry_run: bool):
+    def _print_summary(self, all_stats: list, success: int, errors: int, dry_run: bool):
         """列印總結報告"""
         total_records = sum(s.get('calculated', 0) for s in all_stats)
         

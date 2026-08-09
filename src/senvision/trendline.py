@@ -45,9 +45,9 @@ class Trendline:
     p2: Peak
     slope: float
     is_broken: bool = False
-    break_index: Optional[int] = None
-    break_date: Optional[datetime] = None
-    break_price: Optional[float] = None
+    break_index: int | None = None
+    break_date: datetime | None = None
+    break_price: float | None = None
 
     def price_at(self, bar_index: int) -> float:
         """計算切線在指定 bar 索引處的理論價格"""
@@ -68,10 +68,10 @@ class Trendline:
 
 
 def find_descending_resistance(
-    peaks: List[Peak],
+    peaks: list[Peak],
     min_separation: int = 5,
     max_lines: int = 2,
-) -> List[Trendline]:
+) -> list[Trendline]:
     """
     尋找下降壓力切線（連結高點 H1 > H2）
 
@@ -86,7 +86,7 @@ def find_descending_resistance(
         下降切線列表（按新舊排序，最新在前）
     """
     highs = [p for p in peaks if p.type == 'H']
-    trendlines: List[Trendline] = []
+    trendlines: list[Trendline] = []
 
     for i in range(len(highs) - 1, 0, -1):
         H2 = highs[i]      # 較新
@@ -112,10 +112,10 @@ def find_descending_resistance(
 
 
 def find_ascending_support(
-    peaks: List[Peak],
+    peaks: list[Peak],
     min_separation: int = 5,
     max_lines: int = 2,
-) -> List[Trendline]:
+) -> list[Trendline]:
     """
     尋找上升支撐切線（連結低點 L1 < L2）
 
@@ -128,7 +128,7 @@ def find_ascending_support(
         上升切線列表（最新在前）
     """
     lows = [p for p in peaks if p.type == 'L']
-    trendlines: List[Trendline] = []
+    trendlines: list[Trendline] = []
 
     for i in range(len(lows) - 1, 0, -1):
         L2 = lows[i]
@@ -155,11 +155,11 @@ def find_ascending_support(
 
 def detect_trendline_break(
     df: pd.DataFrame,
-    trendlines: List[Trendline],
+    trendlines: list[Trendline],
     min_breakout_pct: float = 0.005,
     volume_ratio: float = 1.5,
     volume_ma_period: int = 5,
-) -> List[Trendline]:
+) -> list[Trendline]:
     """
     偵測切線是否已發生有效突破（原地修改 is_broken 等欄位）
 

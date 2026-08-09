@@ -7,9 +7,10 @@ Author: GitHub Copilot
 Date: 2026-02-24
 """
 
-from typing import Dict, List, Set
-from enum import Enum
 import re
+from enum import Enum
+from typing import Dict, List, Set
+
 from pymongo import MongoClient
 
 
@@ -134,7 +135,7 @@ class StockClassifier:
         # 返回代码规则的判断结果
         return code_type
     
-    def classify_stock_list(self, stock_ids: List[str]) -> Dict[SecurityType, List[str]]:
+    def classify_stock_list(self, stock_ids: list[str]) -> dict[SecurityType, list[str]]:
         """
         将股票列表按类型分类
         
@@ -243,7 +244,7 @@ class StockClassifier:
         }
     
     @staticmethod
-    def get_data_requirements(sec_type: SecurityType) -> Dict[str, bool]:
+    def get_data_requirements(sec_type: SecurityType) -> dict[str, bool]:
         """
         获取该证券类型的数据需求
         
@@ -289,7 +290,7 @@ def main():
         
         print(f"\n股票代码: {stock_id} ({stock_name})")
         print(f"  类型: {sec_type.value}")
-        print(f"  数据需求:")
+        print("  数据需求:")
         for data_type, needed in requirements.items():
             icon = "✅" if needed else "❌"
             print(f"    {icon} {data_type}")

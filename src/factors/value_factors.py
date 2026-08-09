@@ -10,10 +10,11 @@ Value Factors 模組 - 價值因子計算
 - Earnings Yield（盈餘殖利率）
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional
 from datetime import datetime
+from typing import Dict, List, Optional
+
+import numpy as np
+import pandas as pd
 from bson.decimal128 import Decimal128
 
 
@@ -35,7 +36,7 @@ class ValueFactors:
             return float(value.to_decimal())
         return float(value)
     
-    def calculate_pe_ratio(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_pe_ratio(self, symbol: str, date: datetime) -> float | None:
         """
         計算本益比 (P/E Ratio)
         
@@ -109,7 +110,7 @@ class ValueFactors:
         
         return None
     
-    def calculate_pb_ratio(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_pb_ratio(self, symbol: str, date: datetime) -> float | None:
         """
         計算股價淨值比 (P/B Ratio)
         
@@ -183,7 +184,7 @@ class ValueFactors:
         
         return None
     
-    def calculate_dividend_yield(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_dividend_yield(self, symbol: str, date: datetime) -> float | None:
         """
         計算股息殖利率 (Dividend Yield)
         
@@ -229,7 +230,7 @@ class ValueFactors:
         
         return None
     
-    def calculate_earnings_yield(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_earnings_yield(self, symbol: str, date: datetime) -> float | None:
         """
         計算盈餘殖利率 (Earnings Yield)
         
@@ -249,7 +250,7 @@ class ValueFactors:
         
         return None
     
-    def calculate_all_value_factors(self, symbol: str, date: datetime) -> Dict:
+    def calculate_all_value_factors(self, symbol: str, date: datetime) -> dict:
         """
         計算所有價值因子
         
@@ -274,7 +275,7 @@ class ValueFactors:
             'earnings_yield': self.calculate_earnings_yield(symbol, date)
         }
     
-    def batch_calculate(self, symbols: List[str], start_date: datetime, 
+    def batch_calculate(self, symbols: list[str], start_date: datetime, 
                         end_date: datetime) -> pd.DataFrame:
         """
         批次計算價值因子

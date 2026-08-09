@@ -12,12 +12,13 @@ Author: SenVision Team
 Date: 2026-02-24
 """
 
-import sys
-import logging
-from pathlib import Path
-from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
 import argparse
+import logging
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
 from pymongo import MongoClient
 from tqdm import tqdm
@@ -28,12 +29,16 @@ logger = logging.getLogger(__name__)
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root / 'src'))
 
-from senvision.pattern_detector import (
-    Pattern, PatternType, PatternStatus,
-    WBottomDetector, MTopDetector,
-    TripleBottomDetector, TripleTopDetector,
-)
 from senvision.analysis import analyze_timeframe, score_signal
+from senvision.pattern_detector import (
+    MTopDetector,
+    Pattern,
+    PatternStatus,
+    PatternType,
+    TripleBottomDetector,
+    TripleTopDetector,
+    WBottomDetector,
+)
 
 try:
     from utils.stock_classifier import StockClassifier
@@ -106,13 +111,13 @@ class MarketScanner:
 
         # 基本面快取（由 load_fundamentals_cache() 填充）
         # 所有估值數據統一來自 stock_factors 集合
-        self._per_cache:     Dict[str, float] = {}    # stock_id → PE ratio (衍生自 _factors_cache)
-        self._rev_cache:     Dict[str, float] = {}    # stock_id → revenue YoY %
-        self._factors_cache: Dict[str, Dict]  = {}    # stock_id → {pe_ratio, pb_ratio, dividend_yield, roe, rsi_14, ...}
-        self._inst_cache:    Dict[str, Dict]  = {}    # stock_id → {total_net, ...}
+        self._per_cache:     dict[str, float] = {}    # stock_id → PE ratio (衍生自 _factors_cache)
+        self._rev_cache:     dict[str, float] = {}    # stock_id → revenue YoY %
+        self._factors_cache: dict[str, dict]  = {}    # stock_id → {pe_ratio, pb_ratio, dividend_yield, roe, rsi_14, ...}
+        self._inst_cache:    dict[str, dict]  = {}    # stock_id → {total_net, ...}
 
     def get_stock_list(self,
-                       exclude_types: Optional[List] = None) -> List[str]:
+                       exclude_types: list | None = None) -> list[str]:
         """
         獲取股票列表
 
@@ -155,7 +160,7 @@ class MarketScanner:
 
     def get_price_data(self,
                        stock_id: str,
-                       days: int = 120) -> Optional[pd.DataFrame]:
+                       days: int = 120) -> pd.DataFrame | None:
         """
         獲取股票價格數據
 
@@ -259,7 +264,7 @@ class MarketScanner:
                     }}} for f in _FACTOR_FIELDS},
                 }},
             ]
-            self._factors_cache: Dict[str, Dict] = {}
+            self._factors_cache: dict[str, dict] = {}
             for doc in self.db.stock_factors.aggregate(pipeline, allowDiskUse=True):
                 sid = doc['_id']
                 entry = {}
@@ -303,7 +308,7 @@ class MarketScanner:
                     'trust_net':   {'$first': '$trust_net'},
                 }},
             ]
-            self._inst_cache: Dict[str, Dict] = {}
+            self._inst_cache: dict[str, dict] = {}
             for doc in self.db.institutional_flow.aggregate(pipeline):
                 sid = doc['_id']
                 entry = {}
@@ -319,7 +324,7 @@ class MarketScanner:
             if self._inst_cache:
                 print(f"  三大法人籌碼快取：{len(self._inst_cache)} 支股票")
             else:
-                print(f"  三大法人籌碼快取：無資料（請先執行 twse_daily_update.py）")
+                print("  三大法人籌碼快取：無資料（請先執行 twse_daily_update.py）")
         except Exception as e:
             print(f"  三大法人籌碼快取載入失敗: {e}")
 
@@ -327,10 +332,10 @@ class MarketScanner:
 
     def scan_pattern(self,
                      pattern_type: PatternType,
-                     stock_ids: Optional[List[str]] = None,
+                     stock_ids: list[str] | None = None,
                      days: int = 120,
                      min_rrr: float = 0.5,
-                     status_filter: Optional[List[PatternStatus]] = None) -> List[Pattern]:
+                     status_filter: list[PatternStatus] | None = None) -> list[Pattern]:
         """
         掃描指定形態
 
@@ -377,7 +382,7 @@ class MarketScanner:
 
         return all_patterns
 
-    def scan_all_patterns(self, **kwargs) -> Dict[PatternType, List[Pattern]]:
+    def scan_all_patterns(self, **kwargs) -> dict[PatternType, list[Pattern]]:
         """
         掃描所有形態（W底、M頭、三重底、三重頂）
 
@@ -400,10 +405,10 @@ class MarketScanner:
         self,
         stock_id: str,
         df_daily: pd.DataFrame,
-        timeframes: List[str],
+        timeframes: list[str],
         min_rrr: float = 0.5,
         min_score: float = 0.60,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         對單支股票在多個時間框架上執行全套分析，並對每個信號評分。
 
@@ -421,8 +426,8 @@ class MarketScanner:
             符合條件的信號列表，每個元素為 dict（含評分與形態資訊）
         """
         # ── 基本面數據（從快取取得，無快取則 None）──────────────────
-        per: Optional[float] = self._per_cache.get(stock_id)
-        revenue_yoy: Optional[float] = self._rev_cache.get(stock_id)
+        per: float | None = self._per_cache.get(stock_id)
+        revenue_yoy: float | None = self._rev_cache.get(stock_id)
         factors = self._factors_cache.get(stock_id, {})
         roe     = factors.get('roe')
         rsi_14  = factors.get('rsi_14')
@@ -440,7 +445,7 @@ class MarketScanner:
         inst_net   = inst_data.get('total_net')
 
         # ── 第一輪：收集所有通過 RRR 門檻的候選信號 ─────────────────
-        candidates: List[Dict[str, Any]] = []
+        candidates: list[dict[str, Any]] = []
 
         for tf in timeframes:
             try:
@@ -477,7 +482,7 @@ class MarketScanner:
         confluence_tfs = len({c['tf'] for c in candidates})
 
         # ── 第二輪：加入共振加分後重新評分，並過濾最小評分門檻 ──────
-        signals: List[Dict[str, Any]] = []
+        signals: list[dict[str, Any]] = []
 
         for c in candidates:
             pattern = c['pattern']
@@ -549,7 +554,7 @@ class MarketScanner:
 
     # ── 報表與輸出（維持原有方法）─────────────────────────────────────────────────
 
-    def print_report(self, patterns: List[Pattern]):
+    def print_report(self, patterns: list[Pattern]):
         """打印單一形態掃描報告"""
         if not patterns:
             print("未找到符合條件的形態")
@@ -577,7 +582,7 @@ class MarketScanner:
 
         print("="*100)
 
-    def export_to_csv(self, patterns: List[Pattern], output_path: str):
+    def export_to_csv(self, patterns: list[Pattern], output_path: str):
         """導出形態列表為 CSV"""
         if not patterns:
             print("無數據可導出")

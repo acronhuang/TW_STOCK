@@ -23,19 +23,20 @@ P2-B: 流通股数下载器
     python3 src/downloaders/outstanding_shares_downloader.py --all --skip-existing --execute
 """
 
-import sys
-import os
 import argparse
 import logging
+import os
+import sys
 import time
-from pathlib import Path
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
+from typing import Dict, List
+
+import requests
+from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
 from pymongo.errors import BulkWriteError
-from bson.decimal128 import Decimal128
-import requests
-from typing import Dict, List
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -185,7 +186,7 @@ class OutstandingSharesDownloader:
             self.logger.error(f"❌ {stock_id}: 處理失敗 - {e}")
             return 0.0
     
-    def update_stock(self, stock_id: str, dry_run: bool = True) -> Dict:
+    def update_stock(self, stock_id: str, dry_run: bool = True) -> dict:
         """
         更新單一股票的流通股數
         
@@ -230,22 +231,22 @@ class OutstandingSharesDownloader:
                 stats['status'] = 'success'
                 
                 if stats['updated']:
-                    self.logger.info(f"✅ 已更新")
+                    self.logger.info("✅ 已更新")
                 else:
-                    self.logger.info(f"✅ 無需更新（值相同）")
+                    self.logger.info("✅ 無需更新（值相同）")
             else:
                 stats['status'] = 'dry_run'
-                self.logger.info(f"✅ 預覽完成（未寫入）")
+                self.logger.info("✅ 預覽完成（未寫入）")
             
         except Exception as e:
-            error_msg = f"處理失敗: {str(e)}"
+            error_msg = f"處理失敗: {e!s}"
             self.logger.error(f"❌ {error_msg}")
             stats['status'] = 'error'
             stats['error'] = error_msg
         
         return stats
     
-    def _load_priority_list(self) -> List[str]:
+    def _load_priority_list(self) -> list[str]:
         """
         載入優先股票列表
         
@@ -259,7 +260,7 @@ class OutstandingSharesDownloader:
             return []
         
         stock_ids = []
-        with open(priority_file, 'r', encoding='utf-8') as f:
+        with open(priority_file, encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
@@ -273,7 +274,7 @@ class OutstandingSharesDownloader:
         self.logger.info(f"載入優先列表: {len(stock_ids)} 支股票")
         return stock_ids
     
-    def _filter_existing(self, stock_ids: List[str]) -> List[str]:
+    def _filter_existing(self, stock_ids: list[str]) -> list[str]:
         """
         過濾已有 outstanding_shares 的股票
         
@@ -301,7 +302,7 @@ class OutstandingSharesDownloader:
                           dry_run: bool = True, 
                           limit: int = None,
                           priority_list: bool = False,
-                          skip_existing: bool = False) -> Dict:
+                          skip_existing: bool = False) -> dict:
         """
         更新所有股票的流通股數
         
@@ -315,7 +316,7 @@ class OutstandingSharesDownloader:
             總體統計
         """
         self.logger.info(f"\n{'='*80}")
-        self.logger.info(f"🚀 流通股數下載器")
+        self.logger.info("🚀 流通股數下載器")
         self.logger.info(f"{'='*80}")
         self.logger.info(f"模式: {'預覽模式' if dry_run else '執行模式'}")
         self.logger.info(f"時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -323,10 +324,10 @@ class OutstandingSharesDownloader:
         # 獲取股票代碼
         if priority_list:
             stock_ids = self._load_priority_list()
-            self.logger.info(f"來源: 優先股票列表 (核心 50 支)")
+            self.logger.info("來源: 優先股票列表 (核心 50 支)")
         else:
             stock_ids = self.db.taiwan_stock_info.distinct('stock_id')
-            self.logger.info(f"來源: 資料庫全部股票")
+            self.logger.info("來源: 資料庫全部股票")
         
         # 跳過已下載
         if skip_existing:
@@ -368,7 +369,7 @@ class OutstandingSharesDownloader:
         
         # 總結報告
         self.logger.info(f"\n{'='*80}")
-        self.logger.info(f"📊 下載總結")
+        self.logger.info("📊 下載總結")
         self.logger.info(f"{'='*80}")
         self.logger.info(f"股票總數: {total_stats['total']}")
         self.logger.info(f"  成功: {total_stats['success']}")
@@ -381,7 +382,7 @@ class OutstandingSharesDownloader:
         self.logger.info(f"{'='*80}")
         
         if dry_run:
-            self.logger.info(f"\n⚠️  這是預覽模式")
+            self.logger.info("\n⚠️  這是預覽模式")
             self.logger.info(f"{'='*80}\n")
         
         return total_stats

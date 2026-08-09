@@ -17,18 +17,20 @@ v2.1 整合策略
 創建日期: 2026-02-23
 """
 
-from typing import Dict, List, Tuple, Optional
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field
 import sys
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.strategy.multi_factor_strategy import MultiFactorStrategy
-from morphology.pattern_detector import PatternDetector
 from chip_analysis import ChipAnalyzer
+from morphology.pattern_detector import PatternDetector
+from src.strategy.multi_factor_strategy import MultiFactorStrategy
 
 
 @dataclass
@@ -43,7 +45,7 @@ class StockRanking:
     
     # Stage 2: 形態評分
     pattern_score: float
-    patterns_detected: List[str]
+    patterns_detected: list[str]
     
     # Stage 3: 籌碼評分
     chip_score: float
@@ -53,9 +55,9 @@ class StockRanking:
     integrated_score: float
     
     # Optional fields with defaults
-    pattern_rank: Optional[int] = None
-    chip_rank: Optional[int] = None
-    final_rank: Optional[int] = None
+    pattern_rank: int | None = None
+    chip_rank: int | None = None
+    final_rank: int | None = None
     position_weight: float = 0.0
     
     def __repr__(self):
@@ -93,9 +95,9 @@ class IntegratedStrategyV21:
     def __init__(
         self,
         db_connection,
-        factor_config: Optional[Dict] = None,
-        pattern_config: Optional[Dict] = None,
-        chip_config: Optional[Dict] = None,
+        factor_config: dict | None = None,
+        pattern_config: dict | None = None,
+        chip_config: dict | None = None,
         enable_pattern_filter: bool = False,
         enable_chip_filter: bool = False
     ):
@@ -158,7 +160,7 @@ class IntegratedStrategyV21:
         rebalance_date: str,
         top_n: int = 30,
         require_price_data: bool = True
-    ) -> List[StockRanking]:
+    ) -> list[StockRanking]:
         """
         Stage 1: 17 因子初選
         
@@ -170,7 +172,7 @@ class IntegratedStrategyV21:
         Returns:
             StockRanking 列表
         """
-        print(f"\n========== Stage 1: 因子初選 ==========")
+        print("\n========== Stage 1: 因子初選 ==========")
         
         # 獲取有價格數據的股票列表（用於過濾）
         valid_stocks = set()
@@ -220,8 +222,8 @@ class IntegratedStrategyV21:
     
     def stage_2_pattern_filtering(
         self,
-        stage1_rankings: List[StockRanking]
-    ) -> List[StockRanking]:
+        stage1_rankings: list[StockRanking]
+    ) -> list[StockRanking]:
         """
         Stage 2: 形態學過濾
         
@@ -231,11 +233,11 @@ class IntegratedStrategyV21:
         Returns:
             通過形態過濾的 StockRanking 列表
         """
-        print(f"\n========== Stage 2: 形態過濾 ==========")
+        print("\n========== Stage 2: 形態過濾 ==========")
         
         # 檢查是否有候選股票
         if not stage1_rankings:
-            print(f"⚠️  無候選股票，跳過形態過濾")
+            print("⚠️  無候選股票，跳過形態過濾")
             return []
         
         stock_ids = [r.stock_id for r in stage1_rankings]
@@ -269,8 +271,8 @@ class IntegratedStrategyV21:
     
     def stage_3_chip_confirmation(
         self,
-        stage2_rankings: List[StockRanking]
-    ) -> List[StockRanking]:
+        stage2_rankings: list[StockRanking]
+    ) -> list[StockRanking]:
         """
         Stage 3: 籌碼面確認
         
@@ -280,11 +282,11 @@ class IntegratedStrategyV21:
         Returns:
             通過籌碼確認的 StockRanking 列表
         """
-        print(f"\n========== Stage 3: 籌碼確認 ==========")
+        print("\n========== Stage 3: 籌碼確認 ==========")
         
         # 檢查是否有候選股票
         if not stage2_rankings:
-            print(f"⚠️  無候選股票，跳過籌碼確認")
+            print("⚠️  無候選股票，跳過籌碼確認")
             return []
         
         stock_ids = [r.stock_id for r in stage2_rankings]
@@ -317,9 +319,9 @@ class IntegratedStrategyV21:
     
     def stage_4_integrated_ranking(
         self,
-        stage3_rankings: List[StockRanking],
+        stage3_rankings: list[StockRanking],
         top_n: int = 10
-    ) -> List[StockRanking]:
+    ) -> list[StockRanking]:
         """
         Stage 4: 綜合評分與排名
         
@@ -330,10 +332,10 @@ class IntegratedStrategyV21:
         Returns:
             最終排名的 StockRanking 列表（前 N 名）
         """
-        print(f"\n========== Stage 4: 綜合排名 ==========")        
+        print("\n========== Stage 4: 綜合排名 ==========")        
         # 檢查是否有候選股票
         if not stage3_rankings:
-            print(f"⚠️  無候選股票，跳過綜合評分")
+            print("⚠️  無候選股票，跳過綜合評分")
             return []        
         weights = self.integration_config['weights']
         
@@ -394,8 +396,8 @@ class IntegratedStrategyV21:
     
     def allocate_positions(
         self,
-        final_rankings: List[StockRanking]
-    ) -> List[StockRanking]:
+        final_rankings: list[StockRanking]
+    ) -> list[StockRanking]:
         """
         倉位分配
         
@@ -446,8 +448,7 @@ class IntegratedStrategyV21:
         
         # 限制單股最大權重 12%
         for r in final_rankings:
-            if r.position_weight > 0.12:
-                r.position_weight = 0.12
+            r.position_weight = min(r.position_weight, 0.12)
         
         # 再次標準化
         total_weight = sum(r.position_weight for r in final_rankings)
@@ -456,7 +457,7 @@ class IntegratedStrategyV21:
         
         return final_rankings
     
-    def select_stocks(self, rebalance_date: str) -> List[StockRanking]:
+    def select_stocks(self, rebalance_date: str) -> list[StockRanking]:
         """
         完整選股流程（4 個階段）
         
@@ -467,7 +468,7 @@ class IntegratedStrategyV21:
             最終選股結果（含倉位配置）
         """
         print(f"\n{'='*60}")
-        print(f"v2.1 整合策略選股")
+        print("v2.1 整合策略選股")
         print(f"日期: {rebalance_date}")
         print(f"{'='*60}")
         
@@ -481,16 +482,16 @@ class IntegratedStrategyV21:
         if self.enable_pattern_filter:
             stage2 = self.stage_2_pattern_filtering(stage1)
         else:
-            print(f"\n========== Stage 2: 形態過濾 ==========")
-            print(f"⚠️  形態過濾已停用（enable_pattern_filter=False），跳過此階段")
+            print("\n========== Stage 2: 形態過濾 ==========")
+            print("⚠️  形態過濾已停用（enable_pattern_filter=False），跳過此階段")
             stage2 = stage1  # 跳過過濾，直接使用 Stage 1 結果
         
         # Stage 3: 籌碼確認（10-15 支）
         if self.enable_chip_filter:
             stage3 = self.stage_3_chip_confirmation(stage2)
         else:
-            print(f"\n========== Stage 3: 籌碼確認 ==========")
-            print(f"⚠️  籌碼確認已停用（enable_chip_filter=False），跳過此階段")
+            print("\n========== Stage 3: 籌碼確認 ==========")
+            print("⚠️  籌碼確認已停用（enable_chip_filter=False），跳過此階段")
             stage3 = stage2  # 跳過過濾，直接使用 Stage 2 結果
         
         # Stage 4: 綜合排名（10 支）
@@ -515,9 +516,9 @@ class IntegratedStrategyV21:
     
     def check_exit_signals(
         self,
-        holdings: List[Dict],
+        holdings: list[dict],
         current_date: str
-    ) -> List[PositionExitSignal]:
+    ) -> list[PositionExitSignal]:
         """
         檢查出場訊號
         
@@ -629,6 +630,6 @@ if __name__ == "__main__":
     rebalance_date = '2024-12-31'
     selections = strategy.select_stocks(rebalance_date)
     
-    print(f"\n最終選股結果:")
+    print("\n最終選股結果:")
     for s in selections:
         print(f"  {s}")

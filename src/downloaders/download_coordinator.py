@@ -3,15 +3,16 @@
 統一管理所有資料表的下載流程
 """
 
-import time
 import logging
-from typing import Dict, List, Optional
+import time
 from datetime import datetime
+from typing import Dict, List, Optional
+
 from pymongo import MongoClient
+
+from .data_validator import DataValidator
 from .finmind_client import FinMindClient
 from .table_config import get_all_tables, get_tables_by_category
-from .data_validator import DataValidator
-
 
 DEFAULT_START_DATE = "2015-01-01"   # table_config 未指定時的起始日
 
@@ -24,7 +25,7 @@ class DownloadCoordinator:
         api_token: str,
         mongo_uri: str = "mongodb://localhost:27017/",
         db_name: str = "tw_stock_analysis",
-        logger: Optional[logging.Logger] = None
+        logger: logging.Logger | None = None
     ):
         """
         初始化下載協調器
@@ -57,7 +58,7 @@ class DownloadCoordinator:
             'end_time': None
         }
         
-    def download_all(self, categories: Optional[List[str]] = None, skip_existing: bool = True):
+    def download_all(self, categories: list[str] | None = None, skip_existing: bool = True):
         """
         下載所有資料表
         
@@ -150,7 +151,7 @@ class DownloadCoordinator:
             'api_usage': self.api_client.get_api_usage()
         }
     
-    def download_table(self, table_config: Dict, skip_existing: bool = True) -> Dict:
+    def download_table(self, table_config: dict, skip_existing: bool = True) -> dict:
         """
         下載單一資料表
         
@@ -227,7 +228,7 @@ class DownloadCoordinator:
                 # 整體下載（不需要股票代碼）
                 # 檢查是否已有最新資料
                 if skip_existing and self._has_recent_data(collection):
-                    self.logger.info(f"   ⏭️  資料已是最新，跳過下載")
+                    self.logger.info("   ⏭️  資料已是最新，跳過下載")
                     result['status'] = 'skipped'
                     return result
                 
@@ -244,7 +245,7 @@ class DownloadCoordinator:
                     
                     self.logger.info(f"   ✅ {len(data)} 筆 (新增 {saved['inserted']}, 更新 {saved['updated']})")
                 else:
-                    self.logger.warning(f"   ⚠️  無資料")
+                    self.logger.warning("   ⚠️  無資料")
                     result['status'] = 'no_data'
             
             # 建立索引
@@ -258,7 +259,7 @@ class DownloadCoordinator:
         
         return result
     
-    def _get_symbols(self) -> List[str]:
+    def _get_symbols(self) -> list[str]:
         """從資料庫獲取股票代碼（過濾 ETF）"""
         try:
             # 嘗試從 taiwan_stock_info 獲取
@@ -279,7 +280,7 @@ class DownloadCoordinator:
             self.logger.warning(f"獲取股票代碼失敗: {e}")
             return []
     
-    def _filter_etf(self, symbols: List[str]) -> List[str]:
+    def _filter_etf(self, symbols: list[str]) -> list[str]:
         """
         過濾 ETF、權證及其他特殊代碼
         
@@ -368,7 +369,7 @@ class DownloadCoordinator:
         
         return filtered
     
-    def _has_recent_data(self, collection, symbol: Optional[str] = None) -> bool:
+    def _has_recent_data(self, collection, symbol: str | None = None) -> bool:
         """
         檢查是否有最新資料
         
@@ -418,7 +419,7 @@ class DownloadCoordinator:
         except Exception:
             return False
     
-    def _save_data(self, collection, data: List[Dict], unique_keys: List[str], symbol: Optional[str] = None, dataset: Optional[str] = None) -> Dict:
+    def _save_data(self, collection, data: list[dict], unique_keys: list[str], symbol: str | None = None, dataset: str | None = None) -> dict:
         """
         儲存資料到 MongoDB（含資料驗證）
         
@@ -495,17 +496,17 @@ class DownloadCoordinator:
             'validation_errors': validation_errors
         }
     
-    def _create_indexes(self, collection_name: str, indexes: List):
+    def _create_indexes(self, collection_name: str, indexes: list):
         """建立索引"""
         try:
             collection = self.db[collection_name]
             for index in indexes:
                 collection.create_index([index], background=True)
-            self.logger.debug(f"   ✅ 索引建立完成")
+            self.logger.debug("   ✅ 索引建立完成")
         except Exception as e:
             self.logger.warning(f"   索引建立警告: {e}")
     
-    def _print_summary(self, results: List[Dict]):
+    def _print_summary(self, results: list[dict]):
         """列印摘要報告"""
         duration = (self.stats['end_time'] - self.stats['start_time']).total_seconds()
         
@@ -522,7 +523,7 @@ class DownloadCoordinator:
         
         # API 使用統計
         api_usage = self.api_client.get_api_usage()
-        self.logger.info(f"\n🔌 API 使用:")
+        self.logger.info("\n🔌 API 使用:")
         self.logger.info(f"   └─ {api_usage['call_count']}/{api_usage['quota']} ({api_usage['usage_percent']}%)")
         
         # 各類別統計

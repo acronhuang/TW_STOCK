@@ -19,7 +19,7 @@ def _f(v):
         return None
 
 
-def monthly_rev_yoy(db, symbol: str) -> Optional[float]:
+def monthly_rev_yoy(db, symbol: str) -> float | None:
     """回最新月營收 YoY%（截斷 >500%）。無資料回 None。"""
     d = db.monthly_revenue.find_one({'symbol': symbol}, sort=[('year_month', -1)])
     y = (d or {}).get('yoy_growth')
@@ -29,7 +29,7 @@ def monthly_rev_yoy(db, symbol: str) -> Optional[float]:
     return round(min(y, YOY_CLAMP), 1)
 
 
-def quarterly_rev_yoy(db, symbol: str) -> Optional[float]:
+def quarterly_rev_yoy(db, symbol: str) -> float | None:
     """回最新季營收 YoY%（最新季 vs 去年同季）。資料不足回 None。"""
     q = db.quarterly_earnings.find_one(
         {'symbol': symbol, 'income.revenue': {'$ne': None}},

@@ -11,14 +11,15 @@ Usage:
     la.execute(suggestions)                  # 執行到投組（需確認）
 """
 
-import sys
 import logging
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+
 import numpy as np
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -26,7 +27,7 @@ sys.path.insert(0, str(project_root))
 logger = logging.getLogger(__name__)
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -56,7 +57,7 @@ class LiveAdvisor:
         self.db = self.client[db_name]
         self.portfolio_name = portfolio_name
 
-    def generate_suggestions(self) -> Dict:
+    def generate_suggestions(self) -> dict:
         """產生交易建議（買入 + 賣出）"""
         buy_candidates = self._screen_buy_candidates()
         sell_candidates = self._screen_sell_candidates()
@@ -75,7 +76,7 @@ class LiveAdvisor:
             },
         }
 
-    def execute(self, suggestions: Dict, confirm: bool = False):
+    def execute(self, suggestions: dict, confirm: bool = False):
         """執行交易建議到投組（需 confirm=True）"""
         if not confirm:
             logger.warning('未確認執行，請設定 confirm=True')
@@ -103,7 +104,7 @@ class LiveAdvisor:
     # ──────────────────────────────────────────────
     #  買入篩選
     # ──────────────────────────────────────────────
-    def _screen_buy_candidates(self) -> List[Dict]:
+    def _screen_buy_candidates(self) -> list[dict]:
         """用綜合選股評分 + 風險管理篩選買入標的"""
         from src.analysis.stock_ranker import StockRanker
         sr = StockRanker()
@@ -168,9 +169,9 @@ class LiveAdvisor:
     # ──────────────────────────────────────────────
     #  賣出篩選
     # ──────────────────────────────────────────────
-    def _screen_sell_candidates(self) -> List[Dict]:
+    def _screen_sell_candidates(self) -> list[dict]:
         """檢查持倉是否需要停損或獲利了結"""
-        from src.portfolio.tracker import PortfolioTracker, COLLECTION
+        from src.portfolio.tracker import COLLECTION, PortfolioTracker
         positions = list(self.db[COLLECTION].find(
             {'portfolio': self.portfolio_name}))
 
@@ -224,7 +225,7 @@ class LiveAdvisor:
     # ──────────────────────────────────────────────
     #  再平衡檢查
     # ──────────────────────────────────────────────
-    def _check_rebalance(self) -> List[Dict]:
+    def _check_rebalance(self) -> list[dict]:
         """檢查持倉是否偏離目標權重過多"""
         from src.portfolio.tracker import COLLECTION
         positions = list(self.db[COLLECTION].find(
@@ -289,7 +290,7 @@ class LiveAdvisor:
                 total += pos['shares'] * price
         return total
 
-    def _get_latest_price(self, symbol: str) -> Optional[float]:
+    def _get_latest_price(self, symbol: str) -> float | None:
         rec = self.db.stock_price.find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)])
         return _to_float(rec['close']) if rec else None
@@ -338,6 +339,6 @@ if __name__ == '__main__':
         print('\n  📉 無賣出建議（無持倉或無需調整）')
 
     if suggestions['rebalance']:
-        print(f"\n  ⚖️ 再平衡建議:")
+        print("\n  ⚖️ 再平衡建議:")
         for r in suggestions['rebalance']:
             print(f"    {r['symbol']} {r['action']}: {r['reason']}")

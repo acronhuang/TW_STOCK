@@ -258,8 +258,7 @@ def strategy_replay(db, stop_loss=None, take_profit=None, trailing=None,
         peak = entry
         ex_dt, ex_px, reason = after.index[-1], after.iloc[-1], "續持"
         for dt, px in after.items():
-            if px > peak:
-                peak = px
+            peak = max(peak, px)
             if stop_loss and px <= entry * (1 - stop_loss):
                 ex_dt, ex_px, reason = dt, entry * (1 - stop_loss), "停損"
                 break

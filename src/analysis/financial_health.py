@@ -15,16 +15,17 @@
 """
 
 from __future__ import annotations
-from typing import Dict, List, Optional
-from pymongo import MongoClient
-from bson import Decimal128
 
+from typing import Dict, List, Optional
+
+from bson import Decimal128
+from pymongo import MongoClient
 
 MONGODB_URI = 'mongodb://localhost:27017/'
 DB_NAME = 'tw_stock_analysis'
 
 
-def _tof(v) -> Optional[float]:
+def _tof(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -65,7 +66,7 @@ class FinancialHealthAnalyzer:
     # ─────────────────────────────────────────────────
     #  主 API
     # ─────────────────────────────────────────────────
-    def analyze_stock(self, symbol: str) -> Dict:
+    def analyze_stock(self, symbol: str) -> dict:
         """單股完整財報分析。"""
         ttm = self._calc_ttm(symbol)
         if ttm is None:
@@ -107,13 +108,13 @@ class FinancialHealthAnalyzer:
             'warnings': warnings,
         }
 
-    def analyze_batch(self, symbols: List[str]) -> Dict[str, Dict]:
+    def analyze_batch(self, symbols: list[str]) -> dict[str, dict]:
         return {s: self.analyze_stock(s) for s in symbols}
 
     # ─────────────────────────────────────────────────
     #  TTM（Trailing Twelve Months）計算
     # ─────────────────────────────────────────────────
-    def _calc_ttm(self, symbol: str) -> Optional[Dict]:
+    def _calc_ttm(self, symbol: str) -> dict | None:
         qes = list(self.db.quarterly_earnings.find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(8))
@@ -184,7 +185,7 @@ class FinancialHealthAnalyzer:
             'quarters_analyzed': len(recent4),
         }
 
-    def _latest_balance(self, symbol: str) -> Dict:
+    def _latest_balance(self, symbol: str) -> dict:
         """取資產負債表（優先 financial_statements，fallback quarterly_earnings.balance）。"""
         fs = self.db.financial_statements.find_one(
             {'symbol': symbol}, sort=[('year', -1), ('season', -1)])
@@ -221,7 +222,7 @@ class FinancialHealthAnalyzer:
     # ─────────────────────────────────────────────────
     #  6 維評分
     # ─────────────────────────────────────────────────
-    def _score_profitability(self, ttm: Dict) -> float:
+    def _score_profitability(self, ttm: dict) -> float:
         scores = []
         nm = ttm.get('net_margin')
         om = ttm.get('operating_margin')
@@ -234,7 +235,7 @@ class FinancialHealthAnalyzer:
             scores.append(self._scale(gm, bad=10, good=30, excellent=50))
         return sum(scores) / len(scores) if scores else 50
 
-    def _score_growth(self, ttm: Dict) -> float:
+    def _score_growth(self, ttm: dict) -> float:
         scores = []
         for key in ('revenue_yoy', 'net_income_yoy', 'eps_yoy'):
             v = ttm.get(key)
@@ -247,7 +248,7 @@ class FinancialHealthAnalyzer:
             base = min(100, base + 10)
         return base
 
-    def _score_safety(self, ttm: Dict, balance: Dict) -> float:
+    def _score_safety(self, ttm: dict, balance: dict) -> float:
         scores = []
         ta = balance.get('total_assets')
         tl = balance.get('total_liabilities')
@@ -267,7 +268,7 @@ class FinancialHealthAnalyzer:
 
         return sum(scores) / len(scores) if scores else 50
 
-    def _score_efficiency(self, ttm: Dict, balance: Dict) -> float:
+    def _score_efficiency(self, ttm: dict, balance: dict) -> float:
         rev = ttm.get('revenue')
         ta = balance.get('total_assets')
         if rev and ta and ta > 0:
@@ -275,7 +276,7 @@ class FinancialHealthAnalyzer:
             return self._scale(turnover, bad=0.1, good=0.6, excellent=1.2)
         return 50
 
-    def _score_quality(self, ttm: Dict, balance: Dict) -> float:
+    def _score_quality(self, ttm: dict, balance: dict) -> float:
         scores = []
         eq = balance.get('equity')
         ta = balance.get('total_assets')
@@ -290,7 +291,7 @@ class FinancialHealthAnalyzer:
 
         return sum(scores) / len(scores) if scores else 50
 
-    def _score_value(self, factors: Dict) -> float:
+    def _score_value(self, factors: dict) -> float:
         pe = _tof(factors.get('pe_ratio'))
         pb = _tof(factors.get('pb_ratio'))
         dy = _tof(factors.get('dividend_yield'))
@@ -308,7 +309,7 @@ class FinancialHealthAnalyzer:
     # ─────────────────────────────────────────────────
     #  杜邦分析 & 警示
     # ─────────────────────────────────────────────────
-    def _dupont(self, ttm: Dict, balance: Dict) -> Dict:
+    def _dupont(self, ttm: dict, balance: dict) -> dict:
         ni = ttm.get('net_income')
         rev = ttm.get('revenue')
         ta = balance.get('total_assets')
@@ -330,7 +331,7 @@ class FinancialHealthAnalyzer:
             'roe_pct': roe,
         }
 
-    def _warnings(self, ttm: Dict, balance: Dict, scores: Dict) -> List[str]:
+    def _warnings(self, ttm: dict, balance: dict, scores: dict) -> list[str]:
         out = []
         ni = ttm.get('net_income') or 0
         if ni <= 0:

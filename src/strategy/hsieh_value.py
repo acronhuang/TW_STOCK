@@ -38,12 +38,12 @@ class HsiehValueScreen:
         self._latest = db.stock_price.find_one(sort=[('date', -1)])['date']
 
     # ── 資料載入 ───────────────────────────────────────────────────────
-    def _active_universe(self) -> List[str]:
+    def _active_universe(self) -> list[str]:
         cutoff = self._latest - timedelta(days=10)
         return [s for s in self.db.stock_price.distinct('symbol', {'date': {'$gte': cutoff}})
                 if isinstance(s, str) and s.isdigit() and len(s) == 4]
 
-    def _latest_quarters(self) -> Dict[str, dict]:
+    def _latest_quarters(self) -> dict[str, dict]:
         """每股最新季的 balance/income/year/season。"""
         out = {}
         for q in self.db.quarterly_earnings.aggregate([
@@ -55,7 +55,7 @@ class HsiehValueScreen:
             out[q['_id']] = q
         return out
 
-    def _dividend_yield(self, symbol: str) -> Optional[float]:
+    def _dividend_yield(self, symbol: str) -> float | None:
         rec = self.db.stock_factors.find_one(
             {'symbol': symbol, 'dividend_yield': {'$ne': None}},
             {'dividend_yield': 1}, sort=[('date', -1)])
@@ -68,7 +68,7 @@ class HsiehValueScreen:
         return len([y for y in yrs if str(y).isdigit()])
 
     # ── 單股評估 ───────────────────────────────────────────────────────
-    def evaluate(self, symbol: str, q: dict) -> Optional[dict]:
+    def evaluate(self, symbol: str, q: dict) -> dict | None:
         """回單股各條件數值 + 是否通過；資料不足回 None。"""
         b, i = q.get('b') or {}, q.get('i') or {}
         ta, tl = _f(b.get('total_assets')), _f(b.get('total_liabilities'))
@@ -112,11 +112,11 @@ class HsiehValueScreen:
         }
 
     # ── 全市場篩選 ─────────────────────────────────────────────────────
-    def screen(self, top: Optional[int] = None, require_liquid: bool = True) -> List[dict]:
+    def screen(self, top: int | None = None, require_liquid: bool = True) -> list[dict]:
         """回通過全部條件的個股，依殖利率排序。
         require_liquid=True：濾掉掛單買不到的冷門股(每日 LINE 用)。
         require_liquid=False：列出全部優質股，流動性僅附 avg_lots 標記不排除。"""
-        from src.strategy.screen_liquidity import avg_volume_lots, MIN_VOL_LOTS
+        from src.strategy.screen_liquidity import MIN_VOL_LOTS, avg_volume_lots
         lq = self._latest_quarters()
         results = []
         for sym in self._active_universe():
@@ -140,7 +140,7 @@ class HsiehValueScreen:
     MREV_YOY_MIN = 0.0       # 月營收 YoY 門檻(%)：最新動能未轉弱(領先層)
     QREV_YOY_MIN = 0.0       # 季營收 YoY 門檻(%)：同期營收成長(同期層)
 
-    def growth_picks(self, require_liquid: bool = True) -> List[dict]:
+    def growth_picks(self, require_liquid: bool = True) -> list[dict]:
         """存股成長精選——四重確認：
           存股法6條件 ∩ EPS年增≥10% ∩ 月營收YoY≥0 ∩ 季營收YoY≥0。
         每檔附 ttm_eps / eps_yoy / mrev_yoy / qrev_yoy；依殖利率排序。"""

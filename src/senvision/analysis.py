@@ -15,26 +15,26 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 from .multi_timeframe import (
-    resample_ohlcv,
-    get_zigzag_threshold,
-    get_pattern_width_params,
     TIMEFRAME_CONFIG,
+    get_pattern_width_params,
+    get_zigzag_threshold,
+    resample_ohlcv,
 )
 from .pattern_detector import (
-    Pattern,
-    PatternType,
-    PatternStatus,
-    WBottomDetector,
     MTopDetector,
+    Pattern,
+    PatternStatus,
+    PatternType,
     TripleBottomDetector,
     TripleTopDetector,
+    WBottomDetector,
 )
 from .support_resistance import SRLevel, find_support_resistance
 from .trendline import (
@@ -45,9 +45,8 @@ from .trendline import (
 )
 from .zigzag import Peak, ZigZagIndicator
 
-
 # 時間框架加分（加法，避免乘法過度放大弱信號）
-_TF_BONUS: Dict[str, float] = {
+_TF_BONUS: dict[str, float] = {
     'D': 0.00,
     'W': 0.05,
     'M': 0.10,
@@ -76,8 +75,8 @@ _BEARISH_TYPES = {
 
 # ── 型態生命週期管理 ─────────────────────────────────────────────────────────
 
-def _apply_lifecycle(patterns: List[Pattern], df: pd.DataFrame,
-                     timeframe: str = 'D') -> List[Pattern]:
+def _apply_lifecycle(patterns: list[Pattern], df: pd.DataFrame,
+                     timeframe: str = 'D') -> list[Pattern]:
     """過濾已達標、已停損、或已過期的型態（過期天數隨時間框架調整）。"""
     if not patterns or len(df) == 0:
         return patterns
@@ -92,7 +91,7 @@ def _apply_lifecycle(patterns: List[Pattern], df: pd.DataFrame,
     forming_expiry = max(180, int(max_w * candle_days * 3))
     breakout_expiry = max(60, int(max_w * candle_days))
 
-    alive: List[Pattern] = []
+    alive: list[Pattern] = []
 
     for p in patterns:
         # 三路方向判斷：明確多頭 / 明確空頭 / 中性型態用幾何推斷
@@ -126,11 +125,11 @@ def _apply_lifecycle(patterns: List[Pattern], df: pd.DataFrame,
     return alive
 
 
-def _deduplicate_patterns(patterns: List[Pattern]) -> List[Pattern]:
+def _deduplicate_patterns(patterns: list[Pattern]) -> list[Pattern]:
     """去重：同類型+頸線接近(±2%) → 保留 confidence 最高。"""
     if len(patterns) <= 1:
         return patterns
-    best: Dict[str, Pattern] = {}
+    best: dict[str, Pattern] = {}
     for p in patterns:
         bucket = round(math.log(max(p.neckline, 0.01)) * 50)  # ~2% per step (log-space)
         key = f'{p.pattern_type.value}_{bucket}'
@@ -139,20 +138,20 @@ def _deduplicate_patterns(patterns: List[Pattern]) -> List[Pattern]:
     return list(best.values())
 
 
-def _limit_per_type(patterns: List[Pattern], max_per_type: int = 2) -> List[Pattern]:
+def _limit_per_type(patterns: list[Pattern], max_per_type: int = 2) -> list[Pattern]:
     """每種型態最多保留 max_per_type 個（取 confidence 最高）。"""
     from collections import defaultdict
-    groups: Dict[PatternType, List[Pattern]] = defaultdict(list)
+    groups: dict[PatternType, list[Pattern]] = defaultdict(list)
     for p in patterns:
         groups[p.pattern_type].append(p)
-    result: List[Pattern] = []
+    result: list[Pattern] = []
     for plist in groups.values():
         plist.sort(key=lambda x: x.confidence, reverse=True)
         result.extend(plist[:max_per_type])
     return result
 
 
-def compute_kd_k(df: pd.DataFrame, rsv_period: int = 9) -> Optional[float]:
+def compute_kd_k(df: pd.DataFrame, rsv_period: int = 9) -> float | None:
     """
     計算隨機指標（KD）的 K 值（最新一根）。
 
@@ -183,7 +182,7 @@ def compute_kd_k(df: pd.DataFrame, rsv_period: int = 9) -> Optional[float]:
 
 def compute_bb_pct(df: pd.DataFrame,
                    period: int = 20,
-                   std_dev: float = 2.0) -> Optional[float]:
+                   std_dev: float = 2.0) -> float | None:
     """
     計算布林通道 %B（Bollinger Bands %B）。
 
@@ -255,7 +254,7 @@ def analyze_timeframe(
     df_daily: pd.DataFrame,
     stock_id: str,
     timeframe: str,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     對單支股票的單一時間框架執行全套技術分析。
 
@@ -291,10 +290,10 @@ def analyze_timeframe(
 
     # ZigZag
     zigzag = ZigZagIndicator(threshold=threshold)
-    peaks: List[Peak] = zigzag.calculate(df)
+    peaks: list[Peak] = zigzag.calculate(df)
 
     # 形態識別（4 種 senvision 原生偵測器）
-    patterns: List[Pattern] = []
+    patterns: list[Pattern] = []
     for DetectorCls in (WBottomDetector, MTopDetector,
                          TripleBottomDetector, TripleTopDetector):
         try:
@@ -316,12 +315,12 @@ def analyze_timeframe(
         logger.debug(f'{stock_id}/{timeframe} Pattern12Masters 失敗: {e}')
 
     # 支撐壓力（最近 100 根或全部）
-    sr_levels: List[SRLevel] = find_support_resistance(
+    sr_levels: list[SRLevel] = find_support_resistance(
         df, window=min(100, len(df))
     )
 
     # 趨勢切線 + 突破偵測
-    trendlines: List[Trendline] = []
+    trendlines: list[Trendline] = []
     if len(peaks) >= 2:
         trendlines = (
             find_descending_resistance(peaks) +
@@ -336,8 +335,7 @@ def analyze_timeframe(
     # 將 formation_date 上限設為日線資料末日（避免週/月重採樣日期超越實際日期）
     daily_end = pd.to_datetime(df_daily['date'].iloc[-1])
     for p in patterns:
-        if p.formation_date > daily_end:
-            p.formation_date = daily_end
+        p.formation_date = min(p.formation_date, daily_end)
 
     # 型態生命週期：過濾達標/停損/過期 → 去重 → 限數
     patterns = _apply_lifecycle(patterns, df, timeframe)
@@ -359,22 +357,22 @@ def analyze_timeframe(
 def score_signal(
     pattern: Pattern,
     timeframe: str,
-    sr_levels: List[SRLevel],
-    trendlines: List[Trendline],
+    sr_levels: list[SRLevel],
+    trendlines: list[Trendline],
     ma_alignment: str = 'mixed',
-    per: Optional[float] = None,
-    revenue_yoy: Optional[float] = None,
+    per: float | None = None,
+    revenue_yoy: float | None = None,
     confluence_timeframes: int = 1,
-    kd_k: Optional[float] = None,
-    bb_pct: Optional[float] = None,
-    roe: Optional[float] = None,
-    rsi_14: Optional[float] = None,
-    inst_net: Optional[float] = None,
-    volume_ratio: Optional[float] = None,
-    obv_slope: Optional[float] = None,
-    vp_divergence: Optional[int] = None,
-    foreign_streak: Optional[int] = None,
-    ma_above_long: Optional[int] = None,
+    kd_k: float | None = None,
+    bb_pct: float | None = None,
+    roe: float | None = None,
+    rsi_14: float | None = None,
+    inst_net: float | None = None,
+    volume_ratio: float | None = None,
+    obv_slope: float | None = None,
+    vp_divergence: int | None = None,
+    foreign_streak: int | None = None,
+    ma_above_long: int | None = None,
     sr_neckline_tolerance: float = 0.02,
 ) -> float:
     """
@@ -448,9 +446,7 @@ def score_signal(
         score += 0.08
 
     # 趨勢切線已突破（方向必須與型態一致）
-    if is_bottom and any(tl.is_broken and tl.type == 'descending_resistance' for tl in trendlines):
-        score += 0.12
-    elif is_top and any(tl.is_broken and tl.type == 'ascending_support' for tl in trendlines):
+    if (is_bottom and any(tl.is_broken and tl.type == 'descending_resistance' for tl in trendlines)) or (is_top and any(tl.is_broken and tl.type == 'ascending_support' for tl in trendlines)):
         score += 0.12
 
     # 頸線附近有強支撐壓力（±2%）
@@ -469,16 +465,12 @@ def score_signal(
 
     # 估值加分：底部形態 PER<20 或頂部形態 PER>40（台股中位 ~15-20）
     if per is not None and per > 0:
-        if is_bottom and per < 20:
-            score += 0.08
-        elif is_top and per > 40:
+        if (is_bottom and per < 20) or (is_top and per > 40):
             score += 0.08
 
     # 月營收年增率動能：底部形態 YoY>20% 或頂部形態 YoY<-10%
     if revenue_yoy is not None:
-        if is_bottom and revenue_yoy >= 20:
-            score += 0.10
-        elif is_top and revenue_yoy <= -10:
+        if (is_bottom and revenue_yoy >= 20) or (is_top and revenue_yoy <= -10):
             score += 0.10
 
     # 多時間框架共振：同一股票在 >=2 個時間框架出現同向信號

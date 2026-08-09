@@ -49,7 +49,7 @@ def assess(db, symbol, cost, px=None, trap_th=-3.0):
     df = _load(db, symbol)
     if df is None or len(df) < 60 or not cost:
         return None
-    cur = px if px else float(df["close"].iloc[-1])
+    cur = px or float(df["close"].iloc[-1])
     pnl = (cur / cost - 1) * 100
     trapped = pnl <= trap_th
 

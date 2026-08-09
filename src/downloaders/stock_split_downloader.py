@@ -22,17 +22,18 @@ P2: 股票分割數據下載器
     python3 src/downloaders/stock_split_downloader.py --all --execute
 """
 
-import sys
-import os
 import argparse
 import logging
+import os
+import sys
 import time
-from pathlib import Path
 from datetime import datetime, timedelta
 from decimal import Decimal
-from pymongo import MongoClient, UpdateOne
-from bson.decimal128 import Decimal128
+from pathlib import Path
+
 import requests
+from bson.decimal128 import Decimal128
+from pymongo import MongoClient, UpdateOne
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))

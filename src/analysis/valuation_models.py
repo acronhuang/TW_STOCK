@@ -11,14 +11,15 @@ Usage:
     print(result['dcf']['fair_value'], result['ddm']['fair_value'])
 """
 
-import sys
 import logging
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+
 import numpy as np
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -26,7 +27,7 @@ sys.path.insert(0, str(project_root))
 logger = logging.getLogger(__name__)
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -64,7 +65,7 @@ class ValuationAnalyzer:
         self.client = MongoClient(mongo_uri)
         self.db = self.client[db_name]
 
-    def analyze(self, symbol: str) -> Dict:
+    def analyze(self, symbol: str) -> dict:
         """完整估值分析（DCF + DDM + PE Band + 綜合判定）"""
         price = self._get_current_price(symbol)
         if price is None:
@@ -111,7 +112,7 @@ class ValuationAnalyzer:
     # ──────────────────────────────────────────────
     #  DCF（自由現金流折現模型）
     # ──────────────────────────────────────────────
-    def dcf_valuation(self, symbol: str, price: float = None) -> Optional[Dict]:
+    def dcf_valuation(self, symbol: str, price: float = None) -> dict | None:
         """
         簡化 DCF：
         FCF ≈ 營業利益 × (1 - 稅率) + 折舊 - 資本支出 - 營運資金變動
@@ -202,7 +203,7 @@ class ValuationAnalyzer:
     # ──────────────────────────────────────────────
     #  DDM（股利折現模型）
     # ──────────────────────────────────────────────
-    def ddm_valuation(self, symbol: str, price: float = None) -> Optional[Dict]:
+    def ddm_valuation(self, symbol: str, price: float = None) -> dict | None:
         """
         多階段 DDM：
         - Stage 1（3年）：用近3年平均股利成長率
@@ -292,7 +293,7 @@ class ValuationAnalyzer:
     # ──────────────────────────────────────────────
     #  本益比河流圖（PE Band）
     # ──────────────────────────────────────────────
-    def pe_band_analysis(self, symbol: str, price: float = None) -> Optional[Dict]:
+    def pe_band_analysis(self, symbol: str, price: float = None) -> dict | None:
         """計算歷史 PE 分位數，判定目前估值水位"""
         if price is None:
             price = self._get_current_price(symbol)
@@ -391,7 +392,7 @@ class ValuationAnalyzer:
     # ──────────────────────────────────────────────
     #  資料存取輔助方法
     # ──────────────────────────────────────────────
-    def _get_current_price(self, symbol: str) -> Optional[float]:
+    def _get_current_price(self, symbol: str) -> float | None:
         rec = self.db.stock_price.find_one(
             {'symbol': symbol},
             {'close': 1},
@@ -399,20 +400,20 @@ class ValuationAnalyzer:
         )
         return _to_float(rec['close']) if rec else None
 
-    def _get_quarterly_earnings(self, symbol: str, years: int = 5) -> List[Dict]:
+    def _get_quarterly_earnings(self, symbol: str, years: int = 5) -> list[dict]:
         min_year = datetime.now().year - years
         return list(self.db.quarterly_earnings.find(
             {'symbol': symbol, 'year': {'$gte': min_year}},
             {'year': 1, 'season': 1, 'income': 1, 'balance': 1}
         ).sort([('year', 1), ('season', 1)]))
 
-    def _get_dividend_history(self, symbol: str) -> List[Dict]:
+    def _get_dividend_history(self, symbol: str) -> list[dict]:
         return list(self.db.dividend_detail.find(
             {'stock_id': symbol},
             {'date': 1, 'cash_earnings_distribution': 1, 'stock_earnings_distribution': 1}
         ).sort('date', -1))
 
-    def _get_shares_outstanding(self, symbol: str) -> Optional[float]:
+    def _get_shares_outstanding(self, symbol: str) -> float | None:
         """取得流通在外股數（DB 存千股，回傳實際股數）"""
         info = self.db.taiwan_stock_info.find_one({'stock_id': symbol})
         if info:
@@ -428,7 +429,7 @@ class ValuationAnalyzer:
 
         return None
 
-    def _get_trailing_eps(self, symbol: str) -> Optional[float]:
+    def _get_trailing_eps(self, symbol: str) -> float | None:
         """取得最近 4 季累計 EPS（TTM）。
 
         直接加總 4 季 EPS 作為 TTM。只在「Q4 EPS > 同年 Q1+Q2+Q3 總和」
@@ -453,7 +454,7 @@ class ValuationAnalyzer:
         # （quarterly_earnings 集合的 EPS 是「單季 EPS」，不是累計值）
         return sum(e[2] for e in eps_vals)
 
-    def _aggregate_annual(self, earnings: List[Dict], field: str) -> List[Dict]:
+    def _aggregate_annual(self, earnings: list[dict], field: str) -> list[dict]:
         """將季度數據加總為年度"""
         by_year = {}
         for e in earnings:
@@ -471,7 +472,7 @@ class ValuationAnalyzer:
                   if v['quarters'] >= 3]
         return result
 
-    def _calc_cagr(self, annual_data: List[Dict], min_years: int = 2) -> Optional[float]:
+    def _calc_cagr(self, annual_data: list[dict], min_years: int = 2) -> float | None:
         if not annual_data or len(annual_data) < min_years:
             return None
         start_val = annual_data[0]['value']
@@ -481,7 +482,7 @@ class ValuationAnalyzer:
             return None
         return (end_val / start_val) ** (1 / n_years) - 1
 
-    def _calc_div_cagr(self, annual_div: Dict[int, float]) -> Optional[float]:
+    def _calc_div_cagr(self, annual_div: dict[int, float]) -> float | None:
         sorted_years = sorted(annual_div.keys())
         if len(sorted_years) < 2:
             return None
@@ -531,7 +532,7 @@ class ValuationAnalyzer:
         beta = cov[0][1] / cov[1][1]
         return max(min(beta, 3.0), 0.3)  # 限制範圍
 
-    def _calc_returns(self, prices: List[Dict]) -> List[Tuple]:
+    def _calc_returns(self, prices: list[dict]) -> list[tuple]:
         returns = []
         for i in range(1, len(prices)):
             p0 = _to_float(prices[i - 1].get('close'))
@@ -540,7 +541,7 @@ class ValuationAnalyzer:
                 returns.append((prices[i]['date'], (p1 - p0) / p0))
         return returns
 
-    def _extract_year(self, dividend_doc: Dict) -> Optional[int]:
+    def _extract_year(self, dividend_doc: dict) -> int | None:
         date = dividend_doc.get('date', '')
         if isinstance(date, str) and len(date) >= 4:
             try:
@@ -551,7 +552,7 @@ class ValuationAnalyzer:
             return date.year
         return None
 
-    def _get_verdict(self, upside: Optional[float]) -> str:
+    def _get_verdict(self, upside: float | None) -> str:
         if upside is None:
             return '無法判定'
         if upside > 30:

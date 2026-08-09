@@ -24,7 +24,7 @@ def _f(v):
 
 
 # ── A. 景氣燈號擇時 ──────────────────────────────────────────────────────
-def agan_market_signal(db) -> Optional[Dict]:
+def agan_market_signal(db) -> dict | None:
     """讀景氣對策信號分數 → 燈號 + 阿甘進出場訊號。無資料回 None。"""
     d = db.macro_indicators.find_one({'indicator': 'leading'}, sort=[('date', -1)])
     score = (d.get('data') or {}).get('signal_score') if d else None
@@ -58,7 +58,7 @@ class AganMoatScreen:
         self.db = db
         self._latest = db.stock_price.find_one(sort=[('date', -1)])['date']
 
-    def _large_caps(self) -> Dict[str, dict]:
+    def _large_caps(self) -> dict[str, dict]:
         """市值前 TOP_MKTCAP 大型股 {symbol: {name, price, mktcap}}（市值=發行股數×最新收盤）。"""
         latest_px = {}
         for d in self.db.stock_price.aggregate([
@@ -105,11 +105,11 @@ class AganMoatScreen:
             'year', {'stock_id': symbol, 'cash_earnings_distribution': {'$gt': 0}})
         return len([y for y in yrs if str(y).isdigit()])
 
-    def screen(self, top: Optional[int] = None, require_liquid: bool = True) -> List[dict]:
+    def screen(self, top: int | None = None, require_liquid: bool = True) -> list[dict]:
         """回通過條件的大型龍頭，依 ROE 排序。
         require_liquid=True：排除冷門股(只列買得到的，每日 LINE 用)。
         require_liquid=False：列出全部優質股，流動性僅附 avg_lots 標記不排除。"""
-        from src.strategy.screen_liquidity import avg_volume_lots, MIN_VOL_LOTS
+        from src.strategy.screen_liquidity import MIN_VOL_LOTS, avg_volume_lots
         results = []
         for sym, m in self._large_caps().items():
             lots = avg_volume_lots(self.db, sym)

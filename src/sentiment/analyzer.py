@@ -17,20 +17,21 @@ Usage:
     print(result['insider_trading'])
 """
 
-import os
-import sys
-import re
 import logging
+import os
+import re
+import sys
 import xml.etree.ElementTree as ET
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime, timezone, timedelta
-from collections import Counter
 from urllib.parse import quote
+
 import requests
 import urllib3
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -40,7 +41,7 @@ sys.path.insert(0, str(project_root))
 logger = logging.getLogger(__name__)
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -80,7 +81,7 @@ class SentimentAnalyzer:
         self.db = self.client[db_name]
         self.finmind_token = os.getenv('FINMIND_API_TOKEN', '')
 
-    def analyze(self, symbol: str) -> Dict:
+    def analyze(self, symbol: str) -> dict:
         """完整情緒分析"""
         name = self._get_stock_name(symbol)
 
@@ -122,7 +123,7 @@ class SentimentAnalyzer:
     # ──────────────────────────────────────────────
     #  新聞情緒分析
     # ──────────────────────────────────────────────
-    def news_sentiment(self, symbol: str, name: str = None) -> Dict:
+    def news_sentiment(self, symbol: str, name: str = None) -> dict:
         """從 Google News 抓取新聞並分析情緒"""
         if not name:
             name = self._get_stock_name(symbol)
@@ -167,7 +168,7 @@ class SentimentAnalyzer:
     # ──────────────────────────────────────────────
     #  內部人交易追蹤
     # ──────────────────────────────────────────────
-    def insider_trading(self, symbol: str) -> Dict:
+    def insider_trading(self, symbol: str) -> dict:
         """追蹤董監事持股異動"""
         # 從 FinMind 取得董監事持股變動
         if self.finmind_token:
@@ -221,7 +222,7 @@ class SentimentAnalyzer:
     # ──────────────────────────────────────────────
     #  PTT 股票板輿情
     # ──────────────────────────────────────────────
-    def ptt_sentiment(self, symbol: str, name: str = None) -> Dict:
+    def ptt_sentiment(self, symbol: str, name: str = None) -> dict:
         """PTT Stock 板輿情分析"""
         if not name:
             name = self._get_stock_name(symbol)
@@ -269,7 +270,7 @@ class SentimentAnalyzer:
     # ──────────────────────────────────────────────
     #  市場整體情緒指標
     # ──────────────────────────────────────────────
-    def market_sentiment(self) -> Dict:
+    def market_sentiment(self) -> dict:
         """市場整體情緒（融資融券、外資動向、漲跌比）"""
         # 漲跌家數比
         latest_date = self.db.stock_price.find_one(
@@ -338,7 +339,7 @@ class SentimentAnalyzer:
     # ──────────────────────────────────────────────
     #  資料抓取
     # ──────────────────────────────────────────────
-    def _fetch_google_news(self, query: str) -> List[Dict]:
+    def _fetch_google_news(self, query: str) -> list[dict]:
         """從 Google News RSS 取新聞"""
         try:
             url = f'https://news.google.com/rss/search?q={quote(query)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant'
@@ -364,7 +365,7 @@ class SentimentAnalyzer:
             logger.warning(f'Google News 抓取失敗: {e}')
             return []
 
-    def _fetch_insider_from_finmind(self, symbol: str) -> List[Dict]:
+    def _fetch_insider_from_finmind(self, symbol: str) -> list[dict]:
         """從 FinMind 取內部人持股異動"""
         try:
             start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
@@ -393,7 +394,7 @@ class SentimentAnalyzer:
             logger.warning(f'FinMind insider 取得失敗: {e}')
             return []
 
-    def _fetch_ptt_stock(self, symbol: str, name: str) -> List[Dict]:
+    def _fetch_ptt_stock(self, symbol: str, name: str) -> list[dict]:
         """從 PTT Stock 板 RSS 搜尋"""
         try:
             # PTT web RSS
@@ -436,7 +437,7 @@ class SentimentAnalyzer:
 
         return ((pos_count - neg_count) / total) * 100
 
-    def _score_to_label(self, score: Optional[float]) -> str:
+    def _score_to_label(self, score: float | None) -> str:
         if score is None:
             return '無資料'
         if score > 30:

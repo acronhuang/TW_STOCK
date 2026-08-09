@@ -9,9 +9,10 @@
 創建日期: 2026-02-23
 """
 
-import pandas as pd
-import numpy as np
 from typing import Tuple
+
+import numpy as np
+import pandas as pd
 
 
 def detect_volume_surge(
@@ -19,7 +20,7 @@ def detect_volume_surge(
     volume_ratio: float = 3.0,
     price_threshold: float = 1.05,
     lookback: int = 20
-) -> Tuple[pd.Series, pd.DataFrame]:
+) -> tuple[pd.Series, pd.DataFrame]:
     """
     偵測量價噴出形態
     
@@ -108,7 +109,7 @@ def detect_volume_price_divergence(
     window: int = 60,
     lookback_volume: int = 5,
     consecutive_days: int = 2
-) -> Tuple[pd.Series, pd.DataFrame]:
+) -> tuple[pd.Series, pd.DataFrame]:
     """
     偵測量價背離形態（負背離，看跌訊號）
     

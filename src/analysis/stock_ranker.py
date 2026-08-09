@@ -11,14 +11,15 @@ Usage:
     detail = sr.score_stock('2330')
 """
 
-import sys
 import logging
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+
 import numpy as np
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -26,7 +27,7 @@ sys.path.insert(0, str(project_root))
 logger = logging.getLogger(__name__)
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -55,9 +56,9 @@ class StockRanker:
                  db_name: str = "tw_stock_analysis"):
         self.client = MongoClient(mongo_uri)
         self.db = self.client[db_name]
-        self._health_cache: Dict[str, Dict] = {}
+        self._health_cache: dict[str, dict] = {}
 
-    def _get_health(self, symbol: str) -> Optional[Dict]:
+    def _get_health(self, symbol: str) -> dict | None:
         """惰性快取財報分析結果，避免對同一股呼叫多次。"""
         if symbol not in self._health_cache:
             from .financial_health import FinancialHealthAnalyzer
@@ -69,7 +70,7 @@ class StockRanker:
 
     def rank(self, limit: int = 30, exclude_etf: bool = True,
              min_pe: float = 0, max_pe: float = 100,
-             financial_check: bool = True) -> List[Dict]:
+             financial_check: bool = True) -> list[dict]:
         """全市場綜合排名
 
         financial_check=True 會剔除 TTM 虧損 / 高負債 / 淨利率為負的地雷股。
@@ -115,7 +116,7 @@ class StockRanker:
 
         return scored[:limit]
 
-    def score_stock(self, symbol: str) -> Optional[Dict]:
+    def score_stock(self, symbol: str) -> dict | None:
         """單股詳細評分"""
         candidates = self._load_candidates(exclude_etf=False)
         data = candidates.get(symbol)
@@ -124,8 +125,8 @@ class StockRanker:
 
         return self._score_stock_data(symbol, data, candidates)
 
-    def _score_stock_data(self, symbol: str, data: Dict,
-                          all_data: Dict) -> Optional[Dict]:
+    def _score_stock_data(self, symbol: str, data: dict,
+                          all_data: dict) -> dict | None:
         """計算單股綜合評分"""
         scores = {}
 
@@ -221,7 +222,7 @@ class StockRanker:
     # ──────────────────────────────────────────────
     #  資料載入
     # ──────────────────────────────────────────────
-    def _load_candidates(self, exclude_etf: bool = True) -> Dict[str, Dict]:
+    def _load_candidates(self, exclude_etf: bool = True) -> dict[str, dict]:
         """載入全市場最新因子。
         注意：stock_factors 為多來源（TWSE 寫 pe/pb/殖利率；factor_calc 寫 roe/rsi 等，
         且最新一筆常是 factor_calc 無 pe）。故用『近30天取每欄首個非null』而非 naive $first，
@@ -259,7 +260,7 @@ class StockRanker:
 
         return results
 
-    def _percentile_rank_higher(self, value: float, all_data: Dict,
+    def _percentile_rank_higher(self, value: float, all_data: dict,
                                 field: str) -> float:
         """百分位排名（值越高越好）"""
         all_vals = [_to_float(d.get(field)) for d in all_data.values()]
@@ -269,12 +270,12 @@ class StockRanker:
         arr = np.array(all_vals)
         return float(np.searchsorted(np.sort(arr), value) / len(arr) * 100)
 
-    def _percentile_rank_lower(self, value: float, all_data: Dict,
+    def _percentile_rank_lower(self, value: float, all_data: dict,
                                field: str) -> float:
         """百分位排名（值越低越好）"""
         return 100 - self._percentile_rank_higher(value, all_data, field)
 
-    def _get_institutional_score(self, symbol: str) -> Optional[float]:
+    def _get_institutional_score(self, symbol: str) -> float | None:
         """近 5 日法人買賣超評分"""
         cutoff = datetime.now() - timedelta(days=10)
         flows = list(self.db.institutional_flow.find(
@@ -299,7 +300,7 @@ class StockRanker:
             return 35
         return 50
 
-    def _get_revenue_growth(self, symbol: str) -> Optional[float]:
+    def _get_revenue_growth(self, symbol: str) -> float | None:
         """最新月營收 YoY"""
         rec = self.db.monthly_revenue.find_one(
             {'symbol': symbol, 'yoy_growth': {'$exists': True}},
@@ -312,7 +313,7 @@ class StockRanker:
             return min(v, 500.0) if v is not None else None
         return None
 
-    def _get_latest_price(self, symbol: str) -> Optional[float]:
+    def _get_latest_price(self, symbol: str) -> float | None:
         rec = self.db.stock_price.find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)])
         return _to_float(rec['close']) if rec else None

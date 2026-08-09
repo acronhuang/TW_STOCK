@@ -3,9 +3,10 @@ OBV 指標 (On-Balance Volume)
 能量潮指標，衡量成交量與價格的關係
 """
 
-import pandas as pd
-import numpy as np
 from typing import Union
+
+import numpy as np
+import pandas as pd
 
 
 def calculate_obv(
@@ -250,8 +251,8 @@ def calculate_obv_trend_strength(
 
 if __name__ == '__main__':
     # 測試範例
-    import pandas as pd
     import numpy as np
+    import pandas as pd
     
     # 創建測試數據
     np.random.seed(42)

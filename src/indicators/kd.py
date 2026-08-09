@@ -3,9 +3,10 @@ KD 指標 (Stochastic Oscillator)
 隨機指標，衡量價格動能和超買超賣
 """
 
-import pandas as pd
+from typing import Tuple, Union
+
 import numpy as np
-from typing import Union, Tuple
+import pandas as pd
 
 
 def calculate_kd(
@@ -222,8 +223,8 @@ def calculate_kd_divergence(
 
 if __name__ == '__main__':
     # 測試範例
-    import pandas as pd
     import numpy as np
+    import pandas as pd
     
     # 創建測試數據
     np.random.seed(42)

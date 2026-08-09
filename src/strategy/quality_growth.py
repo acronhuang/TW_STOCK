@@ -35,7 +35,7 @@ class QualityGrowthScreen:
         self.db = db
         self._latest = db.stock_price.find_one(sort=[('date', -1)])['date']
 
-    def _active_universe(self) -> List[str]:
+    def _active_universe(self) -> list[str]:
         cutoff = self._latest - timedelta(days=10)
         return [s for s in self.db.stock_price.distinct('symbol', {'date': {'$gte': cutoff}})
                 if isinstance(s, str) and s.isdigit() and len(s) == 4]
@@ -57,7 +57,7 @@ class QualityGrowthScreen:
         opm = _f((qs[0].get('income') or {}).get('operating_margin'))
         return roe, debt, opm
 
-    def screen(self, top: Optional[int] = None) -> List[dict]:
+    def screen(self, top: int | None = None) -> list[dict]:
         """回品質成長股，依 ROE 排序。每檔附 roe/opm/eps_yoy/mrev/qrev/avg_lots。"""
         from src.strategy.eps_metrics import ttm_eps_yoy
         from src.strategy.revenue_metrics import monthly_rev_yoy, quarterly_rev_yoy

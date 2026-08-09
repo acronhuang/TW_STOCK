@@ -3,14 +3,15 @@
 支援簡單移動平均 (SMA) 和指數移動平均 (EMA)
 """
 
-import pandas as pd
+from typing import List, Union
+
 import numpy as np
-from typing import Union, List
+import pandas as pd
 
 
 def calculate_ma(
-    data: Union[pd.Series, pd.DataFrame],
-    periods: Union[int, List[int]] = [5, 10, 20, 60, 120, 240],
+    data: pd.Series | pd.DataFrame,
+    periods: int | list[int] = [5, 10, 20, 60, 120, 240],
     price_column: str = 'close'
 ) -> pd.DataFrame:
     """
@@ -52,8 +53,8 @@ def calculate_ma(
 
 
 def calculate_ema(
-    data: Union[pd.Series, pd.DataFrame],
-    periods: Union[int, List[int]] = [12, 26],
+    data: pd.Series | pd.DataFrame,
+    periods: int | list[int] = [12, 26],
     price_column: str = 'close'
 ) -> pd.DataFrame:
     """
@@ -95,7 +96,7 @@ def calculate_ema(
 
 
 def calculate_ma_crossover(
-    data: Union[pd.Series, pd.DataFrame],
+    data: pd.Series | pd.DataFrame,
     short_period: int = 5,
     long_period: int = 20,
     price_column: str = 'close'
@@ -155,7 +156,7 @@ def calculate_ma_crossover(
 
 
 def calculate_ma_support_resistance(
-    data: Union[pd.Series, pd.DataFrame],
+    data: pd.Series | pd.DataFrame,
     period: int = 60,
     price_column: str = 'close',
     tolerance: float = 0.02

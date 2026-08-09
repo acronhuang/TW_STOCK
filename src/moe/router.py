@@ -15,10 +15,12 @@ MoE Router — 依問題類型路由到專家模型
 """
 
 from __future__ import annotations
+
+import logging
 import re
 import time
-import logging
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
+
 import requests
 
 logging.basicConfig(level=logging.INFO,
@@ -83,7 +85,7 @@ class GPUManager:
 
     def __init__(self, max_vram_gb: float = 48):
         self.max_vram_gb = max_vram_gb
-        self.loaded: Dict[str, float] = {}  # model → vram
+        self.loaded: dict[str, float] = {}  # model → vram
 
     def request(self, model: str, vram_gb: float) -> bool:
         """請求載入模型"""
@@ -128,7 +130,7 @@ class GPUManager:
             pass
         self.loaded.pop(model, None)
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         return {
             'loaded': self.loaded,
             'used_gb': sum(self.loaded.values()),
@@ -154,12 +156,12 @@ class MoERouter:
             if re.search(pattern, question, re.IGNORECASE):
                 logger.info(f'路由 → {expert} ({EXPERTS[expert]["model"]})')
                 return expert
-        logger.info(f'路由 → reasoning (預設)')
+        logger.info('路由 → reasoning (預設)')
         return 'reasoning'
 
     def ask(self,
             question: str,
-            expert: Optional[str] = None,
+            expert: str | None = None,
             stream: bool = False) -> str:
         """送問題給專家。expert=None 時自動路由。"""
         if expert is None:
@@ -196,7 +198,7 @@ class MoERouter:
         except Exception as e:
             return f'❌ 錯誤: {e}'
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         return {
             'experts': {k: v['model'] for k, v in EXPERTS.items()},
             'gpu': self.gpu.status(),

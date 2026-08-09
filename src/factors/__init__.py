@@ -9,8 +9,8 @@
 """
 
 from .factor_calculator import FactorLibrary
-from .value_factors import ValueFactors
 from .momentum_factors import MomentumFactors
 from .quality_factors import QualityFactors
+from .value_factors import ValueFactors
 
-__all__ = ['FactorLibrary', 'ValueFactors', 'MomentumFactors', 'QualityFactors']
+__all__ = ['FactorLibrary', 'MomentumFactors', 'QualityFactors', 'ValueFactors']

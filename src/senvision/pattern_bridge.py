@@ -13,16 +13,16 @@ Date: 2026-02-26
 
 from __future__ import annotations
 
+import logging
 import math
 import sys
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 import numpy as np
 import pandas as pd
 
-from .pattern_detector import Pattern, PatternType, PatternStatus
+from .pattern_detector import Pattern, PatternStatus, PatternType
 from .zigzag import Peak
 
 logger = logging.getLogger(__name__)
@@ -33,11 +33,11 @@ _PR_DIR = str(_PROJECT_ROOT / 'pattern_recognition')
 if _PR_DIR not in sys.path:
     sys.path.insert(0, _PR_DIR)
 
-from patterns_12_masters import Pattern12Masters, PatternSignal  # noqa: E402
+from patterns_12_masters import Pattern12Masters, PatternSignal
 
 # ── 映射表 ──────────────────────────────────────────────────────────────────
 
-_P12M_TO_PATTERN_TYPE: Dict[str, PatternType] = {
+_P12M_TO_PATTERN_TYPE: dict[str, PatternType] = {
     '破底翻':       PatternType.FAILED_BREAKDOWN,
     '破底翻W底':    PatternType.FAILED_BREAKDOWN_W,
     '下飄旗形':     PatternType.FLAG_FALLING,
@@ -51,7 +51,7 @@ _P12M_TO_PATTERN_TYPE: Dict[str, PatternType] = {
 }
 # W底 / M頭 故意不在此表 → 由 senvision WBottomDetector / MTopDetector 負責
 
-_STATUS_MAP: Dict[str, PatternStatus] = {
+_STATUS_MAP: dict[str, PatternStatus] = {
     'confirmed': PatternStatus.BREAKOUT,
     'forming':   PatternStatus.FORMING,
     'completed': PatternStatus.CONFIRMED,
@@ -66,13 +66,13 @@ _p12m = Pattern12Masters()
 def _build_key_points(
     signal: PatternSignal,
     df: pd.DataFrame,
-) -> Dict[str, Peak]:
+) -> dict[str, Peak]:
     """從 PatternSignal.metadata['pivots'] 建構 Peak 字典。"""
     pivots = signal.metadata.get('pivots', {})
     if not pivots or not isinstance(pivots, dict):
         return {}
 
-    key_points: Dict[str, Peak] = {}
+    key_points: dict[str, Peak] = {}
     dates = pd.to_datetime(df['date'])
 
     for label, idx in pivots.items():
@@ -103,7 +103,7 @@ def convert_signal_to_pattern(
     signal: PatternSignal,
     stock_id: str,
     df: pd.DataFrame,
-) -> Optional[Pattern]:
+) -> Pattern | None:
     """將 Pattern12Masters 的 PatternSignal 轉換為 senvision Pattern。"""
     pattern_type = _P12M_TO_PATTERN_TYPE.get(signal.pattern_name)
     if pattern_type is None:
@@ -177,8 +177,8 @@ def convert_signal_to_pattern(
 def detect_12masters_patterns(
     df: pd.DataFrame,
     stock_id: str,
-    exclude_names: Optional[Set[str]] = None,
-) -> List[Pattern]:
+    exclude_names: set[str] | None = None,
+) -> list[Pattern]:
     """
     執行 Pattern12Masters 偵測，回傳 senvision Pattern 列表。
 
@@ -199,7 +199,7 @@ def detect_12masters_patterns(
         logger.debug(f'{stock_id}: Pattern12Masters 偵測失敗: {e}')
         return []
 
-    patterns: List[Pattern] = []
+    patterns: list[Pattern] = []
     for sig in signals:
         if sig.pattern_name in exclude_names:
             continue
@@ -211,12 +211,12 @@ def detect_12masters_patterns(
     return _deduplicate(patterns)
 
 
-def _deduplicate(patterns: List[Pattern]) -> List[Pattern]:
+def _deduplicate(patterns: list[Pattern]) -> list[Pattern]:
     """去除同類型、同頸線的重複型態。"""
     if len(patterns) <= 1:
         return patterns
 
-    best: Dict[str, Pattern] = {}
+    best: dict[str, Pattern] = {}
     for p in patterns:
         # 用 (pattern_type, 對數空間 ~2% per step) 作為 key
         bucket = round(math.log(max(p.neckline, 0.01)) * 50)

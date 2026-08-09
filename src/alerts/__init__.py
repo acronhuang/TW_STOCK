@@ -1,3 +1,3 @@
-from .line_notifier import LineNotifier, AlertManager
+from .line_notifier import AlertManager, LineNotifier
 
-__all__ = ['LineNotifier', 'AlertManager']
+__all__ = ['AlertManager', 'LineNotifier']

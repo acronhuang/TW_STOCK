@@ -7,10 +7,11 @@
 創建日期: 2026-02-23
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional
 from dataclasses import dataclass
+from typing import Dict, List, Optional
+
+import numpy as np
+import pandas as pd
 
 
 @dataclass
@@ -20,7 +21,7 @@ class PatternScore:
     score: float  # 0-1
     weight: float
     detected: bool
-    details: Dict
+    details: dict
 
 
 class PatternScorer:
@@ -35,14 +36,14 @@ class PatternScorer:
         'ma_alignment': 0.05
     }
     
-    def __init__(self, weights: Optional[Dict[str, float]] = None):
+    def __init__(self, weights: dict[str, float] | None = None):
         """
         初始化形態評分器
         
         Args:
             weights: 自訂權重字典，若未提供則使用預設權重
         """
-        self.weights = weights if weights else self.DEFAULT_WEIGHTS.copy()
+        self.weights = weights or self.DEFAULT_WEIGHTS.copy()
         self._validate_weights()
     
     def _validate_weights(self):
@@ -53,7 +54,7 @@ class PatternScorer:
     
     def calculate_score(
         self,
-        patterns: Dict[str, Dict]
+        patterns: dict[str, dict]
     ) -> float:
         """
         計算綜合形態評分
@@ -91,8 +92,8 @@ class PatternScorer:
     
     def get_pattern_scores(
         self,
-        patterns: Dict[str, Dict]
-    ) -> List[PatternScore]:
+        patterns: dict[str, dict]
+    ) -> list[PatternScore]:
         """
         獲取所有形態的詳細評分
         
@@ -128,9 +129,9 @@ class PatternScorer:
     
     def get_top_patterns(
         self,
-        patterns: Dict[str, Dict],
+        patterns: dict[str, dict],
         top_n: int = 3
-    ) -> List[PatternScore]:
+    ) -> list[PatternScore]:
         """
         獲取評分最高的 N 個形態
         
@@ -152,7 +153,7 @@ class PatternScorer:
         return detected_scores[:top_n]
 
 
-def calculate_pattern_strength(patterns: Dict[str, Dict]) -> float:
+def calculate_pattern_strength(patterns: dict[str, dict]) -> float:
     """
     便捷函數：計算綜合形態強度
     
@@ -212,7 +213,7 @@ def calculate_position_weight(
 
 
 def generate_pattern_report(
-    patterns: Dict[str, Dict],
+    patterns: dict[str, dict],
     include_details: bool = True
 ) -> str:
     """
@@ -322,14 +323,14 @@ if __name__ == "__main__":
     
     # 獲取前 3 個形態
     top_patterns = scorer.get_top_patterns(test_patterns, top_n=3)
-    print(f"\n前 3 個形態:")
+    print("\n前 3 個形態:")
     for ps in top_patterns:
         print(f"  {ps.pattern_name}: {ps.score:.3f} (權重 {ps.weight:.2f})")
     
     # 計算倉位權重
     base = 0.10
     adjusted = calculate_position_weight(base, overall, max_boost=1.2)
-    print(f"\n倉位權重調整:")
+    print("\n倉位權重調整:")
     print(f"  基礎權重: {base:.2%}")
     print(f"  調整後: {adjusted:.2%} ({(adjusted/base - 1)*100:+.1f}%)")
     

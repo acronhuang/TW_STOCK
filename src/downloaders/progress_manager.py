@@ -5,15 +5,15 @@
 
 import json
 import logging
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Set, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 
 class ProgressManager:
     """管理下載進度，實現續傳功能"""
     
-    def __init__(self, progress_file: Optional[Path] = None, logger: Optional[logging.Logger] = None):
+    def __init__(self, progress_file: Path | None = None, logger: logging.Logger | None = None):
         """
         初始化進度管理器
         
@@ -31,11 +31,11 @@ class ProgressManager:
         self.progress_file = progress_file
         self.progress = self._load_progress()
     
-    def _load_progress(self) -> Dict:
+    def _load_progress(self) -> dict:
         """載入進度檔案"""
         if self.progress_file.exists():
             try:
-                with open(self.progress_file, 'r', encoding='utf-8') as f:
+                with open(self.progress_file, encoding='utf-8') as f:
                     data = json.load(f)
                     self.logger.info(f"✅ 載入進度檔案: {self.progress_file}")
                     return data
@@ -66,7 +66,7 @@ class ProgressManager:
             with open(self.progress_file, 'w', encoding='utf-8') as f:
                 json.dump(self.progress, indent=2, ensure_ascii=False, fp=f)
             
-            self.logger.debug(f"💾 進度已保存")
+            self.logger.debug("💾 進度已保存")
         except Exception as e:
             self.logger.error(f"❌ 進度保存失敗: {e}")
     
@@ -144,7 +144,7 @@ class ProgressManager:
             return 0
         return len(self.progress["processed_stocks"][table_name])
     
-    def get_resume_info(self) -> Dict:
+    def get_resume_info(self) -> dict:
         """取得續傳資訊"""
         current = self.progress.get("current_table")
         if not current:

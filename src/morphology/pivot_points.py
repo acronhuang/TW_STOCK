@@ -11,10 +11,11 @@
 創建日期: 2026-02-24
 """
 
-import pandas as pd
+from typing import Optional, Tuple
+
 import numpy as np
+import pandas as pd
 from scipy.signal import argrelextrema
-from typing import Tuple, Optional
 
 
 def detect_pivot_highs(
@@ -101,7 +102,7 @@ def get_pivot_points(
     df: pd.DataFrame,
     order: int = 5,
     method: str = 'argrelextrema'
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     獲取所有轉折點的詳細資訊
 
@@ -345,9 +346,9 @@ if __name__ == "__main__":
     # 測試3：獲取轉折點詳細資訊
     print("\n測試3：獲取轉折點詳細資訊")
     pivot_highs, pivot_lows = get_pivot_points(df, order=5)
-    print(f"\n轉折高點 DataFrame:")
+    print("\n轉折高點 DataFrame:")
     print(pivot_highs.head())
-    print(f"\n轉折低點 DataFrame:")
+    print("\n轉折低點 DataFrame:")
     print(pivot_lows.head())
 
     # 測試4：過濾小幅度轉折點

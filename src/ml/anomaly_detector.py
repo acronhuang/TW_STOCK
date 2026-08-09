@@ -17,15 +17,16 @@ Usage:
     market_anomalies = ad.scan_market()
 """
 
-import sys
 import logging
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+
 import numpy as np
 import pandas as pd
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -33,7 +34,7 @@ sys.path.insert(0, str(project_root))
 logger = logging.getLogger(__name__)
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -53,7 +54,7 @@ class AnomalyDetector:
         self.client = MongoClient(mongo_uri)
         self.db = self.client[db_name]
 
-    def detect(self, symbol: str, lookback: int = 60) -> Dict:
+    def detect(self, symbol: str, lookback: int = 60) -> dict:
         """個股異常偵測（綜合）"""
         df = self._get_price_df(symbol, lookback)
         if df is None or len(df) < 20:
@@ -97,7 +98,7 @@ class AnomalyDetector:
             'latest_date': str(df['date'].iloc[-1])[:10],
         }
 
-    def scan_market(self, limit: int = 20) -> List[Dict]:
+    def scan_market(self, limit: int = 20) -> list[dict]:
         """全市場異常掃描"""
         # 取活躍股票（有近期價格的）
         cutoff = datetime.now() - timedelta(days=5)
@@ -123,7 +124,7 @@ class AnomalyDetector:
     # ──────────────────────────────────────────────
     #  偵測方法
     # ──────────────────────────────────────────────
-    def _detect_price_zscore(self, df: pd.DataFrame, threshold: float = 2.5) -> List[Dict]:
+    def _detect_price_zscore(self, df: pd.DataFrame, threshold: float = 2.5) -> list[dict]:
         """價格報酬 Z-Score 異常"""
         returns = df['close'].pct_change()
         mean = returns.mean()
@@ -149,7 +150,7 @@ class AnomalyDetector:
 
         return anomalies
 
-    def _detect_volume_anomaly(self, df: pd.DataFrame, multiplier: float = 3.0) -> List[Dict]:
+    def _detect_volume_anomaly(self, df: pd.DataFrame, multiplier: float = 3.0) -> list[dict]:
         """爆量偵測（成交量 > N 倍均量）"""
         vol = df['volume']
         vol_ma20 = vol.rolling(20).mean()
@@ -171,7 +172,7 @@ class AnomalyDetector:
 
         return anomalies
 
-    def _detect_gap(self, df: pd.DataFrame, threshold: float = 0.03) -> List[Dict]:
+    def _detect_gap(self, df: pd.DataFrame, threshold: float = 0.03) -> list[dict]:
         """跳空缺口偵測"""
         anomalies = []
 
@@ -192,7 +193,7 @@ class AnomalyDetector:
 
         return anomalies
 
-    def _detect_isolation_forest(self, df: pd.DataFrame) -> List[Dict]:
+    def _detect_isolation_forest(self, df: pd.DataFrame) -> list[dict]:
         """Isolation Forest 無監督異常偵測"""
         try:
             from sklearn.ensemble import IsolationForest
@@ -236,7 +237,7 @@ class AnomalyDetector:
     # ──────────────────────────────────────────────
     #  資料
     # ──────────────────────────────────────────────
-    def _get_price_df(self, symbol: str, lookback: int) -> Optional[pd.DataFrame]:
+    def _get_price_df(self, symbol: str, lookback: int) -> pd.DataFrame | None:
         cutoff = datetime.now() - timedelta(days=int(lookback * 1.5))
         prices = list(self.db.stock_price.find(
             {'symbol': symbol, 'date': {'$gte': cutoff}},

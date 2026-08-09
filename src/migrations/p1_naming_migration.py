@@ -7,11 +7,12 @@ P1: 全域命名規範遷移 - 統一所有欄位命名為 snake_case
     python3 src/migrations/p1_naming_migration.py --execute  # 實際執行
 """
 
-import sys
 import argparse
 import logging
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
+
 from pymongo import MongoClient
 
 # 設定路徑
@@ -117,13 +118,13 @@ class NamingMigrator:
         collection = self.db[collection_name]
         
         # 只統計需要重命名的文檔
-        query = {"$or": [{old_name: {"$exists": True}} for old_name in renames.keys()]}
+        query = {"$or": [{old_name: {"$exists": True}} for old_name in renames]}
         total_docs = collection.count_documents(query)
         
         self.logger.info(f"\n{'='*80}")
         self.logger.info(f"開始遷移: {collection_name}")
         self.logger.info(f"需要更新的文檔數: {total_docs:,}")
-        self.logger.info(f"欄位映射:")
+        self.logger.info("欄位映射:")
         for old, new in renames.items():
             self.logger.info(f"  {old} → {new}")
         self.logger.info(f"模式: {'預覽' if dry_run else '實際執行'}")

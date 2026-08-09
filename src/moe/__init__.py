@@ -1,3 +1,3 @@
-from .router import MoERouter, GPUManager, EXPERTS
+from .router import EXPERTS, GPUManager, MoERouter
 
-__all__ = ['MoERouter', 'GPUManager', 'EXPERTS']
+__all__ = ['EXPERTS', 'GPUManager', 'MoERouter']

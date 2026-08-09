@@ -16,16 +16,17 @@ P2: 市值與換手率計算器
     python3 src/calculators/market_metrics_calculator.py --all --execute
 """
 
-import sys
 import argparse
 import logging
-from pathlib import Path
+import sys
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
+from typing import Dict, List
+
+from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
 from pymongo.errors import BulkWriteError
-from bson.decimal128 import Decimal128
-from typing import Dict, List
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -106,7 +107,7 @@ class MarketMetricsCalculator:
         self.logger.warning(f"⚠️  {stock_id}: 沒有流通股數資料")
         return 0.0
     
-    def calculate_stock_metrics(self, stock_id: str, dry_run: bool = True) -> Dict:
+    def calculate_stock_metrics(self, stock_id: str, dry_run: bool = True) -> dict:
         """
         計算單一股票的市值和換手率
         
@@ -150,7 +151,7 @@ class MarketMetricsCalculator:
             stats['total_records'] = len(prices)
             
             if not prices:
-                self.logger.warning(f"⚠️  沒有價格數據")
+                self.logger.warning("⚠️  沒有價格數據")
                 stats['status'] = 'no_price_data'
                 return stats
             
@@ -204,7 +205,7 @@ class MarketMetricsCalculator:
                 self.logger.info(f"✅ 預覽完成: 將更新 {stats['calculated']:,} 筆")
         
         except Exception as e:
-            error_msg = f"計算失敗: {str(e)}"
+            error_msg = f"計算失敗: {e!s}"
             self.logger.error(f"❌ {error_msg}")
             stats['errors'].append(error_msg)
             stats['status'] = 'error'
@@ -220,7 +221,7 @@ class MarketMetricsCalculator:
         
         return stats
     
-    def calculate_all_metrics(self, dry_run: bool = True, limit: int = None) -> Dict:
+    def calculate_all_metrics(self, dry_run: bool = True, limit: int = None) -> dict:
         """計算所有股票的市值和換手率"""
         self.logger.info("\n" + "="*80)
         self.logger.info("🚀 市值與換手率計算器")
@@ -270,7 +271,7 @@ class MarketMetricsCalculator:
         
         return summary
     
-    def _print_summary(self, summary: Dict, failed_stocks: List, dry_run: bool):
+    def _print_summary(self, summary: dict, failed_stocks: list, dry_run: bool):
         """列印總結報告"""
         self.logger.info("\n" + "="*80)
         self.logger.info("📊 計算總結")

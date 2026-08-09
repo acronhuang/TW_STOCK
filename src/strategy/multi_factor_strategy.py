@@ -8,11 +8,12 @@ Multi-Factor Stock Selection Strategy
 """
 
 import sys
-from pathlib import Path
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
-import pandas as pd
+from pathlib import Path
+from typing import Dict, List, Optional
+
 import numpy as np
+import pandas as pd
 from pymongo import MongoClient
 
 # 添加專案路徑
@@ -292,7 +293,7 @@ class MultiFactorStrategy:
     def select_stocks(self,
                      date,
                      top_n: int = 20,
-                     min_factors: int = 3) -> List[Dict]:
+                     min_factors: int = 3) -> list[dict]:
         """
         選股
         

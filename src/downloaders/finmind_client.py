@@ -3,19 +3,20 @@ FinMind API 客戶端基類
 處理 API 請求、速率限制、錯誤重試
 """
 
-import requests
-import time
 import logging
-from typing import Dict, List, Optional
+import time
 from datetime import datetime
-from bson.decimal128 import Decimal128
 from decimal import Decimal
+from typing import Dict, List, Optional
+
+import requests
+from bson.decimal128 import Decimal128
 
 
 class FinMindClient:
     """FinMind API 客戶端"""
     
-    def __init__(self, api_token: str, logger: Optional[logging.Logger] = None):
+    def __init__(self, api_token: str, logger: logging.Logger | None = None):
         """
         初始化 FinMind 客戶端
         
@@ -34,7 +35,7 @@ class FinMindClient:
         self.retry_delay = 2  # 秒
         self.backoff_factor = 2  # 指數退避係數
         
-    def fetch_data(self, dataset: str, params: Dict, retry_count: int = 0) -> List[Dict]:
+    def fetch_data(self, dataset: str, params: dict, retry_count: int = 0) -> list[dict]:
         """
         從 FinMind API 獲取資料（帶重試機制）
         
@@ -111,7 +112,7 @@ class FinMindClient:
                 return []
                 
         except requests.exceptions.Timeout:
-            self.logger.error(f"請求超時")
+            self.logger.error("請求超時")
             if retry_count < self.max_retries:
                 wait_time = self.retry_delay * (self.backoff_factor ** retry_count)
                 self.logger.info(f"等待 {wait_time} 秒後重試...")
@@ -134,7 +135,7 @@ class FinMindClient:
                 return self.fetch_data(dataset, params, retry_count + 1)
             return []
     
-    def _convert_to_decimal128(self, data: List[Dict]) -> List[Dict]:
+    def _convert_to_decimal128(self, data: list[dict]) -> list[dict]:
         """
         將數值欄位轉換為 Decimal128
         
@@ -182,7 +183,7 @@ class FinMindClient:
         
         return converted_data
     
-    def get_api_usage(self) -> Dict:
+    def get_api_usage(self) -> dict:
         """
         獲取 API 使用統計
         

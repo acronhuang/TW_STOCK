@@ -18,12 +18,14 @@
 """
 
 from __future__ import annotations
+
+import logging
 import os
 import sys
 import time
-import logging
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, Optional
+
 import requests
 
 logging.basicConfig(level=logging.INFO,
@@ -112,7 +114,7 @@ MODEL_TO_URL = {
 def ask_role(role: str,
              question: str,
              include_role_prompt: bool = True,
-             timeout: int = 300) -> Dict:
+             timeout: int = 300) -> dict:
     """以指定角色（自動選用對應模型）回答問題。"""
     if role not in ROLE_TO_MODEL:
         return {'error': f'未知角色: {role}', 'available': list(ROLE_TO_MODEL.keys())}
@@ -148,7 +150,7 @@ def ask_role(role: str,
         return {'role': role, 'model': model, 'error': str(e)}
 
 
-def list_roles() -> Dict[str, str]:
+def list_roles() -> dict[str, str]:
     """列出所有角色與其對應模型。"""
     return ROLE_TO_MODEL.copy()
 

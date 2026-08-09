@@ -3,13 +3,14 @@ MACD 指標 (Moving Average Convergence Divergence)
 移動平均收斂發散指標，衡量趨勢強度和反轉時機
 """
 
-import pandas as pd
+from typing import Tuple, Union
+
 import numpy as np
-from typing import Union, Tuple
+import pandas as pd
 
 
 def calculate_macd(
-    data: Union[pd.Series, pd.DataFrame],
+    data: pd.Series | pd.DataFrame,
     fast_period: int = 12,
     slow_period: int = 26,
     signal_period: int = 9,
@@ -77,7 +78,7 @@ def calculate_macd(
 
 
 def calculate_macd_signals(
-    data: Union[pd.Series, pd.DataFrame],
+    data: pd.Series | pd.DataFrame,
     fast_period: int = 12,
     slow_period: int = 26,
     signal_period: int = 9,
@@ -199,8 +200,8 @@ def calculate_macd_divergence(
 
 if __name__ == '__main__':
     # 測試範例
-    import pandas as pd
     import numpy as np
+    import pandas as pd
     
     # 創建測試數據
     np.random.seed(42)

@@ -8,6 +8,7 @@ Strategy 模組 - 交易策略基類
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Dict, List, Optional
+
 import pandas as pd
 
 
@@ -33,10 +34,9 @@ class Strategy(ABC):
         Args:
             **kwargs: 策略參數
         """
-        pass
     
     @abstractmethod
-    def generate_signals(self, date: datetime, data: pd.DataFrame) -> Dict[str, str]:
+    def generate_signals(self, date: datetime, data: pd.DataFrame) -> dict[str, str]:
         """
         生成交易信號
         
@@ -48,7 +48,6 @@ class Strategy(ABC):
             Dict[symbol, signal]: 信號字典
                 signal 可為: 'BUY', 'SELL', 'HOLD'
         """
-        pass
     
     def __repr__(self):
         return f"<Strategy: {self.name}>"
@@ -83,7 +82,7 @@ class MovingAverageCrossover(Strategy):
             'long_window': long_window
         }
     
-    def generate_signals(self, date: datetime, data: pd.DataFrame) -> Dict[str, str]:
+    def generate_signals(self, date: datetime, data: pd.DataFrame) -> dict[str, str]:
         """
         生成均線交叉信號
         
@@ -196,7 +195,7 @@ class RSIMeanReversion(Strategy):
         rsi = 100 - (100 / (1 + rs))
         return rsi
     
-    def generate_signals(self, date: datetime, data: pd.DataFrame) -> Dict[str, str]:
+    def generate_signals(self, date: datetime, data: pd.DataFrame) -> dict[str, str]:
         """
         生成 RSI 信號
         
@@ -273,7 +272,7 @@ class ValueMomentum(Strategy):
             'momentum_days': momentum_days
         }
     
-    def generate_signals(self, date: datetime, data: pd.DataFrame) -> Dict[str, str]:
+    def generate_signals(self, date: datetime, data: pd.DataFrame) -> dict[str, str]:
         """
         生成價值-動能信號
         

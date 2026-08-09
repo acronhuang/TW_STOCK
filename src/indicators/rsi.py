@@ -3,13 +3,14 @@
 衡量價格動能，判斷超買超賣狀態
 """
 
-import pandas as pd
-import numpy as np
 from typing import Union
+
+import numpy as np
+import pandas as pd
 
 
 def calculate_rsi(
-    data: Union[pd.Series, pd.DataFrame],
+    data: pd.Series | pd.DataFrame,
     period: int = 14,
     price_column: str = 'close'
 ) -> pd.Series:
@@ -61,7 +62,7 @@ def calculate_rsi(
 
 
 def calculate_rsi_signals(
-    data: Union[pd.Series, pd.DataFrame],
+    data: pd.Series | pd.DataFrame,
     period: int = 14,
     overbought: float = 70,
     oversold: float = 30,
@@ -188,8 +189,8 @@ def calculate_rsi_divergence(
 
 if __name__ == '__main__':
     # 測試範例
-    import pandas as pd
     import numpy as np
+    import pandas as pd
     
     # 創建測試數據（模擬股價從上漲到下跌的過程）
     np.random.seed(42)

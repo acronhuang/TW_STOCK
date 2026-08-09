@@ -11,14 +11,15 @@ Usage:
     ranking = pc.industry_ranking('半導體業')
 """
 
-import sys
 import logging
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+
 import numpy as np
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -26,7 +27,7 @@ sys.path.insert(0, str(project_root))
 logger = logging.getLogger(__name__)
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -61,7 +62,7 @@ class PeerComparison:
     # ──────────────────────────────────────────────
     #  個股同業比較
     # ──────────────────────────────────────────────
-    def analyze(self, symbol: str) -> Dict:
+    def analyze(self, symbol: str) -> dict:
         """個股 vs 同業比較分析"""
         industry = self._get_industry(symbol)
         if not industry:
@@ -168,7 +169,7 @@ class PeerComparison:
     #  產業排名
     # ──────────────────────────────────────────────
     def industry_ranking(self, industry: str, sort_by: str = 'composite',
-                         limit: int = 20) -> Dict:
+                         limit: int = 20) -> dict:
         """產業內綜合排名"""
         peers = self._get_industry_peers(industry)
         if len(peers) < 3:
@@ -216,7 +217,7 @@ class PeerComparison:
     # ──────────────────────────────────────────────
     #  產業列表
     # ──────────────────────────────────────────────
-    def list_industries(self) -> List[Dict]:
+    def list_industries(self) -> list[dict]:
         """列出所有產業及股票數"""
         industries = self.db.monthly_revenue.distinct('industry')
         result = []
@@ -230,7 +231,7 @@ class PeerComparison:
     # ──────────────────────────────────────────────
     #  輔助方法
     # ──────────────────────────────────────────────
-    def _get_industry(self, symbol: str) -> Optional[str]:
+    def _get_industry(self, symbol: str) -> str | None:
         if symbol in self._industry_cache:
             return self._industry_cache[symbol]
 
@@ -248,7 +249,7 @@ class PeerComparison:
 
         return None
 
-    def _get_industry_peers(self, industry: str) -> List[Dict]:
+    def _get_industry_peers(self, industry: str) -> list[dict]:
         """取得同業所有股票的最新因子"""
         # 取產業內所有股票
         symbols = self.db.monthly_revenue.distinct('symbol', {'industry': industry})
@@ -285,7 +286,7 @@ class PeerComparison:
 
         return peers
 
-    def _calc_composite_score(self, stock: Dict, peers: List[Dict]) -> Optional[float]:
+    def _calc_composite_score(self, stock: dict, peers: list[dict]) -> float | None:
         """計算單股綜合分數"""
         total = 0
         count = 0
@@ -315,7 +316,7 @@ class PeerComparison:
 
         return total / count if count > 0 else None
 
-    def _get_top_peers(self, peers: List[Dict], n: int) -> List[Dict]:
+    def _get_top_peers(self, peers: list[dict], n: int) -> list[dict]:
         """取得前 N 名同業"""
         scored = []
         for p in peers:
@@ -329,7 +330,7 @@ class PeerComparison:
         scored.sort(key=lambda x: x['score'], reverse=True)
         return scored[:n]
 
-    def _get_latest_price(self, symbol: str) -> Optional[float]:
+    def _get_latest_price(self, symbol: str) -> float | None:
         rec = self.db.stock_price.find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)]
         )
@@ -404,7 +405,7 @@ if __name__ == '__main__':
             print(f"  ⚠️ 劣勢: {_wk}")
 
         if r.get('top5_peers'):
-            print(f"\n  同業 Top 5:")
+            print("\n  同業 Top 5:")
             for i, p in enumerate(r['top5_peers'], 1):
                 marker = ' ←' if p['symbol'] == sym else ''
                 print(f"    {i}. {p['symbol']} {p['name']} ({p['score']:.1f}分){marker}")

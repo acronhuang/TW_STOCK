@@ -12,9 +12,10 @@ Volume Factors 模組 - 量價因子計算
 成交量為 bson.Decimal128，統一以 _to_float() 轉換。
 """
 
-import numpy as np
-from typing import Dict, Optional
 from datetime import datetime, timedelta
+from typing import Dict, Optional
+
+import numpy as np
 from bson.decimal128 import Decimal128
 
 
@@ -41,7 +42,7 @@ class VolumeFactors:
         self.db = db
         self._shares_map = None      # {stock_id: 流通股數(千股)}，首次用時載入並快取
 
-    def _to_float(self, value) -> Optional[float]:
+    def _to_float(self, value) -> float | None:
         if value is None:
             return None
         if isinstance(value, Decimal128):
@@ -77,7 +78,7 @@ class VolumeFactors:
 
     # ── 個別因子 ────────────────────────────────────────────────────────
 
-    def calculate_volume_ratio(self, vols: np.ndarray) -> Optional[float]:
+    def calculate_volume_ratio(self, vols: np.ndarray) -> float | None:
         """量比 = 當日量 / 前 VOL_MA_WINDOW 日均量。>1 放量、<1 量縮。"""
         if len(vols) < 2:
             return None
@@ -89,7 +90,7 @@ class VolumeFactors:
             return None
         return round(float(vols[-1]) / base, 3)
 
-    def calculate_vol_percentile(self, vols: np.ndarray) -> Optional[float]:
+    def calculate_vol_percentile(self, vols: np.ndarray) -> float | None:
         """當日量在近 VOL_PCT_WINDOW 日的百分位 (0~100)。"""
         window = vols[-self.VOL_PCT_WINDOW:]
         if len(window) < 10:
@@ -105,7 +106,7 @@ class VolumeFactors:
         obv = np.concatenate([[0.0], np.cumsum(direction * vols[1:])])
         return obv
 
-    def calculate_obv_slope(self, closes: np.ndarray, vols: np.ndarray) -> Optional[float]:
+    def calculate_obv_slope(self, closes: np.ndarray, vols: np.ndarray) -> float | None:
         """
         OBV 近 TREND_WINDOW 日的線性回歸斜率，除以日均量正規化
         → 單位約為「每日流入幾倍日均量」。正=資金流入，負=流出。
@@ -141,7 +142,7 @@ class VolumeFactors:
                     out.append(i)
         return out
 
-    def detect_obv_divergence(self, closes: np.ndarray, vols: np.ndarray) -> Dict:
+    def detect_obv_divergence(self, closes: np.ndarray, vols: np.ndarray) -> dict:
         """
         真量價背離（近 DIVERGENCE_WINDOW 日，以擺動低/高點比對 OBV）：
           底背離(bottom)：價格『更低的低點』但 OBV『抬高的低點』+ 現價在區間下半 → 賣壓衰竭、底部承接
@@ -186,7 +187,7 @@ class VolumeFactors:
         flag = 1 if bottom else (-1 if top else 0)
         return {'flag': flag, 'bottom': bottom, 'top': top, 'pos': round(pos, 3)}
 
-    def calculate_vp_divergence(self, closes: np.ndarray, vols: np.ndarray) -> Optional[int]:
+    def calculate_vp_divergence(self, closes: np.ndarray, vols: np.ndarray) -> int | None:
         """量價背離旗標 -1/0/+1（沿用既有欄位，改用真擺動低/高點背離）。"""
         if len(closes) < self.PIVOT_K * 2 + 4:
             return None
@@ -222,7 +223,7 @@ class VolumeFactors:
         pos = float((closes[-1] - seg.min()) / rng) if rng > 0 else 0.5
         return bool(light and up and pos <= 0.7)
 
-    def volume_state(self, closes: np.ndarray, vols: np.ndarray) -> Optional[str]:
+    def volume_state(self, closes: np.ndarray, vols: np.ndarray) -> str | None:
         """彙整單一主導量價狀態(優先序：絕望量 > 鎖籌 > 窒息量)；皆非則 None。"""
         if self.detect_capitulation(closes, vols):
             return '絕望量'
@@ -263,7 +264,7 @@ class VolumeFactors:
         base = sum(hist) / len(hist)
         return round(today), (round(today / base, 2) if base > 0 else None)
 
-    def _shares(self, symbol: str) -> Optional[float]:
+    def _shares(self, symbol: str) -> float | None:
         """流通股數(千股)，來自 taiwan_stock_info；一次載入全市場快取。"""
         if self._shares_map is None:
             self._shares_map = {d['stock_id']: self._to_float(d.get('outstanding_shares'))
@@ -271,14 +272,14 @@ class VolumeFactors:
                                     {}, {'stock_id': 1, 'outstanding_shares': 1})}
         return self._shares_map.get(symbol)
 
-    def calculate_turnover(self, vols: np.ndarray, symbol: str) -> Optional[float]:
+    def calculate_turnover(self, vols: np.ndarray, symbol: str) -> float | None:
         """周轉率(%) = 當日成交量(股) / 流通股數(股) × 100。把量能標準化，不同股本可比。"""
         sh = self._shares(symbol)          # 千股
         if not sh or sh <= 0:
             return None
         return round(float(vols[-1]) / (sh * 1000.0) * 100.0, 3)
 
-    def calculate_all_volume_factors(self, symbol: str, date: datetime) -> Dict:
+    def calculate_all_volume_factors(self, symbol: str, date: datetime) -> dict:
         """計算單檔單日所有量價因子；資料不足的因子回傳 None。"""
         closes, vols = self._load_series(symbol, date)
         if closes is None:

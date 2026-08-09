@@ -3,13 +3,14 @@
 衡量價格波動範圍和超買超賣
 """
 
-import pandas as pd
+from typing import Tuple, Union
+
 import numpy as np
-from typing import Union, Tuple
+import pandas as pd
 
 
 def calculate_bollinger_bands(
-    data: Union[pd.Series, pd.DataFrame],
+    data: pd.Series | pd.DataFrame,
     period: int = 20,
     std_dev: float = 2.0,
     price_column: str = 'close'
@@ -86,7 +87,7 @@ def calculate_bollinger_bands(
 
 
 def calculate_bollinger_signals(
-    data: Union[pd.Series, pd.DataFrame],
+    data: pd.Series | pd.DataFrame,
     period: int = 20,
     std_dev: float = 2.0,
     price_column: str = 'close',
@@ -157,7 +158,7 @@ def calculate_bollinger_signals(
 
 
 def calculate_bollinger_squeeze(
-    data: Union[pd.Series, pd.DataFrame],
+    data: pd.Series | pd.DataFrame,
     period: int = 20,
     std_dev: float = 2.0,
     price_column: str = 'close',
@@ -209,8 +210,8 @@ def calculate_bollinger_squeeze(
 
 if __name__ == '__main__':
     # 測試範例
-    import pandas as pd
     import numpy as np
+    import pandas as pd
     
     # 創建測試數據（模擬先盤整後突破）
     np.random.seed(42)

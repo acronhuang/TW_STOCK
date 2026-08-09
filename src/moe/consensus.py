@@ -11,6 +11,7 @@
 """
 import os
 import re
+
 import requests
 
 CONSENSUS_URL = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議節點 .27

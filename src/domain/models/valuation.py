@@ -1,7 +1,8 @@
 """Valuation 領域值物件"""
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import List, Optional
 
 
 @dataclass
@@ -9,13 +10,13 @@ class ValuationResult:
     """估值結果（Value Object）"""
     symbol: str
     current_price: float
-    dcf_fair_value: Optional[float] = None
-    ddm_fair_value: Optional[float] = None
-    pe_band_fair_value: Optional[float] = None
-    composite_fair_value: Optional[float] = None
-    upside_pct: Optional[float] = None
+    dcf_fair_value: float | None = None
+    ddm_fair_value: float | None = None
+    pe_band_fair_value: float | None = None
+    composite_fair_value: float | None = None
+    upside_pct: float | None = None
     verdict: str = ''
-    warnings: List[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def is_undervalued(self) -> bool:

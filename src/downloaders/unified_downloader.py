@@ -17,10 +17,10 @@
     python3 unified_downloader.py --all --verbose
 """
 
-import os
-import sys
 import argparse
 import logging
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -86,15 +86,15 @@ def print_statistics(stats: dict):
     print(f"總資料表數:       {stats['total_tables']}")
     print(f"成功下載:         {stats['completed_tables']}")
     print(f"下載失敗:         {stats['failed_tables']}")
-    print(f"─" * 80)
+    print("─" * 80)
     print(f"總記錄數:         {stats['total_records']:,}")
     print(f"新增記錄:         {stats['new_records']:,}")
     print(f"更新記錄:         {stats['updated_records']:,}")
     print(f"跳過記錄:         {stats['skipped_records']:,}")
-    print(f"─" * 80)
+    print("─" * 80)
     print(f"驗證錯誤:         {stats['validation_errors']:,}")
     print(f"耗時:             {duration:.2f} 秒")
-    print(f"API 使用率:       完成")
+    print("API 使用率:       完成")
     print("="*80 + "\n")
 
 
@@ -175,7 +175,7 @@ def main():
     print(f"🔧 模式: {'覆蓋下載' if args.no_skip else '跳過已存在資料'}")
     
     if args.all:
-        print(f"📊 範圍: 全部 43 個資料表")
+        print("📊 範圍: 全部 43 個資料表")
     else:
         print(f"📊 範圍: {', '.join(args.categories)}")
     

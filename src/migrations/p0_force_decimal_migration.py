@@ -9,14 +9,15 @@ P0: 強制精度遷移 - 確保所有數值欄位遷移到 Decimal128
     python3 src/migrations/p0_force_decimal_migration.py --execute  # 實際執行
 """
 
-import sys
 import argparse
 import logging
-from pathlib import Path
-from decimal import Decimal
+import sys
 from datetime import datetime
-from pymongo import MongoClient
+from decimal import Decimal
+from pathlib import Path
+
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -99,7 +100,7 @@ class ForceDecimalMigrator:
     def _force_convert_to_decimal128(self, value):
         """強制將數值轉換為 Decimal128"""
         if value is None or value == '':
-            return Decimal128(Decimal('0'))
+            return Decimal128(Decimal(0))
         
         # 已經是 Decimal128，直接返回
         if isinstance(value, Decimal128):
@@ -114,16 +115,16 @@ class ForceDecimalMigrator:
                 # 嘗試解析字串
                 clean_value = value.strip()
                 if not clean_value:
-                    return Decimal128(Decimal('0'))
+                    return Decimal128(Decimal(0))
                 return Decimal128(Decimal(clean_value))
             elif isinstance(value, Decimal):
                 return Decimal128(value)
             else:
                 self.logger.warning(f"未知類型: {type(value)}, 值: {value}")
-                return Decimal128(Decimal('0'))
+                return Decimal128(Decimal(0))
         except Exception as e:
             self.logger.error(f"轉換失敗: {value} ({type(value)}), 錯誤: {e}")
-            return Decimal128(Decimal('0'))
+            return Decimal128(Decimal(0))
     
     def migrate_collection(self, collection_name: str, decimal_fields: list, 
                           dry_run: bool = True) -> dict:

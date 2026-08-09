@@ -170,7 +170,7 @@ def trapped_volume_zones(df, cur=None, top=3, mult=1.8, tol=0.03):
     回 [{price, volume, dist%}] 由近到遠。跌深股反彈判讀第3點(蔡森/口訣:出量位置=日後壓力區)。"""
     if df is None or len(df) < 25 or "volume" not in df:
         return []
-    cur = cur if cur else float(df["close"].iloc[-1])
+    cur = cur or float(df["close"].iloc[-1])
     v = df["volume"].astype(float)
     vma = v.rolling(20, min_periods=10).mean()
     cand = []

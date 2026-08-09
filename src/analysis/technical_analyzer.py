@@ -5,10 +5,11 @@
 根據技術指標綜合判斷股票多空態勢
 """
 
-from pymongo import MongoClient
+import statistics
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
-import statistics
+
+from pymongo import MongoClient
 
 MONGODB_URI = 'mongodb://localhost:27017/'
 DB_NAME = 'tw_stock_analysis'
@@ -21,7 +22,7 @@ class TechnicalAnalyzer:
         self.client = MongoClient(MONGODB_URI)
         self.db = self.client[DB_NAME]
         
-    def analyze_stock(self, symbol: str, date: str = None) -> Dict:
+    def analyze_stock(self, symbol: str, date: str = None) -> dict:
         """
         分析單一股票的多空態勢
         
@@ -110,7 +111,7 @@ class TechnicalAnalyzer:
             }
         }
     
-    def _analyze_trend(self, indicator: Dict, price: Dict) -> float:
+    def _analyze_trend(self, indicator: dict, price: dict) -> float:
         """分析趨勢 (-100~100)"""
         score = 0
         close = price['close']
@@ -187,7 +188,7 @@ class TechnicalAnalyzer:
         score = ma_score + price_ma_score + adx_score + bb_score
         return max(-100, min(100, score))
     
-    def _analyze_momentum(self, indicator: Dict) -> float:
+    def _analyze_momentum(self, indicator: dict) -> float:
         """分析動能 (-100~100)"""
         score = 0
         
@@ -250,7 +251,7 @@ class TechnicalAnalyzer:
         score = rsi_score + macd_score + kd_score
         return max(-100, min(100, score))
     
-    def _analyze_volume(self, indicator: Dict, price: Dict) -> float:
+    def _analyze_volume(self, indicator: dict, price: dict) -> float:
         """分析量能 (-100~100)"""
         score = 0
         
@@ -321,7 +322,7 @@ class TechnicalAnalyzer:
         else:
             return '強空'
     
-    def _get_trend_details(self, indicator: Dict, price: Dict) -> Dict:
+    def _get_trend_details(self, indicator: dict, price: dict) -> dict:
         """趨勢詳細資訊"""
         close = price['close']
         details = {}
@@ -353,7 +354,7 @@ class TechnicalAnalyzer:
         
         return details
     
-    def _get_momentum_details(self, indicator: Dict) -> Dict:
+    def _get_momentum_details(self, indicator: dict) -> dict:
         """動能詳細資訊"""
         details = {}
         
@@ -388,7 +389,7 @@ class TechnicalAnalyzer:
         
         return details
     
-    def _get_volume_details(self, indicator: Dict, price: Dict) -> Dict:
+    def _get_volume_details(self, indicator: dict, price: dict) -> dict:
         """量能詳細資訊"""
         details = {}
         
@@ -407,7 +408,7 @@ class TechnicalAnalyzer:
         
         return details
     
-    def scan_market(self, signal_filter: str = None, limit: int = 50) -> List[Dict]:
+    def scan_market(self, signal_filter: str = None, limit: int = 50) -> list[dict]:
         """
         掃描市場找出符合條件的股票
         
@@ -475,15 +476,15 @@ def main():
         print(f"  ├─ 動能分數: {result['momentum_score']:.2f}")
         print(f"  └─ 量能分數: {result['volume_score']:.2f}")
         
-        print(f"\n  📊 趨勢:")
+        print("\n  📊 趨勢:")
         for key, value in result['details']['trend'].items():
             print(f"     • {key}: {value}")
         
-        print(f"\n  ⚡ 動能:")
+        print("\n  ⚡ 動能:")
         for key, value in result['details']['momentum'].items():
             print(f"     • {key}: {value}")
         
-        print(f"\n  💰 量能:")
+        print("\n  💰 量能:")
         for key, value in result['details']['volume'].items():
             print(f"     • {key}: {value}")
     

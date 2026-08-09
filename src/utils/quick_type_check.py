@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """快速精度驗證工具"""
 
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
+
 
 def check_types():
     client = MongoClient('mongodb://localhost:27017/')
@@ -17,7 +18,7 @@ def check_types():
     div = db.dividend_detail.find_one({'cash_earnings_distribution': {'$exists': True, '$ne': None}})
     if div and 'cash_earnings_distribution' in div:
         val = div['cash_earnings_distribution']
-        print(f"  欄位: cash_earnings_distribution")
+        print("  欄位: cash_earnings_distribution")
         print(f"  類型: {type(val).__name__}")
         print(f"  值: {val}")
         print(f"  是 Decimal128? {isinstance(val, Decimal128)}")
@@ -29,7 +30,7 @@ def check_types():
     price = db.stock_price.find_one({'close': {'$exists': True}})
     if price and 'close' in price:
         val = price['close']
-        print(f"  欄位: close")
+        print("  欄位: close")
         print(f"  類型: {type(val).__name__}")
         print(f"  值: {val}")
         print(f"  是 Decimal128? {isinstance(val, Decimal128)}")

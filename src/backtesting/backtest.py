@@ -9,23 +9,23 @@ Backtest 模組 - 回測執行引擎
 - 視覺化結果
 """
 
-import sys
-from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Optional
 import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
 
-import pandas as pd
 import numpy as np
-from pymongo import MongoClient
+import pandas as pd
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from src.backtesting.performance import PerformanceCalculator, PerformanceMetrics
 from src.backtesting.portfolio import Portfolio
 from src.backtesting.strategy import Strategy
-from src.backtesting.performance import PerformanceCalculator, PerformanceMetrics
 
 
 class Backtest:
@@ -57,7 +57,7 @@ class Backtest:
     
     def __init__(self,
                  strategy: Strategy,
-                 symbols: List[str],
+                 symbols: list[str],
                  start_date: str,
                  end_date: str,
                  initial_cash: float = 1_000_000,
@@ -178,7 +178,7 @@ class Backtest:
             return float(value.to_decimal())
         return float(value)
     
-    def run(self) -> Dict:
+    def run(self) -> dict:
         """
         執行回測
         
@@ -244,7 +244,7 @@ class Backtest:
         
         return results
     
-    def _execute_signals(self, date: datetime, signals: Dict[str, str], prices: Dict[str, float]):
+    def _execute_signals(self, date: datetime, signals: dict[str, str], prices: dict[str, float]):
         """
         執行交易信號
         
@@ -291,7 +291,7 @@ class Backtest:
         
         print(metrics)
     
-    def plot_equity_curve(self, save_path: Optional[str] = None):
+    def plot_equity_curve(self, save_path: str | None = None):
         """
         繪製權益曲線
         
@@ -299,8 +299,8 @@ class Backtest:
             save_path: 儲存路徑（可選）
         """
         try:
-            import matplotlib.pyplot as plt
             import matplotlib.dates as mdates
+            import matplotlib.pyplot as plt
         except ImportError:
             self.logger.error("需要安裝 matplotlib: pip install matplotlib")
             return

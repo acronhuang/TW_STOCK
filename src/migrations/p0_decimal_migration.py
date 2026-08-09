@@ -7,14 +7,15 @@ P0: 價格欄位精度遷移 - 將所有數值欄位遷移到 Decimal128
     python3 src/migrations/p0_decimal_migration.py --execute  # 實際執行
 """
 
-import sys
 import argparse
 import logging
-from pathlib import Path
-from decimal import Decimal
+import sys
 from datetime import datetime
-from pymongo import MongoClient
+from decimal import Decimal
+from pathlib import Path
+
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 # 設定路徑
 project_root = Path(__file__).parent.parent.parent

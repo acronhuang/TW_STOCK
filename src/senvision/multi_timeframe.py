@@ -123,7 +123,7 @@ def get_zigzag_threshold(timeframe: TimeFrame) -> float:
     return TIMEFRAME_CONFIG.get(timeframe, {}).get('zigzag_threshold', 0.05)
 
 
-def get_pattern_width_params(timeframe: TimeFrame) -> Tuple[int, int]:
+def get_pattern_width_params(timeframe: TimeFrame) -> tuple[int, int]:
     """
     獲取形態寬度參數（最小/最大 bar 數）
 

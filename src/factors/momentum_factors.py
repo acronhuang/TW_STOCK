@@ -11,10 +11,11 @@ Momentum Factors 模組 - 動能因子計算
 - Price Momentum（價格動能）
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional
 from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+import numpy as np
+import pandas as pd
 from bson.decimal128 import Decimal128
 
 
@@ -37,7 +38,7 @@ class MomentumFactors:
         return float(value)
     
     def calculate_return(self, symbol: str, end_date: datetime, 
-                        days: int) -> Optional[float]:
+                        days: int) -> float | None:
         """
         計算指定期間的報酬率
         
@@ -71,23 +72,23 @@ class MomentumFactors:
 
         return None
     
-    def calculate_1m_return(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_1m_return(self, symbol: str, date: datetime) -> float | None:
         """計算 1 個月報酬率"""
         return self.calculate_return(symbol, date, days=30)
     
-    def calculate_3m_return(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_3m_return(self, symbol: str, date: datetime) -> float | None:
         """計算 3 個月報酬率"""
         return self.calculate_return(symbol, date, days=90)
     
-    def calculate_6m_return(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_6m_return(self, symbol: str, date: datetime) -> float | None:
         """計算 6 個月報酬率"""
         return self.calculate_return(symbol, date, days=180)
     
-    def calculate_12m_return(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_12m_return(self, symbol: str, date: datetime) -> float | None:
         """計算 12 個月報酬率"""
         return self.calculate_return(symbol, date, days=365)
     
-    def calculate_rsi(self, symbol: str, date: datetime, period: int = 14) -> Optional[float]:
+    def calculate_rsi(self, symbol: str, date: datetime, period: int = 14) -> float | None:
         """
         計算 RSI（相對強弱指標）
         
@@ -136,7 +137,7 @@ class MomentumFactors:
         return rsi
     
     def calculate_price_momentum(self, symbol: str, date: datetime, 
-                                 lookback_days: int = 252) -> Optional[float]:
+                                 lookback_days: int = 252) -> float | None:
         """
         計算價格動能指標
         
@@ -155,7 +156,7 @@ class MomentumFactors:
         return self.calculate_return(symbol, date, lookback_days)
     
     def calculate_volatility(self, symbol: str, date: datetime, 
-                            window: int = 30) -> Optional[float]:
+                            window: int = 30) -> float | None:
         """
         計算價格波動率（標準差）
         
@@ -200,7 +201,7 @@ class MomentumFactors:
     MA_LONG_WINDOWS = (60, 120, 240)      # 季線/半年線/年線(長期趨勢)
 
     def calculate_ma_bias(self, symbol: str, date: datetime,
-                          windows=None) -> Dict:
+                          windows=None) -> dict:
         """移動平均線乖離率 % = (收盤 - MA_N) / MA_N × 100。
         正值=價在均線上方(偏多/超買)，負值=下方(偏空/超賣)。
         含 20(短)/60(季線)/120(半年線)/240(年線)。截至 date。"""
@@ -221,7 +222,7 @@ class MomentumFactors:
                 out[f'ma_bias_{w}'] = round((c - ma) / ma * 100, 2) if ma else None
         return out
 
-    def calculate_ma_long_trend(self, symbol: str, date: datetime) -> Dict:
+    def calculate_ma_long_trend(self, symbol: str, date: datetime) -> dict:
         """長期均線(季線60/半年線120/年線240)趨勢位置：
           ma_above_long : 現價站上幾條長均線(0~3)，越多越多頭格局
           ma_long_trend : 長期排列方向 1=長多(60>120>240) / -1=長空(60<120<240) / 0=糾結
@@ -248,7 +249,7 @@ class MomentumFactors:
         return {'ma_above_long': above, 'ma_long_trend': trend}
 
     def calculate_inst_streak(self, symbol: str, date: datetime,
-                              lookback: int = 40) -> Dict:
+                              lookback: int = 40) -> dict:
         """三大法人連續買/賣超天數(外資/投信)。+N=連N日買超, -N=連N日賣超, 0=中性/無資料。
         以連續『有資料的交易日』計(institutional_flow key=stock_id)。截至 date。"""
         docs = list(self.db.institutional_flow.find(
@@ -272,7 +273,7 @@ class MomentumFactors:
         return {'foreign_streak': streak('foreign_net'),
                 'trust_streak': streak('trust_net')}
 
-    def calculate_all_momentum_factors(self, symbol: str, date: datetime) -> Dict:
+    def calculate_all_momentum_factors(self, symbol: str, date: datetime) -> dict:
         """
         計算所有動能因子
         
@@ -304,7 +305,7 @@ class MomentumFactors:
             **self.calculate_inst_streak(symbol, date),
         }
     
-    def batch_calculate(self, symbols: List[str], start_date: datetime, 
+    def batch_calculate(self, symbols: list[str], start_date: datetime, 
                         end_date: datetime) -> pd.DataFrame:
         """
         批次計算動能因子

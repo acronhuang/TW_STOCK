@@ -12,12 +12,13 @@ P2: 關鍵欄位補齊工具
     python3 src/migrations/p2_field_enrichment.py --task all --execute
 """
 
-import sys
 import argparse
 import logging
 import re
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
+
 from pymongo import MongoClient
 
 # 設定路徑
@@ -132,7 +133,7 @@ class FieldEnrichment:
                 if stats['updated'] <= 10:  # 顯示前 10 個範例
                     self.logger.info(f"  {stock_id} ({stock_name}) → {security_type}")
         
-        self.logger.info(f"\n✅ 完成")
+        self.logger.info("\n✅ 完成")
         self.logger.info(f"   {'將新增' if dry_run else '已新增'}: {stats['updated']:,} 筆\n")
         
         return stats
@@ -217,7 +218,7 @@ class FieldEnrichment:
                 if stats['updated'] <= 10:
                     self.logger.info(f"  {stock.get('stock_id')} | {industry} → L1:{l1}, L2:{l2}")
         
-        self.logger.info(f"\n✅ 完成")
+        self.logger.info("\n✅ 完成")
         self.logger.info(f"   {'將新增' if dry_run else '已新增'}: {stats['updated']:,} 筆\n")
         
         return stats
@@ -267,7 +268,7 @@ class FieldEnrichment:
                 if stats['updated'] <= 10:
                     self.logger.info(f"  {stock_id} → is_delisted=True")
         
-        self.logger.info(f"\n✅ 完成")
+        self.logger.info("\n✅ 完成")
         self.logger.info(f"   {'將標記' if dry_run else '已標記'}: {stats['updated']:,} 筆\n")
         
         return stats

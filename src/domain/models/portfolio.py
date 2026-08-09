@@ -1,5 +1,6 @@
 """Portfolio 領域實體"""
 from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -11,7 +12,7 @@ class Position:
     symbol: str
     shares: int
     avg_cost: float
-    first_buy_date: Optional[datetime] = None
+    first_buy_date: datetime | None = None
 
     @property
     def total_cost(self) -> float:

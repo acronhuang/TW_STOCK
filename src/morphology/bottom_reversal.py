@@ -13,9 +13,10 @@
 創建日期: 2026-02-23
 """
 
-import pandas as pd
+from typing import Optional, Tuple
+
 import numpy as np
-from typing import Tuple, Optional
+import pandas as pd
 
 
 def detect_bottom_reversal(
@@ -24,7 +25,7 @@ def detect_bottom_reversal(
     recovery_days: int = 5,
     volume_ratio: float = 1.5,
     recovery_threshold: float = 1.02
-) -> Tuple[pd.Series, pd.DataFrame]:
+) -> tuple[pd.Series, pd.DataFrame]:
     """
     偵測破底翻形態
     
@@ -120,7 +121,7 @@ def check_pattern_breakdown(
     entry_price: float,
     recent_closes: pd.Series,
     recent_volumes: pd.Series
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """
     檢查破底翻形態是否破壞（用於出場判斷）
     

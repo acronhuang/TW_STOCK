@@ -10,10 +10,11 @@ Performance Metrics 模組 - 績效指標計算
 - Calmar Ratio, Sortino Ratio
 """
 
+from dataclasses import dataclass
+from typing import Dict, List
+
 import numpy as np
 import pandas as pd
-from typing import List, Dict
-from dataclasses import dataclass
 
 
 @dataclass
@@ -50,7 +51,7 @@ class PerformanceMetrics:
     end_date: str
     trading_days: int
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """轉為字典"""
         return {
             'total_return': round(self.total_return, 2),
@@ -114,7 +115,7 @@ class PerformanceCalculator:
     """績效計算器"""
     
     @staticmethod
-    def calculate(equity_curve: List[Dict], trades: List, 
+    def calculate(equity_curve: list[dict], trades: list, 
                   initial_cash: float, risk_free_rate: float = 0.01) -> PerformanceMetrics:
         """
         計算完整績效指標
@@ -241,7 +242,7 @@ class PerformanceCalculator:
         return max_dd, max_dd_duration
     
     @staticmethod
-    def _analyze_trades(trades: List) -> Dict:
+    def _analyze_trades(trades: list) -> dict:
         """
         分析交易統計
         

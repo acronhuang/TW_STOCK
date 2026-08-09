@@ -11,15 +11,16 @@ Usage:
     portfolio = ra.portfolio_risk(['2330', '2317', '2454'], weights=[0.5, 0.3, 0.2])
 """
 
-import sys
 import logging
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+
 import numpy as np
-from scipy import stats as sp_stats
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
+from scipy import stats as sp_stats
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -27,7 +28,7 @@ sys.path.insert(0, str(project_root))
 logger = logging.getLogger(__name__)
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -53,7 +54,7 @@ class RiskAnalyzer:
     # ──────────────────────────────────────────────
     #  個股風險分析
     # ──────────────────────────────────────────────
-    def analyze(self, symbol: str, lookback_days: int = 252) -> Dict:
+    def analyze(self, symbol: str, lookback_days: int = 252) -> dict:
         """完整個股風險分析"""
         returns = self._get_returns(symbol, lookback_days)
         if returns is None or len(returns) < 30:
@@ -154,8 +155,8 @@ class RiskAnalyzer:
     # ──────────────────────────────────────────────
     #  投資組合風險
     # ──────────────────────────────────────────────
-    def portfolio_risk(self, symbols: List[str], weights: List[float] = None,
-                       lookback_days: int = 252) -> Dict:
+    def portfolio_risk(self, symbols: list[str], weights: list[float] = None,
+                       lookback_days: int = 252) -> dict:
         """投資組合風險分析"""
         n = len(symbols)
         if weights is None:
@@ -239,7 +240,7 @@ class RiskAnalyzer:
     #  部位管理建議
     # ──────────────────────────────────────────────
     def position_size(self, symbol: str, capital: float,
-                      max_loss_pct: float = 0.02, stop_loss_pct: float = 0.08) -> Dict:
+                      max_loss_pct: float = 0.02, stop_loss_pct: float = 0.08) -> dict:
         """
         ATR-based 部位管理
         capital: 總資金
@@ -304,7 +305,7 @@ class RiskAnalyzer:
     # ──────────────────────────────────────────────
     #  輔助方法
     # ──────────────────────────────────────────────
-    def _get_returns(self, symbol: str, lookback_days: int) -> Optional[List[float]]:
+    def _get_returns(self, symbol: str, lookback_days: int) -> list[float] | None:
         cutoff = datetime.now() - timedelta(days=int(lookback_days * 1.5))
         prices = list(self.db.stock_price.find(
             {'symbol': symbol, 'date': {'$gte': cutoff}},
@@ -326,13 +327,13 @@ class RiskAnalyzer:
 
         return returns[-lookback_days:] if len(returns) > lookback_days else returns
 
-    def _get_latest_price(self, symbol: str) -> Optional[float]:
+    def _get_latest_price(self, symbol: str) -> float | None:
         rec = self.db.stock_price.find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)]
         )
         return _to_float(rec['close']) if rec else None
 
-    def _calc_max_drawdown(self, returns: List[float]) -> Tuple[float, int, int]:
+    def _calc_max_drawdown(self, returns: list[float]) -> tuple[float, int, int]:
         cum = np.cumprod(1 + np.array(returns))
         peak = np.maximum.accumulate(cum)
         dd = (cum - peak) / peak
@@ -400,7 +401,7 @@ class RiskAnalyzer:
         kelly = (p * b - q) / b
         return max(kelly, 0.0)
 
-    def _risk_grade(self, annual_vol: float, max_dd: float, var_95: float) -> Dict:
+    def _risk_grade(self, annual_vol: float, max_dd: float, var_95: float) -> dict:
         score = 0
         if annual_vol < 0.15:
             score += 3
@@ -470,7 +471,7 @@ if __name__ == '__main__':
         print(f"  年化報酬: {p['annual_return']:+.2f}%  波動: {p['annual_volatility']:.2f}%")
         print(f"  Sharpe: {p['sharpe']:.3f}  最大回撤: {p['max_drawdown']:.2f}%")
         print(f"  分散化比率: {port['diversification_ratio']:.3f}")
-        print(f"  相關性矩陣:")
+        print("  相關性矩陣:")
         for i, sym in enumerate(port['correlation_matrix']['symbols']):
             row = port['correlation_matrix']['matrix'][i]
             print(f"    {sym}: {row}")

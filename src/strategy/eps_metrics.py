@@ -18,7 +18,7 @@ def _f(v):
         return None
 
 
-def ttm_eps_yoy(db, symbol: str) -> Tuple[Optional[float], Optional[float]]:
+def ttm_eps_yoy(db, symbol: str) -> tuple[float | None, float | None]:
     """回 (TTM_EPS, EPS_YoY%)。資料不足回 (None, None)。"""
     qs = list(db.quarterly_earnings.find(
         {'symbol': symbol}, {'income.net_income': 1, 'balance.capital_stock': 1}

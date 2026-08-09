@@ -13,14 +13,16 @@
 """
 
 from __future__ import annotations
-from typing import Dict, List, Optional, Tuple
+
 from datetime import datetime, timedelta
-from pymongo import MongoClient
-from bson import Decimal128
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
+from bson import Decimal128
+from pymongo import MongoClient
 
 
-def _tof(v) -> Optional[float]:
+def _tof(v) -> float | None:
     if isinstance(v, Decimal128):
         return float(v.to_decimal())
     try:
@@ -40,7 +42,7 @@ class TradingRules:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  法則一：334 倉位法
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def position_334(self, capital: float, cycle: str = 'normal') -> Dict:
+    def position_334(self, capital: float, cycle: str = 'normal') -> dict:
         """334 倉位管理：30% 底倉 + 30% 機動 + 40% 現金
 
         市場週期會調整比例：
@@ -71,7 +73,7 @@ class TradingRules:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  法則二：止損紀律（5% 無條件 + 破 60 日線清倉）
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def check_stop_loss(self, symbol: str, cost: float) -> Dict:
+    def check_stop_loss(self, symbol: str, cost: float) -> dict:
         """檢查止損：5% 無條件 + 破 60 日線清倉"""
         prices = list(self.db.stock_price.find(
             {'symbol': symbol}, {'close': 1, 'date': 1}
@@ -148,7 +150,7 @@ class TradingRules:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  法則三：買入三問
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def buy_three_questions(self, symbol: str) -> Dict:
+    def buy_three_questions(self, symbol: str) -> dict:
         """買入前三問：為什麼漲？誰在買？還能漲嗎？"""
         # Q1: 為什麼漲？（邏輯）
         factors = self.db.stock_factors.find_one(
@@ -186,10 +188,10 @@ class TradingRules:
             q2_who = f'外資買超 {total_fn/1000:+.0f}千張（主力進場）'
             q2_pass = True
         elif total_fn > 0:
-            q2_who = f'外資買但投信賣（分歧）'
+            q2_who = '外資買但投信賣（分歧）'
             q2_pass = True
         else:
-            q2_who = f'法人賣超（缺乏資金支撐）'
+            q2_who = '法人賣超（缺乏資金支撐）'
             q2_pass = False
 
         # Q3: 還能漲嗎？（空間）
@@ -220,7 +222,7 @@ class TradingRules:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  市場週期判斷（春夏秋冬）
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def market_cycle(self) -> Dict:
+    def market_cycle(self) -> dict:
         """判斷目前市場處於春夏秋冬哪個階段
 
         春播期：小範圍漲停，溫和放量，普遍忽視 → 觀察待機
@@ -291,7 +293,7 @@ class TradingRules:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  主力行為偵測（建倉→洗盤→拉升→出貨）
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def detect_institution_phase(self, symbol: str) -> Dict:
+    def detect_institution_phase(self, symbol: str) -> dict:
         """偵測主力目前在哪個階段"""
         prices = list(self.db.stock_price.find(
             {'symbol': symbol}, {'close': 1, 'volume': 1, 'high': 1, 'low': 1, 'date': 1}
@@ -357,7 +359,7 @@ class TradingRules:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  綜合診斷（法則一～四全檢）
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def full_diagnosis(self, symbol: str, cost: float, capital: float = 1000000) -> Dict:
+    def full_diagnosis(self, symbol: str, cost: float, capital: float = 1000000) -> dict:
         """對單一持股做北大四大法則全面檢查"""
         cycle = self.market_cycle()
         stop = self.check_stop_loss(symbol, cost)

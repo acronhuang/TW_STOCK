@@ -13,15 +13,16 @@ Usage:
     print(pt.rebalance_suggestion({'2330': 60, '0056': 40}))
 """
 
-import sys
 import logging
+import sys
+from collections import defaultdict
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime, timezone, timedelta
-from collections import defaultdict
+
 import numpy as np
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -33,7 +34,7 @@ TRADE_LOG = 'portfolio_trades'
 DIVIDEND_LOG = 'portfolio_dividends'
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -105,7 +106,7 @@ class PortfolioTracker:
                     'shares': new_shares,
                     'avg_cost': round(new_avg, 4),
                     'total_cost': round(new_shares * new_avg, 2),
-                    'updated_at': datetime.now(timezone.utc),
+                    'updated_at': datetime.now(UTC),
                 }}
             )
         else:
@@ -116,7 +117,7 @@ class PortfolioTracker:
                 'avg_cost': price,
                 'total_cost': round(total_cost, 2),
                 'first_buy_date': trade_date,
-                'updated_at': datetime.now(timezone.utc),
+                'updated_at': datetime.now(UTC),
             })
 
         # 記錄交易
@@ -131,7 +132,7 @@ class PortfolioTracker:
             'total': round(total_cost, 2),
             'date': trade_date,
             'note': note,
-            'created_at': datetime.now(timezone.utc),
+            'created_at': datetime.now(UTC),
         })
 
         logger.info(f'買入 {symbol} {shares}股 @ {price} = ${total_cost:,.0f}')
@@ -171,7 +172,7 @@ class PortfolioTracker:
                 {'$set': {
                     'shares': remaining,
                     'total_cost': round(remaining * pos['avg_cost'], 2),
-                    'updated_at': datetime.now(timezone.utc),
+                    'updated_at': datetime.now(UTC),
                 }}
             )
         else:
@@ -193,7 +194,7 @@ class PortfolioTracker:
             'realized_pnl': round(realized_pnl, 2),
             'date': trade_date,
             'note': note,
-            'created_at': datetime.now(timezone.utc),
+            'created_at': datetime.now(UTC),
         })
 
         sign = '+' if realized_pnl >= 0 else ''
@@ -229,7 +230,7 @@ class PortfolioTracker:
             'tax_credit_8_5pct': round(tax_credit, 2),
             'ex_date': ex_date,
             'pay_date': pay_date,
-            'created_at': datetime.now(timezone.utc),
+            'created_at': datetime.now(UTC),
         })
 
         # 若有股票股利，增加持股
@@ -241,7 +242,7 @@ class PortfolioTracker:
                 {'$set': {
                     'shares': new_shares,
                     'avg_cost': round(new_avg, 4),
-                    'updated_at': datetime.now(timezone.utc),
+                    'updated_at': datetime.now(UTC),
                 }}
             )
 
@@ -251,7 +252,7 @@ class PortfolioTracker:
     # ──────────────────────────────────────────────
     #  持倉損益
     # ──────────────────────────────────────────────
-    def summary(self) -> Dict:
+    def summary(self) -> dict:
         """投資組合即時損益摘要"""
         positions = list(self.db[COLLECTION].find(
             {'portfolio': self.portfolio_name}))
@@ -334,8 +335,8 @@ class PortfolioTracker:
     # ──────────────────────────────────────────────
     #  再平衡建議
     # ──────────────────────────────────────────────
-    def rebalance_suggestion(self, target_weights: Dict[str, float],
-                             tolerance: float = 5.0) -> Dict:
+    def rebalance_suggestion(self, target_weights: dict[str, float],
+                             tolerance: float = 5.0) -> dict:
         """
         再平衡建議
         target_weights: {'2330': 50, '0056': 30, '2317': 20}（百分比）
@@ -411,7 +412,7 @@ class PortfolioTracker:
     # ──────────────────────────────────────────────
     #  股利追蹤 / 稅務
     # ──────────────────────────────────────────────
-    def dividend_summary(self, year: int = None) -> Dict:
+    def dividend_summary(self, year: int = None) -> dict:
         """股利收入摘要與稅務計算"""
         query = {'portfolio': self.portfolio_name}
         if year:
@@ -458,7 +459,7 @@ class PortfolioTracker:
     # ──────────────────────────────────────────────
     #  績效歸因分析
     # ──────────────────────────────────────────────
-    def performance_attribution(self, benchmark: str = '0050') -> Dict:
+    def performance_attribution(self, benchmark: str = '0050') -> dict:
         """
         Brinson 績效歸因（簡化版）
         分解投組報酬為：選股效果 + 配置效果 + 交互效果
@@ -526,7 +527,7 @@ class PortfolioTracker:
     # ──────────────────────────────────────────────
     #  交易歷史
     # ──────────────────────────────────────────────
-    def trade_history(self, limit: int = 20) -> List[Dict]:
+    def trade_history(self, limit: int = 20) -> list[dict]:
         trades = list(self.db[TRADE_LOG].find(
             {'portfolio': self.portfolio_name},
             {'_id': 0}
@@ -536,11 +537,11 @@ class PortfolioTracker:
     # ──────────────────────────────────────────────
     #  輔助方法
     # ──────────────────────────────────────────────
-    def _get_position(self, symbol: str) -> Optional[Dict]:
+    def _get_position(self, symbol: str) -> dict | None:
         return self.db[COLLECTION].find_one(
             {'portfolio': self.portfolio_name, 'symbol': symbol})
 
-    def _get_latest_price(self, symbol: str) -> Optional[float]:
+    def _get_latest_price(self, symbol: str) -> float | None:
         rec = self.db.stock_price.find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)])
         return _to_float(rec['close']) if rec else None
@@ -577,7 +578,7 @@ class PortfolioTracker:
         result = list(self.db[TRADE_LOG].aggregate(pipeline))
         return result[0]['total'] if result else 0
 
-    def _calc_period_return(self, symbol: str, days: int = 30) -> Optional[float]:
+    def _calc_period_return(self, symbol: str, days: int = 30) -> float | None:
         cutoff = datetime.now() - timedelta(days=days)
         prices = list(self.db.stock_price.find(
             {'symbol': symbol, 'date': {'$gte': cutoff}},

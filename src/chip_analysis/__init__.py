@@ -11,11 +11,12 @@
 創建日期: 2026-02-23
 """
 
-from typing import Dict, List, Tuple, Optional
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 
 
 def _to_utc_midnight(d) -> datetime:
@@ -26,9 +27,9 @@ def _to_utc_midnight(d) -> datetime:
     （見記憶 date-field-three-representations）。
     """
     if isinstance(d, datetime):
-        return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+        return datetime(d.year, d.month, d.day, tzinfo=UTC)
     ts = pd.to_datetime(d)
-    return datetime(ts.year, ts.month, ts.day, tzinfo=timezone.utc)
+    return datetime(ts.year, ts.month, ts.day, tzinfo=UTC)
 
 
 @dataclass
@@ -83,7 +84,7 @@ class ChipAnalyzer:
         stock_id: str,
         end_date: str,
         lookback_weeks: int = 4
-    ) -> Dict:
+    ) -> dict:
         """
         分析大戶持股趨勢
         
@@ -149,7 +150,7 @@ class ChipAnalyzer:
         stock_id: str,
         end_date: str,
         lookback_days: int = 20
-    ) -> Dict:
+    ) -> dict:
         """
         分析法人買賣動向
         
@@ -211,9 +212,9 @@ class ChipAnalyzer:
     
     def detect_main_force(
         self,
-        holdings_analysis: Dict,
-        trading_analysis: Dict
-    ) -> Tuple[str, float]:
+        holdings_analysis: dict,
+        trading_analysis: dict
+    ) -> tuple[str, float]:
         """
         偵測主力動向
         
@@ -263,8 +264,8 @@ class ChipAnalyzer:
     
     def calculate_chip_score(
         self,
-        holdings_analysis: Dict,
-        trading_analysis: Dict,
+        holdings_analysis: dict,
+        trading_analysis: dict,
         main_force_signal: str,
         main_force_strength: float
     ) -> float:
@@ -364,9 +365,9 @@ class ChipAnalyzer:
     
     def batch_analyze(
         self,
-        stock_ids: List[str],
+        stock_ids: list[str],
         date: str
-    ) -> List[ChipSignal]:
+    ) -> list[ChipSignal]:
         """
         批量分析多支股票
         
@@ -391,9 +392,9 @@ class ChipAnalyzer:
     
     def filter_by_chip_score(
         self,
-        signals: List[ChipSignal],
+        signals: list[ChipSignal],
         min_score: float = 0.6
-    ) -> List[ChipSignal]:
+    ) -> list[ChipSignal]:
         """
         根據籌碼評分過濾
         
@@ -475,7 +476,7 @@ if __name__ == "__main__":
     # 分析台積電
     signal = analyzer.analyze('2330', '2024-12-31')
     
-    print(f"\n台積電籌碼分析（2024-12-31）:")
+    print("\n台積電籌碼分析（2024-12-31）:")
     print(f"  大戶持股（400張+）: {signal.holding_400_plus:.1%}")
     print(f"  4週變化: {signal.holding_change_4w:+.2%}")
     print(f"  持股趨勢: {signal.holding_trend}")

@@ -23,9 +23,9 @@ Usage:
     twstock health
 """
 
-import sys
-import os
 import json
+import os
+import sys
 import warnings
 from pathlib import Path
 
@@ -35,11 +35,13 @@ ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
+
 load_dotenv(ROOT / '.env')
 
-from pymongo import MongoClient
-from bson import Decimal128
 from datetime import datetime, timedelta
+
+from bson import Decimal128
+from pymongo import MongoClient
 
 client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017'))
 db = client['tw_stock_analysis']
@@ -98,8 +100,8 @@ def cmd_ranking(limit=20):
 
 
 def cmd_scan(limit=20):
-    from src.analysis.stock_ranker import StockRanker
     from src.analysis.risk_manager import RiskAnalyzer
+    from src.analysis.stock_ranker import StockRanker
     sr, ra = StockRanker(), RiskAnalyzer()
     ranking = sr.rank(limit=limit*2)
     results = []

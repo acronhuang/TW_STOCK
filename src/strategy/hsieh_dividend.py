@@ -28,18 +28,20 @@
 """
 
 from __future__ import annotations
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
-from pymongo import MongoClient
-from bson import Decimal128
-import numpy as np
+
 import logging
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+import numpy as np
+from bson import Decimal128
+from pymongo import MongoClient
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
 
 
-def _tof(v) -> Optional[float]:
+def _tof(v) -> float | None:
     if isinstance(v, Decimal128):
         return float(v.to_decimal())
     try:
@@ -71,7 +73,7 @@ class HsiehDividendStrategy:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  主掃描
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def scan(self, limit: int = 30) -> List[Dict]:
+    def scan(self, limit: int = 30) -> list[dict]:
         """全市場掃描"""
         logger.info("開始謝富旭深度價值掃描...")
 
@@ -99,7 +101,7 @@ class HsiehDividendStrategy:
         logger.info(f"  通過篩選: {len(results)} 支")
         return results[:limit]
 
-    def _evaluate(self, symbol: str) -> Optional[Dict]:
+    def _evaluate(self, symbol: str) -> dict | None:
         """對單支股票做謝富旭全面評估"""
         price_doc = self.db.stock_price.find_one(
             {'symbol': symbol}, sort=[('date', -1)])
@@ -179,7 +181,7 @@ class HsiehDividendStrategy:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  一、本業獲利能力
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def _check_profitability(self, symbol: str) -> Dict:
+    def _check_profitability(self, symbol: str) -> dict:
         """毛利率穩定 + 營業利益率 + 議價能力"""
         score = 0
         qes = list(self.db.quarterly_earnings.find(
@@ -237,7 +239,7 @@ class HsiehDividendStrategy:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  二、安全三門檻
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def _check_safety_thresholds(self, symbol: str) -> Dict:
+    def _check_safety_thresholds(self, symbol: str) -> dict:
         """負債比 < 60% / 速動比 > 100% / 未分配盈餘 > 2 個股本"""
         score = 0
         debt_ratio = None
@@ -315,7 +317,7 @@ class HsiehDividendStrategy:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  三、配息穩定性
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def _check_dividend_stability(self, symbol: str, price: float) -> Dict:
+    def _check_dividend_stability(self, symbol: str, price: float) -> dict:
         """連續配息年數 + 平均股利 + 殖利率"""
         score = 0
         divs = list(self.db.dividend_detail.find(
@@ -379,7 +381,7 @@ class HsiehDividendStrategy:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  四、估價：未來配息估算法
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def _check_valuation(self, symbol: str, price: float, div_info: Dict) -> Dict:
+    def _check_valuation(self, symbol: str, price: float, div_info: dict) -> dict:
         """四區間估價色帶（參考謝富旭 2026/4/13 更新格式）
 
         紅色=便宜（殖利率 ≥ 8%）  → 積極買進
@@ -426,7 +428,7 @@ class HsiehDividendStrategy:
             'zones': zones,
         }
 
-    def _estimate_future_dividend(self, div_info: Dict) -> float:
+    def _estimate_future_dividend(self, div_info: dict) -> float:
         """預估未來配息（考慮成長趨勢）"""
         avg = div_info.get('avg_dividend', 0)
         if avg <= 0:
@@ -441,7 +443,7 @@ class HsiehDividendStrategy:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  五、抗壓性
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def _check_resilience(self, symbol: str) -> Dict:
+    def _check_resilience(self, symbol: str) -> dict:
         """景氣冷衰退少、景氣熱成長多"""
         score = 0
         qes = list(self.db.quarterly_earnings.find(
@@ -471,7 +473,7 @@ class HsiehDividendStrategy:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  三段式風控
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def _check_upcoming_ex_dividend(self, symbol: str) -> Optional[Dict]:
+    def _check_upcoming_ex_dividend(self, symbol: str) -> dict | None:
         """檢查是否即將除息（已公布除息日但尚未除息）"""
         today = datetime.now()
         divs = list(self.db.dividend_detail.find(
@@ -498,7 +500,7 @@ class HsiehDividendStrategy:
                 pass
         return None
 
-    def _eps_trend(self, symbol: str) -> Dict:
+    def _eps_trend(self, symbol: str) -> dict:
         """3 年 EPS 趨勢"""
         qes = list(self.db.quarterly_earnings.find(
             {'symbol': symbol}
@@ -537,7 +539,7 @@ class HsiehDividendStrategy:
 
         return {'trend': trend, 'eps_by_year': eps_list}
 
-    def market_risk_level(self) -> Dict:
+    def market_risk_level(self) -> dict:
         """三段式風控：觀察大盤從年內高點跌落幅度"""
         prices = list(self.db.stock_price.find(
             {'symbol': '0050'}, {'close': 1, 'date': 1}
@@ -584,7 +586,8 @@ class HsiehDividendStrategy:
 
 
 if __name__ == '__main__':
-    import os, sys
+    import os
+    import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     from dotenv import load_dotenv
     load_dotenv()

@@ -4,16 +4,18 @@
 嚴格 DDD 應放在 infrastructure/ 但為實用性保留在此。
 """
 from __future__ import annotations
-from typing import List, Optional, Dict
+
 from datetime import datetime, timedelta
-from pymongo import MongoClient
+from typing import Dict, List, Optional
+
 from bson import Decimal128
+from pymongo import MongoClient
 
+from ..models.stock import Stock, StockFactor, StockPrice
 from .stock_repository import StockRepository
-from ..models.stock import Stock, StockPrice, StockFactor
 
 
-def _tof(v) -> Optional[float]:
+def _tof(v) -> float | None:
     if isinstance(v, Decimal128):
         return float(v.to_decimal())
     try:
@@ -30,7 +32,7 @@ class MongoStockRepository(StockRepository):
                  db_name: str = "tw_stock_analysis"):
         self.db = MongoClient(mongo_uri)[db_name]
 
-    def get_price(self, symbol: str, days: int = 20) -> List[StockPrice]:
+    def get_price(self, symbol: str, days: int = 20) -> list[StockPrice]:
         records = list(self.db.stock_price.find(
             {'symbol': symbol},
             {'_id': 0, 'date': 1, 'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1}
@@ -46,12 +48,12 @@ class MongoStockRepository(StockRepository):
             volume=_tof(r.get('volume')) or 0,
         ) for r in reversed(records)]
 
-    def get_latest_price(self, symbol: str) -> Optional[float]:
+    def get_latest_price(self, symbol: str) -> float | None:
         doc = self.db.stock_price.find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)])
         return _tof(doc['close']) if doc else None
 
-    def get_factor(self, symbol: str) -> Optional[StockFactor]:
+    def get_factor(self, symbol: str) -> StockFactor | None:
         doc = self.db.stock_factors.find_one(
             {'symbol': symbol}, sort=[('date', -1)])
         if not doc:
@@ -69,10 +71,10 @@ class MongoStockRepository(StockRepository):
             volatility_30d=_tof(doc.get('volatility_30d')),
         )
 
-    def get_all_symbols(self) -> List[str]:
+    def get_all_symbols(self) -> list[str]:
         return sorted(self.db.stock_factors.distinct('symbol'))
 
-    def get_quarterly_earnings(self, symbol: str, limit: int = 4) -> List[Dict]:
+    def get_quarterly_earnings(self, symbol: str, limit: int = 4) -> list[dict]:
         return list(self.db.quarterly_earnings.find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(limit))

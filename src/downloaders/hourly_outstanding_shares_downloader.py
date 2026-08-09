@@ -14,18 +14,19 @@
     python3 src/downloaders/hourly_outstanding_shares_downloader.py --all
 """
 
-import sys
-import os
 import argparse
 import logging
+import os
+import sys
 import time
-from pathlib import Path
 from datetime import datetime, timedelta
 from decimal import Decimal
-from pymongo import MongoClient
-from bson.decimal128 import Decimal128
-import requests
+from pathlib import Path
 from typing import Dict, List, Tuple
+
+import requests
+from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -111,7 +112,7 @@ class HourlyDownloader:
         wait_seconds = (next_hour - now).total_seconds()
         
         self.logger.info(f"\n{'='*80}")
-        self.logger.info(f"⏰ API 配额已耗尽")
+        self.logger.info("⏰ API 配额已耗尽")
         self.logger.info(f"{'='*80}")
         self.logger.info(f"当前时间: {now.strftime('%H:%M:%S')}")
         self.logger.info(f"下次重试: {next_hour.strftime('%H:%M:%S')}")
@@ -135,10 +136,10 @@ class HourlyDownloader:
         self.consecutive_402_errors = 0
         
         self.logger.info(f"\n{'='*80}")
-        self.logger.info(f"✅ 配额已重置，继续下载...")
+        self.logger.info("✅ 配额已重置，继续下载...")
         self.logger.info(f"{'='*80}\n")
     
-    def download_capital_stock(self, stock_id: str) -> Tuple[float, bool]:
+    def download_capital_stock(self, stock_id: str) -> tuple[float, bool]:
         """
         下载股本数据
         
@@ -230,7 +231,7 @@ class HourlyDownloader:
             self.logger.error(f"❌ {stock_id}: 处理失败 - {e}")
             return 0.0, False
     
-    def update_stock(self, stock_id: str, stock_name: str = "") -> Dict:
+    def update_stock(self, stock_id: str, stock_name: str = "") -> dict:
         """更新单一股票"""
         stats = {
             'stock_id': stock_id,
@@ -271,13 +272,13 @@ class HourlyDownloader:
             stats['status'] = 'success'
             
         except Exception as e:
-            self.logger.error(f"❌ {stock_id}: 处理失败 - {str(e)}")
+            self.logger.error(f"❌ {stock_id}: 处理失败 - {e!s}")
             stats['status'] = 'error'
             stats['error'] = str(e)
         
         return stats
     
-    def _load_priority_list(self) -> List[Tuple[str, str]]:
+    def _load_priority_list(self) -> list[tuple[str, str]]:
         """加载优先列表"""
         priority_file = project_root / "data" / "priority_stocks.txt"
         
@@ -286,7 +287,7 @@ class HourlyDownloader:
             return []
         
         stock_list = []
-        with open(priority_file, 'r', encoding='utf-8') as f:
+        with open(priority_file, encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
@@ -299,7 +300,7 @@ class HourlyDownloader:
         
         return stock_list
     
-    def _get_missing_stocks(self, stock_list: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    def _get_missing_stocks(self, stock_list: list[tuple[str, str]]) -> list[tuple[str, str]]:
         """获取未下载的股票"""
         missing = []
         for stock_id, stock_name in stock_list:
@@ -321,7 +322,7 @@ class HourlyDownloader:
             max_hours: 最多运行小时数（防止无限循环）
         """
         self.logger.info(f"\n{'='*80}")
-        self.logger.info(f"🚀 每小时自动下载器")
+        self.logger.info("🚀 每小时自动下载器")
         self.logger.info(f"{'='*80}")
         self.logger.info(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.logger.info(f"模式: {'优先列表 (50 支核心股票)' if priority_list else '全部股票'}")
@@ -348,7 +349,7 @@ class HourlyDownloader:
             
             if not missing_stocks:
                 self.logger.info(f"\n{'='*80}")
-                self.logger.info(f"✅ 所有股票都已下载完成！")
+                self.logger.info("✅ 所有股票都已下载完成！")
                 self.logger.info(f"{'='*80}")
                 self.logger.info(f"总下载数: {total_downloaded}")
                 self.logger.info(f"总耗时: {hours_elapsed} 小时")
@@ -396,7 +397,7 @@ class HourlyDownloader:
         
         # 最终报告
         self.logger.info(f"\n{'='*80}")
-        self.logger.info(f"🎉 下载任务完成")
+        self.logger.info("🎉 下载任务完成")
         self.logger.info(f"{'='*80}")
         self.logger.info(f"总下载数: {total_downloaded} 支")
         self.logger.info(f"总耗时: {hours_elapsed} 小时")

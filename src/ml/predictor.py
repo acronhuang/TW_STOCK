@@ -14,16 +14,17 @@ Usage:
     prediction = sp.predict('2330')
 """
 
-import sys
 import logging
 import pickle
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+
 import numpy as np
 import pandas as pd
-from pymongo import MongoClient
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -33,7 +34,7 @@ MODEL_DIR = project_root / 'models'
 MODEL_DIR.mkdir(exist_ok=True)
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -68,7 +69,7 @@ class StockPredictor:
     # ──────────────────────────────────────────────
     #  特徵工程
     # ──────────────────────────────────────────────
-    def _build_features(self, symbol: str, lookback_days: int = 500) -> Optional[pd.DataFrame]:
+    def _build_features(self, symbol: str, lookback_days: int = 500) -> pd.DataFrame | None:
         """從股價建構特徵 DataFrame"""
         cutoff = datetime.now() - timedelta(days=int(lookback_days * 1.5))
         prices = list(self.db.stock_price.find(
@@ -149,11 +150,11 @@ class StockPredictor:
     # ──────────────────────────────────────────────
     #  訓練
     # ──────────────────────────────────────────────
-    def train(self, symbol: str, lookback_days: int = 500) -> Dict:
+    def train(self, symbol: str, lookback_days: int = 500) -> dict:
         """訓練個股預測模型"""
-        from xgboost import XGBClassifier
-        from sklearn.model_selection import TimeSeriesSplit
         from sklearn.metrics import accuracy_score, classification_report
+        from sklearn.model_selection import TimeSeriesSplit
+        from xgboost import XGBClassifier
 
         df = self._build_features(symbol, lookback_days)
         if df is None or len(df) < 100:
@@ -218,7 +219,7 @@ class StockPredictor:
     # ──────────────────────────────────────────────
     #  預測
     # ──────────────────────────────────────────────
-    def predict(self, symbol: str) -> Dict:
+    def predict(self, symbol: str) -> dict:
         """預測未來 N 天方向"""
         # 載入模型
         if symbol not in self.models:
@@ -264,7 +265,7 @@ class StockPredictor:
     # ──────────────────────────────────────────────
     #  批次預測
     # ──────────────────────────────────────────────
-    def batch_predict(self, symbols: List[str]) -> List[Dict]:
+    def batch_predict(self, symbols: list[str]) -> list[dict]:
         """批次預測多支股票"""
         results = []
         for sym in symbols:
@@ -304,7 +305,7 @@ if __name__ == '__main__':
               f"CV: {result['cv_scores']}")
         print(f"  樣本數: {result['train_samples']}  "
               f"上漲比例: {result['positive_ratio']}%")
-        print(f"  重要特徵:")
+        print("  重要特徵:")
         for f in result['top_features'][:3]:
             print(f"    {f['feature']}: {f['importance']:.4f}")
 

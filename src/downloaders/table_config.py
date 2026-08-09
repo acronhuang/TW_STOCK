@@ -4,8 +4,8 @@
 """
 
 from datetime import datetime, timedelta
-from pymongo import ASCENDING, DESCENDING
 
+from pymongo import ASCENDING, DESCENDING
 
 # 完整的 43 個資料表配置
 DATA_TABLES = {

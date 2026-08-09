@@ -12,13 +12,14 @@ P1: 日期清洗工具 - 統一所有日期格式為 ISODate
     python3 src/utils/date_cleaner.py --execute  # 實際執行
 """
 
-import sys
 import argparse
 import logging
+import sys
+from datetime import date, datetime
 from pathlib import Path
-from datetime import datetime, date
-from pymongo import MongoClient, UpdateOne
+
 from bson import ObjectId
+from pymongo import MongoClient, UpdateOne
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -187,7 +188,7 @@ class DateCleaner:
         }
         
         if total_docs == 0:
-            self.logger.warning(f"⚠️  沒有需要清洗的文檔")
+            self.logger.warning("⚠️  沒有需要清洗的文檔")
             return stats
         
         # 批次處理

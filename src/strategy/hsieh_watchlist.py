@@ -15,13 +15,16 @@
 """
 
 from __future__ import annotations
-from typing import Dict, List, Optional
-from datetime import datetime
-from pymongo import MongoClient
-from bson import Decimal128
-import os
 
-def _tof(v) -> Optional[float]:
+import os
+from datetime import datetime
+from typing import Dict, List, Optional
+
+from bson import Decimal128
+from pymongo import MongoClient
+
+
+def _tof(v) -> float | None:
     if isinstance(v, Decimal128): return float(v.to_decimal())
     try: return float(v)
     except: return None
@@ -201,7 +204,7 @@ class HsiehWatchlist:
         uri = mongo_uri or os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
         self.db = MongoClient(uri)[db_name]
 
-    def report(self) -> List[Dict]:
+    def report(self) -> list[dict]:
         """產出完整追蹤報告"""
         results = []
         for sym, name, industry, attr, est_div, zone, ex_date in HSIEH_PICKS:
@@ -266,14 +269,15 @@ class HsiehWatchlist:
 
         return results
 
-    def full_analysis(self) -> List[Dict]:
+    def full_analysis(self) -> list[dict]:
         """對老師清單每支做主動深度分析（不只追蹤，要給建議）"""
-        from src.analysis.financial_health import FinancialHealthAnalyzer
-        from src.analysis.valuation_models import ValuationAnalyzer
-        from src.analysis.risk_manager import RiskAnalyzer
-        from src.strategy.trading_rules import TradingRules
-        from src.strategy.hsieh_analysis import HsiehAnalysis
         import csv
+
+        from src.analysis.financial_health import FinancialHealthAnalyzer
+        from src.analysis.risk_manager import RiskAnalyzer
+        from src.analysis.valuation_models import ValuationAnalyzer
+        from src.strategy.hsieh_analysis import HsiehAnalysis
+        from src.strategy.trading_rules import TradingRules
 
         fh, va, ra, tr, ha = FinancialHealthAnalyzer(), ValuationAnalyzer(), RiskAnalyzer(), TradingRules(), HsiehAnalysis()
 
@@ -507,7 +511,7 @@ class HsiehWatchlist:
 
         # 短線套利機會
         if HSIEH_SHORT_TERM:
-            lines.append(f"\n📌 短線套利（第786期）")
+            lines.append("\n📌 短線套利（第786期）")
             today = datetime.now()
             for sym, info in HSIEH_SHORT_TERM.items():
                 name_r = next((r for r in results if r['symbol'] == sym), None)
@@ -562,7 +566,7 @@ class HsiehWatchlist:
         # 即將除息
         upcoming = [r for r in results if r.get('days_to_ex') and 0 < r['days_to_ex'] <= 60]
         if upcoming:
-            lines.append(f"\n🟡 即將除息（60天內）")
+            lines.append("\n🟡 即將除息（60天內）")
             for r in upcoming:
                 lines.append(f"  {r['symbol']} {r['name']} {r['ex_date']} 配{r['est_div'] or '?'}元")
 

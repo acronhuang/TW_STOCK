@@ -13,19 +13,21 @@
 """
 
 from __future__ import annotations
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
-from pymongo import MongoClient
-from bson import Decimal128
-import numpy as np
-import os
+
 import logging
+import os
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+import numpy as np
+from bson import Decimal128
+from pymongo import MongoClient
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
 
 
-def _tof(v) -> Optional[float]:
+def _tof(v) -> float | None:
     if isinstance(v, Decimal128): return float(v.to_decimal())
     try: return float(v)
     except: return None
@@ -38,7 +40,7 @@ class HsiehAnalysis:
         uri = mongo_uri or os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
         self.db = MongoClient(uri)[db_name]
 
-    def full_research(self, symbol: str) -> Dict:
+    def full_research(self, symbol: str) -> dict:
         """對單支股票做謝富旭式完整研究"""
         p = self.db.stock_price.find_one({'symbol': symbol}, sort=[('date', -1)])
         if not p:
@@ -69,7 +71,7 @@ class HsiehAnalysis:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  1. 財報驚喜偵測
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def detect_earnings_surprise(self, symbol: str, price: float) -> Dict:
+    def detect_earnings_surprise(self, symbol: str, price: float) -> dict:
         """
         財報驚喜 = 營收大幅成長 + 股價尚未反映
 
@@ -123,7 +125,7 @@ class HsiehAnalysis:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  2. EPS → 配息 → 合理價 推演鏈
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def eps_to_fair_price(self, symbol: str) -> Dict:
+    def eps_to_fair_price(self, symbol: str) -> dict:
         """
         老師估價法：
           預估全年 EPS → 乘配息率 → 得預估配息 → 除以期望殖利率 → 合理價
@@ -170,7 +172,7 @@ class HsiehAnalysis:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  3. 配股效應分析
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def analyze_stock_dividend(self, symbol: str) -> Dict:
+    def analyze_stock_dividend(self, symbol: str) -> dict:
         """
         老師原則：配股好不好取決於是否為成長股
         如果獲利成長能追上股本膨脹 → 支持配股
@@ -211,7 +213,7 @@ class HsiehAnalysis:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  4. 填息條件評估
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def assess_fill_dividend(self, symbol: str) -> Dict:
+    def assess_fill_dividend(self, symbol: str) -> dict:
         """
         老師原則：今年 EPS ≥ 去年 EPS → 填息機率高
         即使今年無法填息，只要 EPS 成長，明後年也會填
@@ -252,7 +254,7 @@ class HsiehAnalysis:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  5. 結構性成長辨識
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def detect_structural_growth(self, symbol: str) -> Dict:
+    def detect_structural_growth(self, symbol: str) -> dict:
         """
         老師定義：
         結構性成長 = 以前沒有或不多，但現在很多的獲利
@@ -307,7 +309,7 @@ class HsiehAnalysis:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  6. 三段式風控
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def three_stage_risk(self) -> Dict:
+    def three_stage_risk(self) -> dict:
         """大盤從年內高點跌落幅度 → 部位調整"""
         prices = list(self.db.stock_price.find(
             {'symbol': '0050'}, {'close': 1}
@@ -330,7 +332,7 @@ class HsiehAnalysis:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  綜合評語
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def check_stop_loss_rules(self, symbol: str, price: float) -> Dict:
+    def check_stop_loss_rules(self, symbol: str, price: float) -> dict:
         """
         謝富旭停損三原則（第787期 2026/4/24）
         1. 扛不住：持股比重太高
@@ -373,7 +375,7 @@ class HsiehAnalysis:
 
         return {'checks': checks}
 
-    def _generate_verdict(self, r: Dict) -> str:
+    def _generate_verdict(self, r: dict) -> str:
         points = []
         surprise = r.get('earnings_surprise', {})
         if surprise.get('score', 0) > 3:

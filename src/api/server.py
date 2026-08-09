@@ -8,22 +8,23 @@ URL:  http://localhost:8888
 供 OpenClaw Ollama agents 透過 HTTP 取得即時分析數據。
 """
 
-import sys
 import os
-from pathlib import Path
+import sys
 from datetime import datetime, timedelta
-from typing import Optional, List
+from pathlib import Path
+from typing import List, Optional
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
+
 load_dotenv(project_root / '.env')
 
+from bson import Decimal128
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
-from bson import Decimal128
 
 app = FastAPI(title="台股智能分析 API", version="1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -101,7 +102,7 @@ def get_risk(symbol: str):
 
 @app.get("/api/risk/portfolio")
 def get_portfolio_risk(symbols: str = Query(..., description="逗號分隔，如 2330,2317,0056"),
-                       weights: Optional[str] = None):
+                       weights: str | None = None):
     """投組風險分析"""
     from src.analysis.risk_manager import RiskAnalyzer
     ra = RiskAnalyzer()
@@ -298,8 +299,8 @@ def get_financial(symbol: str):
 @app.get("/api/scan")
 def scan_market(limit: int = 20):
     """全市場綜合分析：排行 + 風險篩選 + 最終推薦"""
-    from src.analysis.stock_ranker import StockRanker
     from src.analysis.risk_manager import RiskAnalyzer
+    from src.analysis.stock_ranker import StockRanker
     sr = StockRanker()
     ra = RiskAnalyzer()
 
@@ -363,7 +364,7 @@ def _clean(doc):
 
 
 @app.get("/api/team/{symbol}")
-def team_symbol(symbol: str, date: Optional[str] = None):
+def team_symbol(symbol: str, date: str | None = None):
     """個股團隊分析：6 角色報告 + 佐證 + 顧問整合 + .27 合議定案 + 復驗狀態。
     date=YYYYMMDD 指定日期；預設回最新一日。"""
     q = {'symbol': symbol}
@@ -376,8 +377,8 @@ def team_symbol(symbol: str, date: Optional[str] = None):
 
 
 @app.get("/api/team")
-def team_verdicts(date: Optional[str] = None, verdict: Optional[str] = None,
-                  status: Optional[str] = None, limit: int = 3000):
+def team_verdicts(date: str | None = None, verdict: str | None = None,
+                  status: str | None = None, limit: int = 3000):
     """全市場定案彙總（供 dashboard 表格）。可依 date / verdict / verify 狀態篩選。
     預設回最新一個有資料的日期。"""
     if date:

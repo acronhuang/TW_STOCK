@@ -13,16 +13,17 @@ P1: 調整後收盤價計算器 (原子性更新版本)
     python3 src/calculators/adj_close_calculator_atomic.py --all --execute
 """
 
-import sys
 import argparse
 import logging
-from pathlib import Path
+import sys
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
 from pymongo.errors import BulkWriteError
-from bson.decimal128 import Decimal128
-from typing import List, Dict, Optional
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -80,7 +81,7 @@ class AtomicAdjustedCloseCalculator:
         """轉換為 Decimal128，保留4位小數"""
         return Decimal128(Decimal(str(round(value, 4))))
     
-    def _normalize_date(self, date_value) -> Optional[datetime]:
+    def _normalize_date(self, date_value) -> datetime | None:
         """統一日期格式為 datetime"""
         if date_value is None:
             return None
@@ -90,7 +91,7 @@ class AtomicAdjustedCloseCalculator:
         self.logger.warning(f"日期格式異常: {type(date_value)}, 值: {date_value}")
         return None
     
-    def get_dividend_events(self, stock_id: str) -> List[Dict]:
+    def get_dividend_events(self, stock_id: str) -> list[dict]:
         """
         獲取除權息事件
         
@@ -137,7 +138,7 @@ class AtomicAdjustedCloseCalculator:
         
         return events
     
-    def calculate_stock_atomic(self, stock_id: str, dry_run: bool = True) -> Dict:
+    def calculate_stock_atomic(self, stock_id: str, dry_run: bool = True) -> dict:
         """
         原子性計算單一股票的 adj_close
         
@@ -183,7 +184,7 @@ class AtomicAdjustedCloseCalculator:
             stats['total_records'] = len(prices)
             
             if not prices:
-                self.logger.warning(f"⚠️  沒有價格數據")
+                self.logger.warning("⚠️  沒有價格數據")
                 stats['status'] = 'no_data'
                 return stats
             
@@ -256,7 +257,7 @@ class AtomicAdjustedCloseCalculator:
             # 4. 原子性批次更新
             if not dry_run and updates:
                 try:
-                    self.logger.info(f"開始原子性批次更新...")
+                    self.logger.info("開始原子性批次更新...")
                     
                     result = self.db.stock_price.bulk_write(
                         updates,
@@ -276,7 +277,7 @@ class AtomicAdjustedCloseCalculator:
                     # 原子性保證：bulk_write 失敗時，MongoDB 會自動回滾該批次
                 
                 except Exception as e:
-                    error_msg = f"未預期錯誤: {str(e)}"
+                    error_msg = f"未預期錯誤: {e!s}"
                     self.logger.error(f"❌ {error_msg}")
                     stats['errors'].append(error_msg)
                     stats['status'] = 'error'
@@ -287,7 +288,7 @@ class AtomicAdjustedCloseCalculator:
                 self.logger.info(f"✅ 預覽完成: 將更新 {stats['calculated']:,} 筆")
             
         except Exception as e:
-            error_msg = f"計算失敗: {str(e)}"
+            error_msg = f"計算失敗: {e!s}"
             self.logger.error(f"❌ {error_msg}")
             stats['errors'].append(error_msg)
             stats['status'] = 'error'
@@ -305,7 +306,7 @@ class AtomicAdjustedCloseCalculator:
         
         return stats
     
-    def calculate_all_atomic(self, dry_run: bool = True, limit: int = None) -> Dict:
+    def calculate_all_atomic(self, dry_run: bool = True, limit: int = None) -> dict:
         """原子性計算所有股票"""
         self.logger.info("\n" + "="*80)
         self.logger.info("🚀 調整後收盤價計算器 (原子性更新版)")
@@ -358,7 +359,7 @@ class AtomicAdjustedCloseCalculator:
         
         return summary
     
-    def _print_summary(self, summary: Dict, failed_stocks: List, dry_run: bool):
+    def _print_summary(self, summary: dict, failed_stocks: list, dry_run: bool):
         """列印總結報告"""
         self.logger.info("\n" + "="*80)
         self.logger.info("📊 計算總結")
@@ -371,7 +372,7 @@ class AtomicAdjustedCloseCalculator:
         self.logger.info(f"{'將更新' if dry_run else '已更新'}: {summary['total_updated']:,}")
         
         if failed_stocks:
-            self.logger.info(f"\n⚠️  失敗股票清單:")
+            self.logger.info("\n⚠️  失敗股票清單:")
             for item in failed_stocks[:10]:  # 只顯示前10個
                 self.logger.info(f"  {item['stock_id']}: {item['errors'][:2]}")
         

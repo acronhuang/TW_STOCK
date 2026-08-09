@@ -10,12 +10,13 @@ Author: SenVision Team
 Date: 2026-02-24
 """
 
-import numpy as np
-import pandas as pd
-from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import pandas as pd
 
 from .zigzag import Peak, ZigZagIndicator
 
@@ -86,10 +87,10 @@ class Pattern:
     target: float
     stop_loss: float
     risk_reward_ratio: float
-    key_points: Dict[str, Peak]
+    key_points: dict[str, Peak]
     formation_date: datetime
-    breakout_date: Optional[datetime] = None
-    current_price: Optional[float] = None
+    breakout_date: datetime | None = None
+    current_price: float | None = None
     status: PatternStatus = PatternStatus.FORMING
     volume_confirmed: bool = False
     confidence: float = 0.0
@@ -99,7 +100,7 @@ class Pattern:
                 f"頸線={self.neckline:.2f}, 目標={self.target:.2f}, "
                 f"風報比={self.risk_reward_ratio:.2f}, 狀態={self.status.value})")
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """轉換為字典格式"""
         return {
             'stock_id': self.stock_id,
@@ -145,7 +146,7 @@ class PatternDetector:
     # 價格容忍度（子類可覆寫）
     price_tolerance: float = 0.03
 
-    def detect(self, df: pd.DataFrame, stock_id: str) -> List[Pattern]:
+    def detect(self, df: pd.DataFrame, stock_id: str) -> list[Pattern]:
         """
         檢測形態（由子類實現）
 
@@ -268,7 +269,7 @@ class PatternDetector:
         return reward / risk
     
     def _find_breakout_bar(self, df: pd.DataFrame, neckline: float,
-                           start_idx: int, is_bullish: bool) -> Optional[int]:
+                           start_idx: int, is_bullish: bool) -> int | None:
         """找到突破頸線的第一根 bar 索引。"""
         for i in range(start_idx, len(df)):
             if is_bullish and df['close'].iloc[i] >= neckline:
@@ -347,7 +348,7 @@ class WBottomDetector(PatternDetector):
         super().__init__(zigzag_threshold, **kwargs)
         self.price_tolerance = price_tolerance
     
-    def detect(self, df: pd.DataFrame, stock_id: str) -> List[Pattern]:
+    def detect(self, df: pd.DataFrame, stock_id: str) -> list[Pattern]:
         """
         檢測 W 底形態
         
@@ -465,7 +466,7 @@ class MTopDetector(PatternDetector):
         super().__init__(zigzag_threshold, **kwargs)
         self.price_tolerance = price_tolerance
     
-    def detect(self, df: pd.DataFrame, stock_id: str) -> List[Pattern]:
+    def detect(self, df: pd.DataFrame, stock_id: str) -> list[Pattern]:
         """檢測 M 頭形態"""
         patterns = []
         
@@ -573,7 +574,7 @@ class TripleBottomDetector(PatternDetector):
         super().__init__(zigzag_threshold, **kwargs)
         self.price_tolerance = price_tolerance
 
-    def detect(self, df: pd.DataFrame, stock_id: str) -> List[Pattern]:
+    def detect(self, df: pd.DataFrame, stock_id: str) -> list[Pattern]:
         patterns = []
         peaks = self.zigzag.calculate(df)
 
@@ -679,7 +680,7 @@ class TripleTopDetector(PatternDetector):
         super().__init__(zigzag_threshold, **kwargs)
         self.price_tolerance = price_tolerance
 
-    def detect(self, df: pd.DataFrame, stock_id: str) -> List[Pattern]:
+    def detect(self, df: pd.DataFrame, stock_id: str) -> list[Pattern]:
         patterns = []
         peaks = self.zigzag.calculate(df)
 

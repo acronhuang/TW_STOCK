@@ -9,12 +9,14 @@
 """
 
 from __future__ import annotations
+
 from typing import Dict, Optional
-from pymongo import MongoClient
+
 from bson import Decimal128
+from pymongo import MongoClient
 
 
-def _tof(v) -> Optional[float]:
+def _tof(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -50,7 +52,7 @@ class FinancialFilter:
               min_ttm_net_income: float = 0,
               max_debt_ratio: float = 80,
               min_net_margin: float = 0,
-              min_positive_quarters: int = 3) -> Dict:
+              min_positive_quarters: int = 3) -> dict:
         """完整檢查並回傳細節"""
         qes = list(self.db.quarterly_earnings.find(
             {'symbol': symbol}
@@ -148,7 +150,7 @@ class FinancialFilter:
     # ─────────────────────────────────────
     #  批次檢查（供 stock_ranker 用）
     # ─────────────────────────────────────
-    def filter_symbols(self, symbols: list, **kwargs) -> Dict[str, bool]:
+    def filter_symbols(self, symbols: list, **kwargs) -> dict[str, bool]:
         """批次：回傳 {symbol: healthy_bool}"""
         return {s: self.is_healthy(s, **kwargs) for s in symbols}
 

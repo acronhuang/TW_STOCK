@@ -31,7 +31,7 @@ def _factor(db, symbol, field):
     return _f(rec.get(field)) if rec else None
 
 
-def _daily_vol(db, symbol, days=30) -> Optional[float]:
+def _daily_vol(db, symbol, days=30) -> float | None:
     """近 days 日簡單報酬標準差(日波動)。"""
     closes = [_f(p.get('close')) for p in db.stock_price.find(
         {'symbol': symbol}, {'close': 1}).sort('date', -1).limit(days + 1)]
@@ -45,7 +45,7 @@ def _daily_vol(db, symbol, days=30) -> Optional[float]:
     return var ** 0.5
 
 
-def portfolio_snapshot(db) -> Dict:
+def portfolio_snapshot(db) -> dict:
     """回 {nav, positions:{sym:{shares,cost,price,value,pnl_pct,weight}}}（合併所有 portfolio）。"""
     pos = {}
     for d in db.portfolio_positions.find():
@@ -71,7 +71,7 @@ def portfolio_snapshot(db) -> Dict:
     return {'nav': nav, 'positions': pos}
 
 
-def var_lines(db, symbol: str, snapshot: Optional[Dict] = None) -> List[str]:
+def var_lines(db, symbol: str, snapshot: dict | None = None) -> list[str]:
     """此持倉的 VaR/淨值影響文字（無持倉資料則回空）。"""
     snap = snapshot or portfolio_snapshot(db)
     nav, pos = snap['nav'], snap['positions'].get(symbol)
@@ -89,7 +89,7 @@ def var_lines(db, symbol: str, snapshot: Optional[Dict] = None) -> List[str]:
 
 
 def checklist(db, symbol: str, cost: float, name: str = '',
-              snapshot: Optional[Dict] = None) -> str:
+              snapshot: dict | None = None) -> str:
     """止損觸發後四維檢查清單（每項用客觀資料自動填答 + 結論）。"""
     from src.strategy.trading_rules import TradingRules
     tr = TradingRules()

@@ -8,11 +8,12 @@ Author: SenVision Team
 Date: 2026-02-24
 """
 
-import numpy as np
-import pandas as pd
-from typing import List, Tuple, Optional, Literal
 from dataclasses import dataclass
 from datetime import datetime
+from typing import List, Literal, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 
 
 @dataclass
@@ -63,7 +64,7 @@ class ZigZagIndicator:
     def calculate(self, df: pd.DataFrame, 
                   high_col: str = 'high',
                   low_col: str = 'low',
-                  date_col: str = 'date') -> List[Peak]:
+                  date_col: str = 'date') -> list[Peak]:
         """
         計算 ZigZag 轉折點
         
@@ -204,7 +205,7 @@ class ZigZagIndicator:
         
         return peaks
     
-    def calculate_simple(self, prices: np.ndarray) -> List[Tuple[int, float, str]]:
+    def calculate_simple(self, prices: np.ndarray) -> list[tuple[int, float, str]]:
         """
         簡化版 ZigZag 計算（僅使用收盤價）
         
@@ -277,8 +278,8 @@ class ZigZagIndicator:
         return peaks
 
 
-def plot_zigzag(df: pd.DataFrame, peaks: List[Peak], 
-                save_path: Optional[str] = None):
+def plot_zigzag(df: pd.DataFrame, peaks: list[Peak], 
+                save_path: str | None = None):
     """
     繪製 ZigZag 圖表
     
@@ -287,8 +288,8 @@ def plot_zigzag(df: pd.DataFrame, peaks: List[Peak],
         peaks: ZigZag 轉折點
         save_path: 儲存路徑（可選）
     """
-    import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
+    import matplotlib.pyplot as plt
     
     fig, ax = plt.subplots(figsize=(15, 7))
     

@@ -10,48 +10,21 @@
 """
 
 # MA 移動平均線
-from .ma import (
-    calculate_ma,
-    calculate_ema,
-    calculate_ma_crossover,
-    calculate_ma_support_resistance
-)
-
-# RSI 相對強弱指標
-from .rsi import (
-    calculate_rsi,
-    calculate_rsi_signals,
-    calculate_rsi_divergence
-)
-
-# MACD 移動平均收斂發散指標
-from .macd import (
-    calculate_macd,
-    calculate_macd_signals,
-    calculate_macd_divergence
-)
+# Bollinger Bands 布林通道
+from .bollinger import calculate_bollinger_bands, calculate_bollinger_signals, calculate_bollinger_squeeze
 
 # KD 隨機指標
-from .kd import (
-    calculate_kd,
-    calculate_kd_signals,
-    calculate_kd_divergence
-)
+from .kd import calculate_kd, calculate_kd_divergence, calculate_kd_signals
+from .ma import calculate_ema, calculate_ma, calculate_ma_crossover, calculate_ma_support_resistance
 
-# Bollinger Bands 布林通道
-from .bollinger import (
-    calculate_bollinger_bands,
-    calculate_bollinger_signals,
-    calculate_bollinger_squeeze
-)
+# MACD 移動平均收斂發散指標
+from .macd import calculate_macd, calculate_macd_divergence, calculate_macd_signals
 
 # OBV 能量潮指標
-from .obv import (
-    calculate_obv,
-    calculate_obv_signals,
-    calculate_obv_divergence,
-    calculate_obv_trend_strength
-)
+from .obv import calculate_obv, calculate_obv_divergence, calculate_obv_signals, calculate_obv_trend_strength
+
+# RSI 相對強弱指標
+from .rsi import calculate_rsi, calculate_rsi_divergence, calculate_rsi_signals
 
 __all__ = [
     # MA 移動平均線

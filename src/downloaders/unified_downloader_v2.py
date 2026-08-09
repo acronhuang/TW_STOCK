@@ -17,10 +17,10 @@
     python3 unified_downloader_v2.py --categories 基本面 --auto-retry
 """
 
-import os
-import sys
 import argparse
 import logging
+import os
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -31,8 +31,8 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.downloaders.download_coordinator import DownloadCoordinator
-from src.downloaders.table_config import get_all_tables
 from src.downloaders.progress_manager import ProgressManager
+from src.downloaders.table_config import get_all_tables
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -77,7 +77,7 @@ class SmartDownloadCoordinator(DownloadCoordinator):
     
     def download_all_with_resume(
         self,
-        categories: Optional[List[str]] = None,
+        categories: list[str] | None = None,
         skip_existing: bool = True
     ):
         """
@@ -285,7 +285,7 @@ class SmartDownloadCoordinator(DownloadCoordinator):
             else:
                 # 整體下載（不需要股票代碼）
                 if skip_existing and self._has_recent_data(collection):
-                    self.logger.info(f"   ⏭️  資料已是最新，跳過下載")
+                    self.logger.info("   ⏭️  資料已是最新，跳過下載")
                     result['status'] = 'skipped'
                     return result
                 
@@ -300,7 +300,7 @@ class SmartDownloadCoordinator(DownloadCoordinator):
                     
                     self.logger.info(f"   ✅ {len(data)} 筆（新增 {saved['inserted']}, 更新 {saved['updated']}）")
                 else:
-                    self.logger.warning(f"   ⚠️  無資料")
+                    self.logger.warning("   ⚠️  無資料")
                     result['status'] = 'no_data'
             
             # 建立索引
@@ -438,11 +438,11 @@ def main():
     print("="*80)
     print(f"📅 時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"🔧 模式: {'覆蓋下載' if args.no_skip else '跳過已存在資料'}")
-    print(f"🔄 續傳: 啟用")
+    print("🔄 續傳: 啟用")
     print(f"⏰ 自動重試: {'啟用' if args.auto_retry else '停用'}")
     
     if args.all:
-        print(f"📊 範圍: 全部資料表")
+        print("📊 範圍: 全部資料表")
     else:
         print(f"📊 範圍: {', '.join(args.categories)}")
     
@@ -508,12 +508,12 @@ def main():
     print(f"總資料表數:       {stats['total_tables']}")
     print(f"成功下載:         {stats['completed_tables']}")
     print(f"下載失敗:         {stats['failed_tables']}")
-    print(f"─" * 80)
+    print("─" * 80)
     print(f"總記錄數:         {stats['total_records']:,}")
     print(f"新增記錄:         {stats['new_records']:,}")
     print(f"更新記錄:         {stats['updated_records']:,}")
     print(f"跳過記錄:         {stats['skipped_records']:,}")
-    print(f"─" * 80)
+    print("─" * 80)
     print(f"耗時:             {duration:.2f} 秒 ({duration/60:.1f} 分鐘)")
     print(f"API 使用:         {api_usage['call_count']}/{api_usage['quota']} ({api_usage['usage_percent']}%)")
     print("="*80 + "\n")
@@ -522,7 +522,7 @@ def main():
         logger.warning(f"⚠️  部分資料表下載失敗 ({stats['failed_tables']} 個)")
         sys.exit(1)
     elif stats['completed_tables'] < stats['total_tables']:
-        logger.info(f"⏸️  下載未完成，下次執行將繼續")
+        logger.info("⏸️  下載未完成，下次執行將繼續")
         sys.exit(0)
     else:
         logger.info("✅ 所有資料下載成功")

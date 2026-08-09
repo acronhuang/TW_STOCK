@@ -12,14 +12,15 @@ Usage:
     signal = ma.market_signal()       # 大盤方向判斷
 """
 
+import logging
 import os
 import sys
-import logging
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
-import requests
+
 import numpy as np
+import requests
 from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
@@ -51,7 +52,7 @@ class MacroAnalyzer:
     # ──────────────────────────────────────────────
     #  總經儀表板
     # ──────────────────────────────────────────────
-    def overview(self) -> Dict:
+    def overview(self) -> dict:
         """總經數據總覽"""
         interest_rate = self._get_interest_rate()
         exchange_rate = self._get_exchange_rate()
@@ -73,7 +74,7 @@ class MacroAnalyzer:
     # ──────────────────────────────────────────────
     #  大盤方向判斷
     # ──────────────────────────────────────────────
-    def market_signal(self) -> Dict:
+    def market_signal(self) -> dict:
         """綜合總經指標判斷大盤方向"""
         signals = []
 
@@ -155,7 +156,7 @@ class MacroAnalyzer:
     # ──────────────────────────────────────────────
     #  各項指標取得
     # ──────────────────────────────────────────────
-    def _get_interest_rate(self) -> Optional[Dict]:
+    def _get_interest_rate(self) -> dict | None:
         """台灣央行利率"""
         # 先查本地
         local = self.db.macro_indicators.find_one(
@@ -178,7 +179,7 @@ class MacroAnalyzer:
 
         return local.get('data') if local else None
 
-    def _get_exchange_rate(self) -> Optional[Dict]:
+    def _get_exchange_rate(self) -> dict | None:
         """美元/台幣匯率"""
         local = self.db.macro_indicators.find_one(
             {'indicator': 'exchange_rate'},
@@ -211,7 +212,7 @@ class MacroAnalyzer:
 
         return local.get('data') if local else None
 
-    def _get_cpi(self) -> Optional[Dict]:
+    def _get_cpi(self) -> dict | None:
         """消費者物價指數"""
         local = self.db.macro_indicators.find_one(
             {'indicator': 'cpi'},
@@ -225,7 +226,7 @@ class MacroAnalyzer:
         # 先回傳本地資料
         return local.get('data') if local else {'yoy': None, 'note': '需手動更新'}
 
-    def _get_money_supply(self) -> Optional[Dict]:
+    def _get_money_supply(self) -> dict | None:
         """M1B/M2 貨幣供給"""
         local = self.db.macro_indicators.find_one(
             {'indicator': 'money_supply'},
@@ -249,7 +250,7 @@ class MacroAnalyzer:
 
         return local.get('data') if local else None
 
-    def _get_leading_indicator(self) -> Optional[Dict]:
+    def _get_leading_indicator(self) -> dict | None:
         """景氣領先指標/燈號"""
         local = self.db.macro_indicators.find_one(
             {'indicator': 'leading'},
@@ -260,7 +261,7 @@ class MacroAnalyzer:
 
         return local.get('data') if local else None
 
-    def _get_taiex_summary(self) -> Optional[Dict]:
+    def _get_taiex_summary(self) -> dict | None:
         """大盤摘要（從本地 stock_price + institutional_flow）"""
         from bson.decimal128 import Decimal128
 
@@ -308,7 +309,7 @@ class MacroAnalyzer:
     # ──────────────────────────────────────────────
     #  輔助
     # ──────────────────────────────────────────────
-    def _finmind_fetch(self, dataset: str, days: int = 365) -> List[Dict]:
+    def _finmind_fetch(self, dataset: str, days: int = 365) -> list[dict]:
         if not self.finmind_token:
             return []
         try:
@@ -324,7 +325,7 @@ class MacroAnalyzer:
             logger.warning(f'FinMind {dataset} 取得失敗: {e}')
         return []
 
-    def _save_indicator(self, indicator: str, data: Dict):
+    def _save_indicator(self, indicator: str, data: dict):
         self.db.macro_indicators.update_one(
             {'indicator': indicator, 'date': data.get('date', '')},
             {'$set': {'indicator': indicator, 'data': data,
@@ -333,7 +334,7 @@ class MacroAnalyzer:
             upsert=True
         )
 
-    def _is_fresh(self, doc: Dict, days: int = 7) -> bool:
+    def _is_fresh(self, doc: dict, days: int = 7) -> bool:
         updated = doc.get('updated_at')
         if not updated:
             return False

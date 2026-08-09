@@ -36,7 +36,7 @@ class SRLevel(NamedTuple):
 def _find_pivot_prices(
     df: pd.DataFrame,
     order: int = 5
-) -> Tuple[List[float], List[float]]:
+) -> tuple[list[float], list[float]]:
     """
     利用 argrelextrema 找出局部高點價格與低點價格
 
@@ -56,7 +56,7 @@ def _find_pivot_prices(
     return [highs[i] for i in high_idxs], [lows[i] for i in low_idxs]
 
 
-def _cluster_prices(prices: List[float], tolerance: float = 0.01) -> List[float]:
+def _cluster_prices(prices: list[float], tolerance: float = 0.01) -> list[float]:
     """
     將相近的價格（誤差 ≤ tolerance*2）聚合為單一代表價
 
@@ -71,8 +71,8 @@ def _cluster_prices(prices: List[float], tolerance: float = 0.01) -> List[float]
         return []
 
     sorted_prices = sorted(prices)
-    clusters: List[List[float]] = []
-    current: List[float] = [sorted_prices[0]]
+    clusters: list[list[float]] = []
+    current: list[float] = [sorted_prices[0]]
 
     for p in sorted_prices[1:]:
         if current[-1] > 0 and abs(p - current[-1]) / current[-1] <= tolerance * 2:
@@ -89,7 +89,7 @@ def _count_touches(
     level_price: float,
     df: pd.DataFrame,
     tolerance: float = 0.01
-) -> Tuple[int, int, int]:
+) -> tuple[int, int, int]:
     """
     計算 K 線觸碰指定價格帶的次數
 
@@ -111,7 +111,7 @@ def _count_touches(
 
     if len(touch_idxs) == 0:
         return 0, -1, -1
-    return int(len(touch_idxs)), int(touch_idxs[0]), int(touch_idxs[-1])
+    return len(touch_idxs), int(touch_idxs[0]), int(touch_idxs[-1])
 
 
 def find_support_resistance(
@@ -121,7 +121,7 @@ def find_support_resistance(
     window: int = 100,
     min_touches_strong: int = 3,
     min_touches_moderate: int = 2,
-) -> List[SRLevel]:
+) -> list[SRLevel]:
     """
     尋找支撐壓力位並評估強度
 
@@ -144,7 +144,7 @@ def find_support_resistance(
     clustered_resistance = _cluster_prices(resistance_prices, tolerance)
     clustered_support = _cluster_prices(support_prices, tolerance)
 
-    sr_levels: List[SRLevel] = []
+    sr_levels: list[SRLevel] = []
 
     # ── 壓力位（在當前價格上方）
     for price in clustered_resistance:

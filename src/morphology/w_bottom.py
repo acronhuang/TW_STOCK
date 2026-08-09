@@ -13,10 +13,11 @@
 創建日期: 2026-02-23
 """
 
-import pandas as pd
+from typing import Dict, List, Tuple
+
 import numpy as np
+import pandas as pd
 from scipy.signal import argrelextrema
-from typing import Tuple, List, Dict
 
 
 def detect_w_bottom(
@@ -26,7 +27,7 @@ def detect_w_bottom(
     tolerance: float = 0.02,
     breakout_threshold: float = 1.03,
     volume_ratio: float = 1.5
-) -> Tuple[pd.Series, pd.DataFrame]:
+) -> tuple[pd.Series, pd.DataFrame]:
     """
     偵測 W 底形態
     
@@ -145,7 +146,7 @@ def check_w_bottom_breakdown(
     current_price: float,
     neckline: float,
     second_bottom: float
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """
     檢查 W 底形態是否破壞
     

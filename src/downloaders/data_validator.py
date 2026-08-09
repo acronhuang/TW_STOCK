@@ -5,15 +5,16 @@
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
 from decimal import Decimal
+from typing import Dict, List, Optional, Tuple
+
 from bson.decimal128 import Decimal128
 
 
 class DataValidator:
     """財經資料驗證器"""
     
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: logging.Logger | None = None):
         """
         初始化驗證器
         
@@ -23,7 +24,7 @@ class DataValidator:
         self.logger = logger or logging.getLogger(__name__)
         self.error_log = []
         
-    def validate_price_data(self, record: Dict) -> Tuple[bool, Optional[str]]:
+    def validate_price_data(self, record: dict) -> tuple[bool, str | None]:
         """
         驗證價格資料邏輯
         
@@ -88,9 +89,9 @@ class DataValidator:
             return True, None
             
         except Exception as e:
-            return False, f"驗證過程發生錯誤: {str(e)}"
+            return False, f"驗證過程發生錯誤: {e!s}"
     
-    def validate_financial_data(self, record: Dict) -> Tuple[bool, Optional[str]]:
+    def validate_financial_data(self, record: dict) -> tuple[bool, str | None]:
         """
         驗證財報資料邏輯
         
@@ -138,9 +139,9 @@ class DataValidator:
             return True, None
             
         except Exception as e:
-            return False, f"財報驗證過程發生錯誤: {str(e)}"
+            return False, f"財報驗證過程發生錯誤: {e!s}"
     
-    def validate_dividend_data(self, record: Dict) -> Tuple[bool, Optional[str]]:
+    def validate_dividend_data(self, record: dict) -> tuple[bool, str | None]:
         """
         驗證股利資料邏輯
         
@@ -183,9 +184,9 @@ class DataValidator:
             return True, None
             
         except Exception as e:
-            return False, f"股利驗證過程發生錯誤: {str(e)}"
+            return False, f"股利驗證過程發生錯誤: {e!s}"
     
-    def _extract_decimal(self, value) -> Optional[Decimal]:
+    def _extract_decimal(self, value) -> Decimal | None:
         """
         從各種型別中提取 Decimal 值
         
@@ -213,7 +214,7 @@ class DataValidator:
         except Exception:
             return None
     
-    def get_validation_summary(self) -> Dict:
+    def get_validation_summary(self) -> dict:
         """
         獲取驗證摘要
         

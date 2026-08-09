@@ -162,7 +162,7 @@ class SenVisionChart:
         self,
         ax: plt.Axes,
         dates: pd.Series,
-        peaks: List[Peak],
+        peaks: list[Peak],
         df_len: int,
     ) -> None:
         """繪製 ZigZag 折線與高低點標記"""
@@ -194,7 +194,7 @@ class SenVisionChart:
         self,
         ax: plt.Axes,
         dates: pd.Series,
-        sr_levels: List[SRLevel],
+        sr_levels: list[SRLevel],
         tolerance: float = 0.01,
     ) -> None:
         """繪製支撐壓力帶狀區與水平線標籤"""
@@ -236,7 +236,7 @@ class SenVisionChart:
         self,
         ax: plt.Axes,
         dates: pd.Series,
-        patterns: List[Pattern],
+        patterns: list[Pattern],
     ) -> None:
         """繪製形態頸線、目標價、停損位與突破標記"""
         if not patterns:
@@ -283,7 +283,7 @@ class SenVisionChart:
         self,
         ax: plt.Axes,
         dates: pd.Series,
-        trendlines: List[Trendline],
+        trendlines: list[Trendline],
         df_len: int,
     ) -> None:
         """繪製趨勢切線（斜線）及突破標記"""
@@ -332,7 +332,7 @@ class SenVisionChart:
         df: pd.DataFrame,
         dates: pd.Series,
         periods: tuple = (5, 10, 20, 60),
-    ) -> List[Line2D]:
+    ) -> list[Line2D]:
         """繪製均線（MA5/10/20/60）並回傳圖例項目"""
         color_map = {5: _COLORS['ma5'], 10: _COLORS['ma10'],
                      20: _COLORS['ma20'], 60: _COLORS['ma60']}
@@ -389,13 +389,13 @@ class SenVisionChart:
         df: pd.DataFrame,
         stock_id: str,
         timeframe: str = 'D',
-        peaks: Optional[List[Peak]] = None,
-        patterns: Optional[List[Pattern]] = None,
-        sr_levels: Optional[List[SRLevel]] = None,
-        trendlines: Optional[List[Trendline]] = None,
+        peaks: list[Peak] | None = None,
+        patterns: list[Pattern] | None = None,
+        sr_levels: list[SRLevel] | None = None,
+        trendlines: list[Trendline] | None = None,
         ma_alignment: str = 'mixed',
         candle_width_days: float = 0.6,
-        save_path: Optional[str] = None,
+        save_path: str | None = None,
         show: bool = True,
     ) -> plt.Figure:
         """

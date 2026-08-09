@@ -23,16 +23,17 @@ Usage:
     am.check_and_notify()  # 檢查所有規則並發送通知
 """
 
-import os
-import sys
 import json
 import logging
-import requests
+import os
+import sys
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime, timezone, timedelta
-from pymongo import MongoClient
+
+import requests
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -45,7 +46,7 @@ LINE_BROADCAST_API_URL = 'https://api.line.me/v2/bot/message/broadcast'
 LINE_OAUTH_URL = 'https://api.line.me/v2/oauth/accessToken'
 
 
-def _to_float(v) -> Optional[float]:
+def _to_float(v) -> float | None:
     if v is None:
         return None
     if isinstance(v, Decimal128):
@@ -231,7 +232,7 @@ class AlertManager:
             'target_price': target_price,
             'note': note,
             'active': True,
-            'created_at': datetime.now(timezone.utc),
+            'created_at': datetime.now(UTC),
             'triggered_at': None,
         }
         self.db.alert_rules.update_one(
@@ -248,7 +249,7 @@ class AlertManager:
             'type': 'volume',
             'multiplier': multiplier,
             'active': True,
-            'created_at': datetime.now(timezone.utc),
+            'created_at': datetime.now(UTC),
             'triggered_at': None,
         }
         self.db.alert_rules.update_one(
@@ -257,7 +258,7 @@ class AlertManager:
             upsert=True
         )
 
-    def add_watchlist(self, symbols: List[str]):
+    def add_watchlist(self, symbols: list[str]):
         """批次加入監控清單（啟用所有預設警報）"""
         for sym in symbols:
             self.db.alert_rules.update_one(
@@ -266,13 +267,13 @@ class AlertManager:
                     'symbol': sym,
                     'type': 'watchlist',
                     'active': True,
-                    'created_at': datetime.now(timezone.utc),
+                    'created_at': datetime.now(UTC),
                 }},
                 upsert=True
             )
         logger.info(f'已加入監控清單: {len(symbols)} 支')
 
-    def list_rules(self) -> List[Dict]:
+    def list_rules(self) -> list[dict]:
         """列出所有有效規則"""
         return list(self.db.alert_rules.find({'active': True}, {'_id': 0}))
 
@@ -286,7 +287,7 @@ class AlertManager:
     # ──────────────────────────────────────────────
     #  檢查並觸發警報
     # ──────────────────────────────────────────────
-    def check_and_notify(self) -> List[Dict]:
+    def check_and_notify(self) -> list[dict]:
         """檢查所有有效規則，觸發符合條件的警報"""
         triggered = []
         rules = list(self.db.alert_rules.find({'active': True}))
@@ -309,14 +310,14 @@ class AlertManager:
                 )
 
                 # 記錄歷史
-                alert['timestamp'] = datetime.now(timezone.utc)
+                alert['timestamp'] = datetime.now(UTC)
                 alert['name'] = name
                 self.db.alert_history.insert_one(alert)
                 triggered.append(alert)
 
         return triggered
 
-    def _check_rule(self, rule: Dict) -> List[Dict]:
+    def _check_rule(self, rule: dict) -> list[dict]:
         """檢查單一規則"""
         rule_type = rule.get('type')
         if rule_type == 'price':
@@ -327,7 +328,7 @@ class AlertManager:
             return self._check_watchlist(rule)
         return []
 
-    def _check_price_alert(self, rule: Dict) -> List[Dict]:
+    def _check_price_alert(self, rule: dict) -> list[dict]:
         symbol = rule['symbol']
         price = self._get_latest_price(symbol)
         if price is None:
@@ -354,7 +355,7 @@ class AlertManager:
             }]
         return []
 
-    def _check_volume_alert(self, rule: Dict) -> List[Dict]:
+    def _check_volume_alert(self, rule: dict) -> list[dict]:
         symbol = rule['symbol']
         multiplier = rule.get('multiplier', 2.0)
 
@@ -381,7 +382,7 @@ class AlertManager:
             }]
         return []
 
-    def _check_watchlist(self, rule: Dict) -> List[Dict]:
+    def _check_watchlist(self, rule: dict) -> list[dict]:
         """監控清單：檢查技術指標異常"""
         symbol = rule['symbol']
         alerts = []
@@ -445,7 +446,7 @@ class AlertManager:
     # ──────────────────────────────────────────────
     #  掃描結果通知
     # ──────────────────────────────────────────────
-    def notify_scan_results(self, scan_results: List[Dict]):
+    def notify_scan_results(self, scan_results: list[dict]):
         """將掃描結果透過 LINE 發送摘要"""
         if not scan_results:
             return
@@ -476,7 +477,7 @@ class AlertManager:
 
         # 取今日警報數
         alert_count = self.db.alert_history.count_documents({
-            'timestamp': {'$gte': datetime.now(timezone.utc) - timedelta(hours=24)}
+            'timestamp': {'$gte': datetime.now(UTC) - timedelta(hours=24)}
         })
 
         # 取監控股票數
@@ -500,7 +501,7 @@ class AlertManager:
     # ──────────────────────────────────────────────
     #  輔助方法
     # ──────────────────────────────────────────────
-    def _get_latest_price(self, symbol: str) -> Optional[float]:
+    def _get_latest_price(self, symbol: str) -> float | None:
         rec = self.db.stock_price.find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)]
         )
@@ -520,9 +521,9 @@ class AlertManager:
             return rec['name']
         return ''
 
-    def _is_duplicate(self, alert: Dict) -> bool:
+    def _is_duplicate(self, alert: dict) -> bool:
         """24 小時內同一股票同類警報不重複發送"""
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        cutoff = datetime.now(UTC) - timedelta(hours=24)
         exists = self.db.alert_history.find_one({
             'symbol': alert['symbol'],
             'rule_type': alert['rule_type'],

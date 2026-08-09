@@ -1,4 +1,4 @@
-from .predictor import StockPredictor
 from .anomaly_detector import AnomalyDetector
+from .predictor import StockPredictor
 
-__all__ = ['StockPredictor', 'AnomalyDetector']
+__all__ = ['AnomalyDetector', 'StockPredictor']

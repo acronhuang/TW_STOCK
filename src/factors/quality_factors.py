@@ -12,10 +12,11 @@ Quality Factors 模組 - 質量因子計算
 - Debt Ratio（負債比率）
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional
 from datetime import datetime
+from typing import Dict, List, Optional
+
+import numpy as np
+import pandas as pd
 from bson.decimal128 import Decimal128
 
 
@@ -37,7 +38,7 @@ class QualityFactors:
             return float(value.to_decimal())
         return float(value)
     
-    def get_latest_financial_report(self, symbol: str, before_date: Optional[datetime] = None) -> Optional[Dict]:
+    def get_latest_financial_report(self, symbol: str, before_date: datetime | None = None) -> dict | None:
         """
         取得最新財報
 
@@ -116,7 +117,7 @@ class QualityFactors:
         )
         return report
     
-    def calculate_roe(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_roe(self, symbol: str, date: datetime) -> float | None:
         """
         計算 ROE（股東權益報酬率）
         
@@ -135,7 +136,7 @@ class QualityFactors:
             return None
         
         # 從 ratios 取得已計算的 ROE
-        if 'ratios' in report and report['ratios']:
+        if report.get('ratios'):
             roe = report['ratios'].get('roe')
             if roe is not None and float(roe) != 0:
                 return float(roe)
@@ -152,7 +153,7 @@ class QualityFactors:
         
         return None
     
-    def calculate_roa(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_roa(self, symbol: str, date: datetime) -> float | None:
         """
         計算 ROA（資產報酬率）
         
@@ -171,7 +172,7 @@ class QualityFactors:
             return None
         
         # 從 ratios 取得已計算的 ROA
-        if 'ratios' in report and report['ratios']:
+        if report.get('ratios'):
             roa = report['ratios'].get('roa')
             if roa is not None and float(roa) != 0:
                 return float(roa)
@@ -188,7 +189,7 @@ class QualityFactors:
         
         return None
     
-    def calculate_profit_margin(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_profit_margin(self, symbol: str, date: datetime) -> float | None:
         """
         計算淨利率（Profit Margin）
         
@@ -222,7 +223,7 @@ class QualityFactors:
         
         return None
     
-    def calculate_operating_margin(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_operating_margin(self, symbol: str, date: datetime) -> float | None:
         """
         計算營益率（Operating Margin）
         
@@ -256,7 +257,7 @@ class QualityFactors:
         
         return None
     
-    def calculate_current_ratio(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_current_ratio(self, symbol: str, date: datetime) -> float | None:
         """
         計算流動比率（Current Ratio）
         
@@ -290,7 +291,7 @@ class QualityFactors:
         
         return None
     
-    def calculate_debt_ratio(self, symbol: str, date: datetime) -> Optional[float]:
+    def calculate_debt_ratio(self, symbol: str, date: datetime) -> float | None:
         """
         計算負債比率（Debt Ratio）
         
@@ -324,7 +325,7 @@ class QualityFactors:
         
         return None
     
-    def calculate_all_quality_factors(self, symbol: str, date: datetime) -> Dict:
+    def calculate_all_quality_factors(self, symbol: str, date: datetime) -> dict:
         """
         計算所有質量因子
         
@@ -353,7 +354,7 @@ class QualityFactors:
             'debt_ratio': self.calculate_debt_ratio(symbol, date)
         }
     
-    def batch_calculate(self, symbols: List[str], start_date: datetime, 
+    def batch_calculate(self, symbols: list[str], start_date: datetime, 
                         end_date: datetime) -> pd.DataFrame:
         """
         批次計算質量因子

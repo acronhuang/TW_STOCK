@@ -9,11 +9,11 @@ Portfolio 模組 - 投資組合管理
 - 支持多標的投資組合
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional
-import logging
 
 
 @dataclass
@@ -76,13 +76,13 @@ class Portfolio:
         self.commission_rate = commission_rate
         
         # 持倉
-        self.positions: Dict[str, Position] = {}
+        self.positions: dict[str, Position] = {}
         
         # 交易歷史
-        self.trades: List[Trade] = []
+        self.trades: list[Trade] = []
         
         # 權益曲線
-        self.equity_curve: List[Dict] = []
+        self.equity_curve: list[dict] = []
         
         self.logger = logging.getLogger(__name__)
     
@@ -190,7 +190,7 @@ class Portfolio:
         self.logger.info(f"{date} 賣出 {symbol}: {shares}股 @ {price:.2f}, 收入 {net_revenue:.2f}, 損益 {profit:.2f}")
         return True
     
-    def get_position(self, symbol: str) -> Optional[Position]:
+    def get_position(self, symbol: str) -> Position | None:
         """取得持倉資訊"""
         return self.positions.get(symbol)
     
@@ -198,7 +198,7 @@ class Portfolio:
         """是否持有該股票"""
         return symbol in self.positions
     
-    def total_market_value(self, prices: Dict[str, float]) -> float:
+    def total_market_value(self, prices: dict[str, float]) -> float:
         """
         計算持倉總市值
         
@@ -211,7 +211,7 @@ class Portfolio:
                 total += position.market_value(prices[symbol])
         return total
     
-    def total_equity(self, prices: Dict[str, float]) -> float:
+    def total_equity(self, prices: dict[str, float]) -> float:
         """
         計算總權益（現金 + 持倉市值）
         
@@ -220,7 +220,7 @@ class Portfolio:
         """
         return self.cash + self.total_market_value(prices)
     
-    def record_equity(self, date: datetime, prices: Dict[str, float]):
+    def record_equity(self, date: datetime, prices: dict[str, float]):
         """
         記錄權益曲線
         
@@ -252,7 +252,7 @@ class Portfolio:
         
         return ((final_equity - self.initial_cash) / self.initial_cash) * 100
     
-    def summary(self) -> Dict:
+    def summary(self) -> dict:
         """組合摘要"""
         return {
             'initial_cash': self.initial_cash,

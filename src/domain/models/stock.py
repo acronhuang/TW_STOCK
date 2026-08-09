@@ -1,5 +1,6 @@
 """Stock 領域實體"""
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
@@ -25,7 +26,7 @@ class StockPrice:
     volume: float
 
     @property
-    def change_pct(self) -> Optional[float]:
+    def change_pct(self) -> float | None:
         if self.open and self.open > 0:
             return (self.close - self.open) / self.open * 100
         return None
@@ -36,11 +37,11 @@ class StockFactor:
     """股票因子快照（Value Object）"""
     symbol: str
     date: datetime
-    pe_ratio: Optional[float] = None
-    pb_ratio: Optional[float] = None
-    dividend_yield: Optional[float] = None
-    roe: Optional[float] = None
-    rsi_14: Optional[float] = None
-    operating_margin: Optional[float] = None
-    return_1m: Optional[float] = None
-    volatility_30d: Optional[float] = None
+    pe_ratio: float | None = None
+    pb_ratio: float | None = None
+    dividend_yield: float | None = None
+    roe: float | None = None
+    rsi_14: float | None = None
+    operating_margin: float | None = None
+    return_1m: float | None = None
+    volatility_30d: float | None = None

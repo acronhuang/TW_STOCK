@@ -7,16 +7,17 @@
 創建日期: 2026-02-23
 """
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 
 from .bottom_reversal import detect_bottom_reversal
-from .w_bottom import detect_w_bottom
 from .neckline_breakout import detect_neckline_breakout
-from .volume_analysis import detect_volume_surge, detect_volume_price_divergence
 from .pattern_scorer import PatternScorer, calculate_pattern_strength
+from .volume_analysis import detect_volume_price_divergence, detect_volume_surge
+from .w_bottom import detect_w_bottom
 
 
 class PatternDetector:
@@ -24,8 +25,8 @@ class PatternDetector:
     
     def __init__(
         self,
-        enable_patterns: Optional[List[str]] = None,
-        custom_weights: Optional[Dict[str, float]] = None
+        enable_patterns: list[str] | None = None,
+        custom_weights: dict[str, float] | None = None
     ):
         """
         初始化形態偵測引擎
@@ -42,7 +43,7 @@ class PatternDetector:
             'volume_price_divergence'
         ]
         
-        self.enable_patterns = enable_patterns if enable_patterns else self.available_patterns
+        self.enable_patterns = enable_patterns or self.available_patterns
         
         # 驗證啟用的形態
         invalid = set(self.enable_patterns) - set(self.available_patterns)
@@ -55,8 +56,8 @@ class PatternDetector:
     def detect_all(
         self,
         df: pd.DataFrame,
-        stock_id: Optional[str] = None
-    ) -> Dict[str, Dict]:
+        stock_id: str | None = None
+    ) -> dict[str, dict]:
         """
         偵測所有啟用的形態
         
@@ -121,7 +122,7 @@ class PatternDetector:
         pattern_name: str,
         signal: pd.Series,
         details: pd.DataFrame
-    ) -> Dict:
+    ) -> dict:
         """格式化形態偵測結果"""
         detected = signal.sum() > 0
         
@@ -148,7 +149,7 @@ class PatternDetector:
         df: pd.DataFrame,
         lookback_days: int = 5,
         min_score: float = 0.5
-    ) -> Dict[str, Dict]:
+    ) -> dict[str, dict]:
         """
         獲取最近 N 天的形態
         
@@ -218,11 +219,11 @@ class PatternDetector:
     
     def filter_stocks(
         self,
-        stocks_data: Dict[str, pd.DataFrame],
+        stocks_data: dict[str, pd.DataFrame],
         min_patterns: int = 1,
         min_score: float = 0.5,
         lookback_days: int = 5
-    ) -> List[Tuple[str, float, Dict]]:
+    ) -> list[tuple[str, float, dict]]:
         """
         用形態學過濾股票
         
@@ -307,7 +308,7 @@ class PatternDetector:
         
         return "\n".join(report)
     
-    def batch_detect(self, stock_ids: List[str], date: str):
+    def batch_detect(self, stock_ids: list[str], date: str):
         """
         批量檢測多支股票的形態
         
@@ -325,7 +326,7 @@ class PatternDetector:
         class PatternResult:
             stock_id: str
             composite_score: float
-            patterns: List[str]
+            patterns: list[str]
         
         results = []
         

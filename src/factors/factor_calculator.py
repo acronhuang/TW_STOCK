@@ -5,22 +5,22 @@ Factor Library 模組 - 因子庫統一介面
 提供統一的因子計算和存儲介面，整合所有因子類別
 """
 
-import sys
-from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Optional
 import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
 
 import pandas as pd
-from pymongo import MongoClient, UpdateOne
 from bson.decimal128 import Decimal128
+from pymongo import MongoClient, UpdateOne
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.factors.value_factors import ValueFactors
 from src.factors.momentum_factors import MomentumFactors
 from src.factors.quality_factors import QualityFactors
+from src.factors.value_factors import ValueFactors
 from src.factors.volume_factors import VolumeFactors
 
 
@@ -107,7 +107,7 @@ class FactorLibrary:
         self.collection.create_index([('date', -1)])
         self.collection.create_index([('symbol', 1)])
     
-    def calculate_all_factors(self, symbol: str, date: datetime) -> Dict:
+    def calculate_all_factors(self, symbol: str, date: datetime) -> dict:
         """
         計算單一股票在指定日期的所有因子
         
@@ -144,11 +144,11 @@ class FactorLibrary:
         return factors
     
     def calculate_and_store(self,
-                           symbols: List[str],
+                           symbols: list[str],
                            start_date: str,
                            end_date: str,
-                           factor_types: Optional[List[str]] = None,
-                           batch_size: int = 100) -> Dict:
+                           factor_types: list[str] | None = None,
+                           batch_size: int = 100) -> dict:
         """
         批次計算並存儲因子
         
@@ -257,8 +257,8 @@ class FactorLibrary:
     
     def get_factors(self,
                     symbol: str,
-                    start_date: Optional[str] = None,
-                    end_date: Optional[str] = None) -> pd.DataFrame:
+                    start_date: str | None = None,
+                    end_date: str | None = None) -> pd.DataFrame:
         """
         查詢因子數據
         
@@ -290,7 +290,7 @@ class FactorLibrary:
         
         return pd.DataFrame(records)
     
-    def get_cross_section(self, date: str, factor_names: Optional[List[str]] = None) -> pd.DataFrame:
+    def get_cross_section(self, date: str, factor_names: list[str] | None = None) -> pd.DataFrame:
         """
         取得橫斷面因子數據（某一天所有股票的因子值）
         
@@ -313,7 +313,7 @@ class FactorLibrary:
         
         return pd.DataFrame(list(cursor))
     
-    def calculate_factor_stats(self, factor_name: str, start_date: str, end_date: str) -> Dict:
+    def calculate_factor_stats(self, factor_name: str, start_date: str, end_date: str) -> dict:
         """
         計算因子統計量
         
@@ -366,7 +366,7 @@ class FactorLibrary:
         
         return stats
     
-    def list_available_factors(self) -> List[str]:
+    def list_available_factors(self) -> list[str]:
         """
         列出所有可用的因子名稱
         

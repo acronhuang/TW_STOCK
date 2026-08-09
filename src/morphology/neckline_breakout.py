@@ -13,9 +13,10 @@
 創建日期: 2026-02-23
 """
 
-import pandas as pd
+from typing import Optional, Tuple
+
 import numpy as np
-from typing import Tuple, Optional
+import pandas as pd
 
 
 def detect_neckline_breakout(
@@ -25,7 +26,7 @@ def detect_neckline_breakout(
     amplitude_threshold: float = 0.03,
     volume_ratio: float = 2.0,
     confirmation_days: int = 2
-) -> Tuple[pd.Series, pd.DataFrame]:
+) -> tuple[pd.Series, pd.DataFrame]:
     """
     偵測頸線突破形態
     
@@ -140,7 +141,7 @@ def check_neckline_breakdown(
     current_price: float,
     neckline: float,
     entry_price: float
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """
     檢查頸線突破形態是否破壞
     
