@@ -142,6 +142,9 @@ def test_with_mongodb():
             return False
         
         df = pd.DataFrame(data)
+        for _c in ('open', 'high', 'low', 'close', 'volume'):  # Decimal128->float(避 rolling DataError)
+            if _c in df.columns:
+                df[_c] = pd.to_numeric(df[_c].apply(lambda x: float(str(x)) if x is not None else None), errors='coerce')
         df['date'] = pd.to_datetime(df['date'])
         df.set_index('date', inplace=True)
         df = df.sort_index()
