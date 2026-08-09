@@ -3,7 +3,6 @@ OBV 指標 (On-Balance Volume)
 能量潮指標，衡量成交量與價格的關係
 """
 
-from typing import Union
 
 import numpy as np
 import pandas as pd

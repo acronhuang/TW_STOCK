@@ -13,7 +13,6 @@ B. 護城河龍頭選股（品質型，有別於謝富旭高殖利率）
    ① 大型龍頭(市值前段) ② 高ROE(護城河,持續獲利) ③ 低負債 ④ 長期連續配息。
 """
 from datetime import timedelta
-from typing import Dict, List, Optional
 
 
 def _f(v):

@@ -9,10 +9,8 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import pandas as pd
-from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
 
 project_root = Path(__file__).parent.parent.parent

@@ -5,9 +5,6 @@
 根據技術指標綜合判斷股票多空態勢
 """
 
-import statistics
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
 
 from pymongo import MongoClient
 
@@ -440,7 +437,7 @@ class TechnicalAnalyzer:
                 if 'error' not in analysis:
                     if signal_filter is None or analysis['signal'] == signal_filter:
                         results.append(analysis)
-            except Exception as e:
+            except Exception:
                 continue
         
         # 按分數排序

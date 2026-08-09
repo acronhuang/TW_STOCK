@@ -13,7 +13,6 @@
 創建日期: 2026-02-23
 """
 
-from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd

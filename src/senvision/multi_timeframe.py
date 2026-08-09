@@ -10,9 +10,8 @@ Author: SenVision Team
 Date: 2026-02-24
 """
 
-from typing import Literal, Tuple
+from typing import Literal
 
-import numpy as np
 import pandas as pd
 
 # ── 支援的時間框架 ──────────────────────────────────────────────────────────────

@@ -3,7 +3,6 @@
 衡量價格動能，判斷超買超賣狀態
 """
 
-from typing import Union
 
 import numpy as np
 import pandas as pd

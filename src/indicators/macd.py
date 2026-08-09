@@ -3,7 +3,6 @@ MACD 指標 (Moving Average Convergence Divergence)
 移動平均收斂發散指標，衡量趨勢強度和反轉時機
 """
 
-from typing import Tuple, Union
 
 import numpy as np
 import pandas as pd

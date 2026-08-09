@@ -15,7 +15,6 @@
 流動性僅附 avg_lots 標記，不排除(關貿這類冷門優質股仍列出)。
 """
 from datetime import timedelta
-from typing import Dict, List, Optional
 
 
 def _f(v):

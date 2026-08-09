@@ -10,9 +10,8 @@ URL:  http://localhost:8888
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))

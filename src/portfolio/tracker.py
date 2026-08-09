@@ -16,11 +16,9 @@ Usage:
 import logging
 import sys
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
-import numpy as np
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 

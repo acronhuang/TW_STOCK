@@ -7,15 +7,13 @@
 創建日期: 2026-02-23
 """
 
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
 from .bottom_reversal import detect_bottom_reversal
 from .neckline_breakout import detect_neckline_breakout
-from .pattern_scorer import PatternScorer, calculate_pattern_strength
+from .pattern_scorer import PatternScorer
 from .volume_analysis import detect_volume_price_divergence, detect_volume_surge
 from .w_bottom import detect_w_bottom
 
@@ -320,7 +318,6 @@ class PatternDetector:
             檢測結果列表，每個結果包含 stock_id, composite_score, patterns
         """
         from dataclasses import dataclass
-        from typing import List
         
         @dataclass
         class PatternResult:

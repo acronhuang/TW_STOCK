@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional
 
 from bson import Decimal128
 from pymongo import MongoClient

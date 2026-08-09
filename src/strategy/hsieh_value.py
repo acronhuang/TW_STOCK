@@ -13,8 +13,7 @@
 資料來源：quarterly_earnings.balance / income、stock_factors、dividend_detail。
 （442 資金配置、大盤跌>10% 減碼屬操作紀律，不在選股篩選內。）
 """
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import timedelta
 
 
 def _f(v):

@@ -18,7 +18,6 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from bson import ObjectId
 from pymongo import MongoClient, UpdateOne
 
 project_root = Path(__file__).parent.parent.parent

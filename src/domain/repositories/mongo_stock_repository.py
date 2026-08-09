@@ -5,13 +5,12 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import datetime
 
 from bson import Decimal128
 from pymongo import MongoClient
 
-from ..models.stock import Stock, StockFactor, StockPrice
+from ..models.stock import StockFactor, StockPrice
 from .stock_repository import StockRepository
 
 

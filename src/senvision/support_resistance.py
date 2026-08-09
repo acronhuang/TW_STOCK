@@ -16,7 +16,7 @@ Author: SenVision Team
 Date: 2026-02-24
 """
 
-from typing import List, NamedTuple, Tuple
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd

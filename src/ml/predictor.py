@@ -19,7 +19,6 @@ import pickle
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -152,7 +151,7 @@ class StockPredictor:
     # ──────────────────────────────────────────────
     def train(self, symbol: str, lookback_days: int = 500) -> dict:
         """訓練個股預測模型"""
-        from sklearn.metrics import accuracy_score, classification_report
+        from sklearn.metrics import accuracy_score
         from sklearn.model_selection import TimeSeriesSplit
         from xgboost import XGBClassifier
 

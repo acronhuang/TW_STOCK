@@ -22,7 +22,6 @@ import time
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import requests
 from bson.decimal128 import Decimal128

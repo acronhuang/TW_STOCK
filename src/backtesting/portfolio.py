@@ -10,10 +10,8 @@ Portfolio 模組 - 投資組合管理
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
-from typing import Dict, List, Optional
 
 
 @dataclass

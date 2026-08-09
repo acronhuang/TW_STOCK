@@ -11,7 +11,6 @@
 創建日期: 2026-02-24
 """
 
-from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd

@@ -13,9 +13,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
@@ -23,7 +21,7 @@ from pymongo import MongoClient
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.backtesting.performance import PerformanceCalculator, PerformanceMetrics
+from src.backtesting.performance import PerformanceCalculator
 from src.backtesting.portfolio import Portfolio
 from src.backtesting.strategy import Strategy
 

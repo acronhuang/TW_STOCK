@@ -38,7 +38,6 @@ from dotenv import load_dotenv
 
 load_dotenv(ROOT / '.env')
 
-from datetime import datetime, timedelta
 
 from bson import Decimal128
 from pymongo import MongoClient

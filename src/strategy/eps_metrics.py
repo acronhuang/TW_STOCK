@@ -8,7 +8,6 @@
 股數採 capital_stock/10(面額10元)，與 stock_factors.pe_ratio 對得起來；
 EPS YoY 用「最新4季淨利加總 / 去年同4季淨利加總 - 1」(消除單季季節性)。
 """
-from typing import Optional, Tuple
 
 
 def _f(v):

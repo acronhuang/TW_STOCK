@@ -6,10 +6,8 @@ Domain 層只依賴這個介面，不知道底層是 MongoDB 還是其他。
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import Dict, List, Optional
 
-from ..models.stock import Stock, StockFactor, StockPrice
+from ..models.stock import StockFactor, StockPrice
 
 
 class StockRepository(ABC):

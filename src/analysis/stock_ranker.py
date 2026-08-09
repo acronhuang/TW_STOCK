@@ -15,7 +15,6 @@ import logging
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import numpy as np
 from bson.decimal128 import Decimal128

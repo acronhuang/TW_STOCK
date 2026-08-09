@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from bson import Decimal128
 from pymongo import MongoClient

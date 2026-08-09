@@ -3,7 +3,6 @@ KD 指標 (Stochastic Oscillator)
 隨機指標，衡量價格動能和超買超賣
 """
 
-from typing import Tuple, Union
 
 import numpy as np
 import pandas as pd

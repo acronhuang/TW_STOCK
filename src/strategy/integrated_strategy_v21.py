@@ -18,12 +18,9 @@ v2.1 整合策略
 """
 
 import sys
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -593,7 +590,7 @@ class IntegratedStrategyV21:
                                 signal.volume_divergence = True
                                 signal.should_exit = True
                                 signal.exit_reason = "量價背離"
-                except Exception as e:
+                except Exception:
                     # 量價分析失敗，跳過
                     pass
             
@@ -607,7 +604,7 @@ class IntegratedStrategyV21:
                     #     signal.should_exit = True
                     #     signal.exit_reason = "主力出貨"
                     pass
-                except Exception as e:
+                except Exception:
                     pass
             
             exit_signals.append(signal)

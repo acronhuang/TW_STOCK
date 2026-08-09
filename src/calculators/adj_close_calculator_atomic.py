@@ -19,7 +19,6 @@ import sys
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne

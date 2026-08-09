@@ -22,10 +22,8 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
-from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 from urllib.parse import quote
 
 import requests

@@ -29,7 +29,6 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.downloaders.download_coordinator import DownloadCoordinator
-from src.downloaders.table_config import get_all_tables
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:

@@ -3,7 +3,6 @@
 衡量價格波動範圍和超買超賣
 """
 
-from typing import Tuple, Union
 
 import numpy as np
 import pandas as pd

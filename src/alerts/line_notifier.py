@@ -27,9 +27,8 @@ import json
 import logging
 import os
 import sys
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import requests
 from bson.decimal128 import Decimal128

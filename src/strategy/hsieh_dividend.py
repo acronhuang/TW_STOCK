@@ -30,8 +30,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import datetime
 
 import numpy as np
 from bson import Decimal128

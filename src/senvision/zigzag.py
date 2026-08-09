@@ -10,7 +10,7 @@ Date: 2026-02-24
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Literal, Optional, Tuple
+from typing import Literal
 
 import numpy as np
 import pandas as pd

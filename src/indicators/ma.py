@@ -3,7 +3,6 @@
 支援簡單移動平均 (SMA) 和指數移動平均 (EMA)
 """
 
-from typing import List, Union
 
 import numpy as np
 import pandas as pd

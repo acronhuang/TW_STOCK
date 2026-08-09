@@ -5,9 +5,7 @@ FinMind API 客戶端基類
 
 import logging
 import time
-from datetime import datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 import requests
 from bson.decimal128 import Decimal128

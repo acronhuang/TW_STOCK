@@ -11,7 +11,6 @@ Performance Metrics 模組 - 績效指標計算
 """
 
 from dataclasses import dataclass
-from typing import Dict, List
 
 import numpy as np
 import pandas as pd

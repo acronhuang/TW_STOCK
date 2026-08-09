@@ -15,7 +15,6 @@
 
 VaR：此倉佔淨值%、未實現損益佔淨值%、後續1日95%風險(參數法)。
 """
-from typing import Dict, List, Optional
 
 
 def _f(v):

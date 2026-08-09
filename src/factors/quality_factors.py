@@ -13,9 +13,7 @@ Quality Factors 模組 - 質量因子計算
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 from bson.decimal128 import Decimal128
 

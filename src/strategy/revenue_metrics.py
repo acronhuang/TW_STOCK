@@ -7,7 +7,6 @@
 月營收偶有極端值(基期過低)，沿用全市場 >500% 截斷規則。
 供 HsiehValueScreen 存股成長精選等共用。
 """
-from typing import Optional
 
 YOY_CLAMP = 500.0    # 月營收 YoY 上限截斷(基期過低的假爆發)
 

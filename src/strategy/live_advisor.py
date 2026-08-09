@@ -13,11 +13,9 @@ Usage:
 
 import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 
-import numpy as np
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
@@ -171,7 +169,7 @@ class LiveAdvisor:
     # ──────────────────────────────────────────────
     def _screen_sell_candidates(self) -> list[dict]:
         """檢查持倉是否需要停損或獲利了結"""
-        from src.portfolio.tracker import COLLECTION, PortfolioTracker
+        from src.portfolio.tracker import COLLECTION
         positions = list(self.db[COLLECTION].find(
             {'portfolio': self.portfolio_name}))
 

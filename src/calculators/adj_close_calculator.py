@@ -15,10 +15,9 @@ P1: 調整後收盤價 (Adjusted Close) 計算器
 import argparse
 import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List
 
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient

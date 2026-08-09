@@ -13,7 +13,6 @@ Volume Factors 模組 - 量價因子計算
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, Optional
 
 import numpy as np
 from bson.decimal128 import Decimal128

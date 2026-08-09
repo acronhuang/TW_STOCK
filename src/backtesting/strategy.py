@@ -7,7 +7,6 @@ Strategy 模組 - 交易策略基類
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Dict, List, Optional
 
 import pandas as pd
 
