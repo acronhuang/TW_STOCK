@@ -30,6 +30,17 @@ from src.morphology.neckline_breakout import detect_neckline_breakout
 from src.morphology.volume_analysis import detect_volume_surge, detect_volume_price_divergence
 
 
+def _coerce_ohlcv(df):
+    """OHLCV 從 Decimal128/object 轉 float(對照 src/senvision/scanner.py:float(str(x)),避 Decimal128 陷阱)。"""
+    for _c in ("open", "high", "low", "close"):
+        if _c in df.columns:
+            df[_c] = pd.to_numeric(df[_c].apply(lambda x: float(str(x)) if x is not None else None), errors="coerce")
+    if "volume" in df.columns:
+        df["volume"] = pd.to_numeric(df["volume"].apply(lambda x: float(str(x)) if x is not None else 0), errors="coerce").fillna(0)
+    return df
+
+
+
 def test_pattern_detection():
     """測試形態偵測基本功能"""
     print("=" * 70)
@@ -102,6 +113,7 @@ def validate_historical_patterns(stock_id="2330", days=360):
         return False
     
     df = pd.DataFrame(data)
+    df = _coerce_ohlcv(df)
     df['date'] = pd.to_datetime(df['date'])
     df.set_index('date', inplace=True)
     df = df.sort_index()
@@ -158,6 +170,7 @@ def calculate_pattern_accuracy(stock_id="2330", days=360, forward_days=20):
         return None
     
     df = pd.DataFrame(data)
+    df = _coerce_ohlcv(df)
     df['date'] = pd.to_datetime(df['date'])
     df.set_index('date', inplace=True)
     df = df.sort_index()
@@ -267,6 +280,7 @@ def batch_validate_stocks(stock_list: List[str], days=180):
             continue
         
         df = pd.DataFrame(data)
+        df = _coerce_ohlcv(df)
         df['date'] = pd.to_datetime(df['date'])
         df.set_index('date', inplace=True)
         df = df.sort_index()
