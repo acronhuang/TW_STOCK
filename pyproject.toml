@@ -36,15 +36,6 @@ nestjs = ["nodejs"]
 [project.scripts]
 twstock = "src.cli.query:main"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-markers = [
-    "unit: Unit tests (no DB required)",
-    "integration: Integration tests (requires MongoDB)",
-    "slow: Slow tests (API calls, large data)",
-]
-
 [tool.ruff]
 line-length = 120
 target-version = "py311"
