@@ -56,3 +56,6 @@ server.pid
 *.bak
 *.bak_*
 *.bak.*
+
+# 部署版本記錄(每台各自狀態,不入版控)
+deploy/DEPLOYED.txt

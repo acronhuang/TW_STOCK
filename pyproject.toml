@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tw-stock-analysis"
-version = "2.2.0"
+version = "2.2.1"
 description = "台股智能分析系統 — 多因子選股、技術分析、估值模型、風險管理、LINE 通知"
 readme = "Readme.md"
 license = {text = "MIT"}

@@ -43,4 +43,7 @@ if [ "$ok" != 1 ]; then
   echo "  ⚠️ API health 未通過,請查 systemctl status twstock-api"
   exit 1
 fi
+# G7 可追溯:記錄本次部署的版本/commit(DEPLOYED.txt 不入版控,每台各自狀態)
+{ echo "deployed_at=$(date '+%F %T')"; echo "version=$(git describe --tags --always 2>/dev/null)"; echo "commit=$(git rev-parse --short HEAD)"; } > deploy/DEPLOYED.txt
+echo "  版本記錄 -> deploy/DEPLOYED.txt: $(git describe --tags --always 2>/dev/null) ($(git rev-parse --short HEAD))"
 echo "== 部署完成 =="
