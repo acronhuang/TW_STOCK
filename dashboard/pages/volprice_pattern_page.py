@@ -109,7 +109,7 @@ def _single(ids, names):
     if recs:
         st.dataframe(pd.DataFrame(recs).style.format(
             {"期間報酬%": "{:+.1f}", "量變%": "{:+.1f}", "位階%": "{:.0f}"}, na_rep="—"),
-            hide_index=True, use_container_width=True)
+            hide_index=True, width='stretch')
 
     # 還原價 + 量圖(近250日)
     df = pd.DataFrame(rows[-250:], columns=["date", "adj", "vol", "raw"])
@@ -119,7 +119,7 @@ def _single(ids, names):
     fig.add_trace(go.Bar(x=df["date"], y=df["vol"], name="量",
                          marker_color=["#E45756" if u else "#2E7D32" for u in up]), row=2, col=1)
     fig.update_layout(height=460, margin=dict(l=0, r=0, t=8, b=0), showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     st.caption("價=還原價(除權息已還原,避免假跌);量色:紅=較前日增、綠=減。標籤用還原價計算。")
 
 
@@ -180,7 +180,7 @@ def _market(names_hint):
             .map(lambda v: f"color:{'#C62F35' if (pd.notna(v) and v>0) else '#1F8A54' if (pd.notna(v) and v<0) else ''}",
                  subset=["期間報酬%", "量變%"])
             .format({"期間報酬%": "{:+.1f}", "量變%": "{:+.1f}", "位階%": "{:.0f}", "收盤": "{:.2f}"}, na_rep="—"),
-        hide_index=True, use_container_width=True, height=540)
+        hide_index=True, width='stretch', height=540)
     st.download_button("⬇️ 下載 CSV", view[cols].to_csv(index=False).encode("utf-8-sig"),
                        file_name=f"volprice_{tf}_{date}.csv", mime="text/csv")
 

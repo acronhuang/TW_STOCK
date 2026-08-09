@@ -83,7 +83,7 @@ def show():
         end = c2.date_input("結束", value=date(2024, 12, 31), min_value=MIN_D, max_value=MAX_D)
         cash = st.number_input("初始資金", value=1000000, step=100000)
         commission = st.number_input("手續費率", value=0.003, min_value=0.0, max_value=0.02, format="%.4f")
-        run = st.button("🚀 執行回測", type="primary", use_container_width=True)
+        run = st.button("🚀 執行回測", type="primary", width='stretch')
 
     # 驗證
     if not symbols:
@@ -132,7 +132,7 @@ def show():
     fig.add_trace(go.Scatter(x=eq["date"], y=eq["equity"], name="策略權益", line=dict(color="#1f77b4")))
     fig.add_hline(y=cash, line_dash="dash", line_color="gray", annotation_text="初始資金")
     fig.update_layout(height=380, margin=dict(t=20, b=20), yaxis_title="權益 (元)", hovermode="x unified")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # 交易明細
     st.markdown(f"### 📋 交易明細（{len(trades)} 筆）")

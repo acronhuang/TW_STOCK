@@ -130,7 +130,7 @@ def show():
              subset=["融資增減", "融券增減", "近5日%"])
         .format({"融資餘額": "{:,.0f}", "融資增減": "{:+,.0f}", "融券餘額": "{:,.0f}", "融券增減": "{:+,.0f}",
                  "券資比%": "{:.2f}", "近5日%": "{:+.1f}", "資券相抵": "{:,.0f}"}, na_rep="—"),
-        hide_index=True, use_container_width=True, height=560)
+        hide_index=True, width='stretch', height=560)
     st.download_button("⬇️ 下載 CSV", view[cols].to_csv(index=False).encode("utf-8-sig"),
                        file_name=f"margin_market_{date}.csv", mime="text/csv")
 

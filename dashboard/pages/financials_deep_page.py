@@ -84,7 +84,7 @@ def _single():
                                  line=dict(width=2, color=cr)))
     fig.update_layout(height=320, margin=dict(l=0, r=0, t=8, b=0), yaxis_title="%",
                       legend=dict(orientation="h", y=1.15))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # ── 三大現金流(單季,億)──
     st.markdown("##### 💵 三大活動現金流(單季,億)")
@@ -95,7 +95,7 @@ def _single():
     fig2.add_hline(y=0, line=dict(color="#999", width=1))
     fig2.update_layout(height=300, margin=dict(l=0, r=0, t=8, b=0), barmode="group",
                        yaxis_title="億", legend=dict(orientation="h", y=1.15))
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width='stretch')
     st.caption("營運>0 且投資<0(擴產)+籌資<0(還債/配息)= 健康的成熟企業現金流結構。")
 
     # ── 逐季明細表 ──
@@ -118,7 +118,7 @@ def _single():
         .format({"營收(億)": "{:,.1f}", "營收YoY%": "{:+.1f}", "毛利率%": "{:.1f}", "營益率%": "{:.1f}",
                  "淨利率%": "{:.1f}", "EPS": "{:.2f}", "EPS YoY%": "{:+.1f}", "營運現金流(億)": "{:,.1f}", "自由現金流(億)": "{:,.1f}", "應收週轉(天)": "{:.1f}",
                  "現金含金量%": "{:.0f}", "負債比%": "{:.1f}", "流動比%": "{:.0f}"}, na_rep="—"),
-        hide_index=True, use_container_width=True, height=440)
+        hide_index=True, width='stretch', height=440)
     st.download_button("⬇️ 下載 CSV", show_df.to_csv(index=False).encode("utf-8-sig"),
                        file_name=f"financials_deep_{sid}.csv", mime="text/csv")
 
@@ -224,7 +224,7 @@ def _market():
                        subset=["營收YoY%", "獲利YoY%", "EPS YoY%"])
             .format({"營收(億)": "{:,.1f}", "獲利(億)": "{:,.1f}", "EPS": "{:.2f}", "毛利率%": "{:.1f}",
                      "營收YoY%": "{:+.1f}", "獲利YoY%": "{:+.1f}", "EPS YoY%": "{:+.1f}", "自由現金流(億)": "{:,.1f}", "應收週轉(天)": "{:.1f}"}, na_rep="—"),
-        hide_index=True, use_container_width=True, height=560)
+        hide_index=True, width='stretch', height=560)
     st.download_button("⬇️ 下載 CSV", view.to_csv(index=False).encode("utf-8-sig"),
                        file_name=f"financial_rank_{label[:6]}.csv", mime="text/csv")
     st.caption("YoY 用 (今−去年)/**|去年|** 計算 → 虧轉盈=正、由盈轉虧=負(符號正確)。"

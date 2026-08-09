@@ -208,7 +208,7 @@ def show():
     fig.add_vline(x=hold_min, line_dash="dot", line_color="#D9A441")
     fig.update_layout(margin=dict(l=0, r=0, t=10, b=0),
                       coloraxis_colorbar=dict(title="期間%"))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # ---- 明細表 ----
     delta_cols = [f"{a}{b}" for a in ("大戶", "股東") for b in TAG]
@@ -234,7 +234,7 @@ def show():
                   "期間%": "{:+.1f}", "日均額(億)": "{:.2f}",
                   **{f"大戶{b}": "{:+.2f}" for b in TAG},
                   **{f"股東{b}": "{:+.1f}%" for b in TAG}}, na_rep="—"),
-        use_container_width=True, hide_index=True, height=560,
+        width='stretch', hide_index=True, height=560,
         column_config={
             "大戶>400張%": st.column_config.ProgressColumn(
                 "大戶>400張%", min_value=0, max_value=100, format="%.1f"),

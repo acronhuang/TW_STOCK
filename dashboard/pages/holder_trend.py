@@ -152,7 +152,7 @@ def render_trend(sid: str, kp: str = ""):
                       yaxis3=dict(overlaying="y", side="right", position=0.99, anchor="free",
                                   title=dict(text="收盤價", font=dict(color="#1F77B4")),
                                   tickfont=dict(color="#1F77B4"), showgrid=False))
-    st.plotly_chart(fig, use_container_width=True, key=f"{kp}chart")
+    st.plotly_chart(fig, width='stretch', key=f"{kp}chart")
 
     tbl = plot_df[[xcol, "total_holders", "big400_pct", "big_pct",
                    "big_holders", "retail_pct", "收盤價"]].copy()
@@ -164,7 +164,7 @@ def render_trend(sid: str, kp: str = ""):
                 "總股東人數": "{:,.0f}", ">400張持有%": "{:.2f}", ">1000張持有%": "{:.2f}",
                 "千張大戶人數": "{:,.0f}", "散戶持股%": "{:.2f}", "收盤價": "{:.2f}",
             }, na_rep="—"),
-            use_container_width=True, hide_index=True, height=340)
+            width='stretch', hide_index=True, height=340)
         st.download_button(
             "⬇️ 下載 CSV", tbl.to_csv(index=False).encode("utf-8-sig"),
             file_name=f"holder_trend_{sid}_{gran}.csv", mime="text/csv", key=f"{kp}dl")

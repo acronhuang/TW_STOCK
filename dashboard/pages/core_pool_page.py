@@ -94,7 +94,7 @@ def show():
                  subset=[c for c in ["2560戰法", "月量價型態", "跌深反彈"] if c in df.columns])
             .format({"綜合分": "{:.2f}", "EPS": "{:.2f}", "獲利(億)": "{:,.1f}", "自由現金流(億)": "{:,.1f}",
                      "毛利率%": "{:.1f}", "應收週轉(天)": "{:.1f}", "外資10日淨買(張)": "{:+,.0f}", "獲利YoY%": "{:+.1f}"}, na_rep="—"),
-            hide_index=True, use_container_width=True, height=560)
+            hide_index=True, width='stretch', height=560)
         st.download_button("⬇️ 下載核心池 CSV", df[cols].to_csv(index=False).encode("utf-8-sig"),
                            file_name=f"core_pool_{meta['buy_date']}.csv", mime="text/csv")
         st.caption("綜合分=EPS+獲利+自由現金流 百分位 + 外資近10日淨買百分位×2。獲利YoY 供參(小基期偏大)。"
@@ -128,10 +128,10 @@ def show():
             st.markdown("##### 🟢 進場時機(基本面優質×委員買×技術對點)")
             st.dataframe(pd.DataFrame(entries).sort_values("綜合分", ascending=False)
                          .style.format({"綜合分": "{:.2f}", "外資10日淨買(張)": "{:+,.0f}"}, na_rep="—"),
-                         hide_index=True, use_container_width=True)
+                         hide_index=True, width='stretch')
         if warns:
             st.markdown("##### 🔴 警示(核心股但月線量價轉弱,留意)")
             st.dataframe(pd.DataFrame(warns).style.format({"綜合分": "{:.2f}", "外資10日淨買(張)": "{:+,.0f}"}, na_rep="—"),
-                         hide_index=True, use_container_width=True)
+                         hide_index=True, width='stretch')
         if not entries and not warns:
             st.info("今日核心股無明確進場/警示訊號(持續追蹤中)。")

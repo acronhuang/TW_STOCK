@@ -112,7 +112,7 @@ def show():
                       annotation_text=f"套牢量壓{z['price']:.0f}(+{z['dist%']:.0f}%)", annotation_position="right")
     fig.update_layout(height=560, margin=dict(l=0, r=0, t=10, b=0),
                       xaxis_rangeslider_visible=False, showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # ── 數據面板 ──
     cc = st.columns(2)
@@ -122,7 +122,7 @@ def show():
             rows = [{"強度": "弱勢 ×0.382", "目標價": fib["weak"], "共振": "⚡" if "weak" in conf else ""},
                     {"強度": "中級 ×0.5", "目標價": fib["mid"], "共振": "⚡" if "mid" in conf else ""},
                     {"強度": "強勢 ×0.618", "目標價": fib["strong"], "共振": "⚡" if "strong" in conf else ""}]
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
             st.caption("⚡ = 該反彈目標與支撐壓力線共振(價差 <2%),是更強的關卡。破強勢頂再上 = 回升(趨勢反轉)。")
     with cc[1]:
         st.markdown("**支撐壓力線(強度/觸碰)**")
@@ -131,4 +131,4 @@ def show():
                   [{"類型": "支撐", "價位": r["price"], "強度": r["strength"], "觸碰": r["touches"]}
                    for r in sr.get("support", [])])
         if srrows:
-            st.dataframe(pd.DataFrame(srrows), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(srrows), hide_index=True, width='stretch')

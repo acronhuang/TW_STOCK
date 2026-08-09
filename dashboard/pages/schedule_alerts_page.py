@@ -86,7 +86,7 @@ def show():
           .map(lambda v: "color:#C62F35;font-weight:600" if isinstance(v, str) and "error" in v
                else ("color:#B4841F" if isinstance(v, str) and "warning" in v else ""),
                subset=["嚴重度"]),
-        hide_index=True, use_container_width=True, height=520)
+        hide_index=True, width='stretch', height=520)
     st.download_button("⬇️ 下載 CSV", df.to_csv(index=False).encode("utf-8-sig"),
                        file_name=f"schedule_alerts_{datetime.now():%Y%m%d}.csv", mime="text/csv")
 

@@ -114,7 +114,7 @@ def show():
                       legend=dict(orientation="h", y=1.08))
     fig.update_yaxes(title_text="餘額(張)", secondary_y=False)
     fig.update_yaxes(title_text="收盤價", secondary_y=True)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     st.markdown("**明細(近→遠)**")
     show_cols = ["date", "融資餘額", "融資增減", "融券餘額", "融券增減", "券資比%", "資券相抵", "收盤"]
@@ -122,6 +122,6 @@ def show():
     st.dataframe(tbl.style.format({
         "融資餘額": "{:,.0f}", "融資增減": "{:+,.0f}", "融券餘額": "{:,.0f}", "融券增減": "{:+,.0f}",
         "券資比%": "{:.2f}", "資券相抵": "{:,.0f}", "收盤": "{:.2f}"}, na_rep="—"),
-        hide_index=True, use_container_width=True, height=380)
+        hide_index=True, width='stretch', height=380)
     st.download_button("⬇️ 下載 CSV", tbl.to_csv(index=False).encode("utf-8-sig"),
                        file_name=f"margin_{sid}.csv", mime="text/csv")

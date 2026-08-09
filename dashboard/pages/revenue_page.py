@@ -84,13 +84,13 @@ def _single(db):
     fig.update_layout(height=440, margin=dict(l=0, r=0, t=10, b=0), legend=dict(orientation="h", y=1.1))
     fig.update_yaxes(title_text="營收(億)", secondary_y=False)
     fig.update_yaxes(title_text="YoY %", secondary_y=True)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     st.markdown("**明細(近→遠)**")
     tbl = df.sort_values("月份", ascending=False)
     st.dataframe(tbl.style.format({"營收(億)": "{:,.1f}", "YoY%": "{:+.1f}", "MoM%": "{:+.1f}",
                                    "累計YoY%": "{:+.1f}"}, na_rep="—"),
-                 hide_index=True, use_container_width=True, height=360)
+                 hide_index=True, width='stretch', height=360)
     st.download_button("⬇️ 下載 CSV", tbl.to_csv(index=False).encode("utf-8-sig"),
                        file_name=f"revenue_{sid}.csv", mime="text/csv")
 
@@ -144,7 +144,7 @@ def _ranking(db):
         view.style.map(lambda v: f"color:{'#C62F35' if (pd.notna(v) and v > 0) else '#1F8A54' if (pd.notna(v) and v < 0) else ''}",
                        subset=["YoY%", "MoM%", "累計YoY%"])
             .format({"營收(億)": "{:,.1f}", "YoY%": "{:+.1f}", "MoM%": "{:+.1f}", "累計YoY%": "{:+.1f}"}, na_rep="—"),
-        hide_index=True, use_container_width=True, height=520)
+        hide_index=True, width='stretch', height=520)
     st.download_button("⬇️ 下載 CSV", view.to_csv(index=False).encode("utf-8-sig"),
                        file_name=f"revenue_rank_{month}.csv", mime="text/csv")
 

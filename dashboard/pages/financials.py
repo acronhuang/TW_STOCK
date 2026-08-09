@@ -72,7 +72,7 @@ def show():
                       legend=dict(orientation="h", y=1.1))
     fig.update_yaxes(title_text="營收(億)", secondary_y=False)
     fig.update_yaxes(title_text="EPS(元)", secondary_y=True)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # ── 逐季明細表 ──
     st.markdown("### 📋 逐季明細")

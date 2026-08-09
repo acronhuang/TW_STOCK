@@ -100,7 +100,7 @@ def _market():
         view.style.map(_c, subset=["情境"]).format(
             {"收盤": "{:.2f}", "MA25(還原)": "{:.2f}", "離25線%": "{:+.1f}", "量比(5/60)": "{:.2f}",
              "日均額(億)": "{:.2f}"}, na_rep="—"),
-        hide_index=True, use_container_width=True, height=520)
+        hide_index=True, width='stretch', height=520)
     st.download_button("⬇️ 下載 CSV", view.to_csv(index=False).encode("utf-8-sig"),
                        file_name=f"strategy2560_{date}.csv", mime="text/csv")
 
@@ -154,7 +154,7 @@ def _single():
     fig.add_trace(go.Scatter(x=df["date"], y=df["v5"], name="5均量", line=dict(color="#E45756", width=1.5)), row=2, col=1)
     fig.add_trace(go.Scatter(x=df["date"], y=df["v60"], name="60均量", line=dict(color="#2E7D32", width=1.5)), row=2, col=1)
     fig.update_layout(height=480, margin=dict(l=0, r=0, t=8, b=0), legend=dict(orientation="h", y=1.08))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     st.caption("上:還原價(藍)+MA25(金);下:成交量+5均量(紅)/60均量(綠)。5均量站上60均量=量能配合。")
 
 
