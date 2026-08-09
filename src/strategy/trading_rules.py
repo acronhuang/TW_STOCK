@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-
 import numpy as np
 from bson import Decimal128
 from pymongo import MongoClient

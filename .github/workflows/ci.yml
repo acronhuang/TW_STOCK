@@ -58,7 +58,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install ruff
-      - run: ruff check src/ --select E9,F63,F7,F82 --no-fix
+      - run: ruff check src/ --select E9,F63,F7,F82,UP006,UP045,UP007,UP017,I001,F541,RUF010,RUF019,RUF046,RUF100,SIM114,PIE790,FURB157,PLR1730 --no-fix
 
   secrets:
     runs-on: ubuntu-latest

@@ -11,7 +11,6 @@ import re
 from enum import Enum
 
 
-
 class SecurityType(Enum):
     """证券类型枚举"""
     STOCK = "Stock"                    # 正常股票

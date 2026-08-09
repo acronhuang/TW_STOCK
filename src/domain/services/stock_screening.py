@@ -8,7 +8,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-
 @dataclass
 class ScreeningCriteria:
     """篩選條件（Value Object）"""

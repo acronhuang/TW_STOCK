@@ -23,7 +23,6 @@ Date: 2026-02-24
 
 from __future__ import annotations
 
-
 import matplotlib.dates as mdates
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt

@@ -10,7 +10,6 @@
 from dataclasses import dataclass
 
 
-
 @dataclass
 class PatternScore:
     """形態評分結果"""
