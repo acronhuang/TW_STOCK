@@ -59,3 +59,13 @@ jobs:
           python-version: '3.11'
       - run: pip install ruff
       - run: ruff check src/ --select E9,F63,F7,F82 --no-fix
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: gitleaks 機密掃描(掃當前檔案樹 --no-git,不碰歷史)
+        # 註:repo 歷史含先前已移除的憑證,故只掃當前追蹤檔樹以免永遠紅;新洩漏仍會被擋。
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --no-git --source . --redact --no-banner --exit-code 1
