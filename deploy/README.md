@@ -6,7 +6,7 @@
 
 | 檔案 | 是什麼 | 對應線上位置 |
 |---|---|---|
-| `crontab.txt` | 30 條排程（資料更新／完整度自癒／看門狗／備份…）| `crontab -l`（使用者 mdsadmin，`TZ=Asia/Taipei`）|
+| `crontab.txt` | 47 條排程（資料更新／完整度自癒／看門狗／備份…）| `crontab -l`（使用者 mdsadmin，`TZ=Asia/Taipei`）|
 | `systemd/twstock-api.service` | FastAPI :8888 常駐 | `/etc/systemd/system/twstock-api.service` |
 | `systemd/twstock-dashboard.service` | Streamlit :8501 常駐 | `/etc/systemd/system/twstock-dashboard.service` |
 
@@ -18,7 +18,7 @@
 - 專案：`/home/mdsadmin/Stock/tw-stock-analysis`
 - venv：`/home/mdsadmin/Stock/.venv`（**在專案外**，故未入版控）
 - DB：本機 MongoDB，database `tw_stock_analysis`
-- 模型節點：`.28`（qwen2.5）、`.27`（合議 hermes3+qwen2.5）
+- 模型節點：`.28`（主力 qwen3-14b）、`.27`（合議 gemma2+qwen2.5）  ← 與 Wazuh 共用池(ADR-009)
 - 備份：`~/Stock/mongodb_backups/*.tar.gz`（週日 01:00 cron），還原性每週驗（`verify_backup.py`）
 
 ## 從零重建（.166 全毀時）
@@ -33,7 +33,7 @@ cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 3) 建 venv 裝套件
 python3 -m venv /home/mdsadmin/Stock/.venv
-/home/mdsadmin/Stock/.venv/bin/pip install -r requirements.txt
+/home/mdsadmin/Stock/.venv/bin/pip install -e ".[dev,dashboard]"   # 依賴權威在 pyproject(G8);requirements.txt 已 legacy
 
 # 4) 還原機密（不在版控）
 cp .env.example .env && vim .env      # 填 MONGODB_PASSWORD / FINMIND_API_TOKEN / LINE_*
@@ -54,10 +54,12 @@ crontab deploy/crontab.txt
 # 8) 驗證
 /home/mdsadmin/Stock/.venv/bin/python3 scripts/twse_openapi_sync.py --check-only   # 應全綠
 /home/mdsadmin/Stock/.venv/bin/python3 scripts/watchdog.py --status
-curl -s localhost:8888/health && curl -sI localhost:8501
+curl -s localhost:8888/api/health && curl -sI localhost:8501
 ```
 
 ## 日常：改了設定要同步回版控
+
+> 先跑 `bash scripts/check_crontab_drift.sh` 偵測 crontab 是否已漂移（可接每日 cron 自動抓）。
 
 ```bash
 crontab -l > deploy/crontab.txt
