@@ -46,6 +46,20 @@ class FinancialFilter:
                        min_net_margin, min_positive_quarters)
         return r.get('healthy', False)
 
+    def _debt_ratio_bsd(self, symbol: str):
+        """負債比=總負債/總資產*100,取自 balance_sheet_detail(現行全市場;取代舊 financial_statements 只192檔且停2025Q3)。無則 None。"""
+        ta_doc = self.db.balance_sheet_detail.find_one(
+            {'stock_id': symbol, 'type': 'TotalAssets'}, sort=[('date', -1)])
+        if not ta_doc:
+            return None
+        tl_doc = self.db.balance_sheet_detail.find_one(
+            {'stock_id': symbol, 'type': 'Liabilities', 'date': ta_doc['date']})
+        ta = _tof(ta_doc.get('value'))
+        tl = _tof(tl_doc.get('value')) if tl_doc else None
+        if ta and tl and ta > 0:
+            return tl / ta * 100
+        return None
+
     def check(self, symbol: str,
               min_ttm_net_income: float = 0,
               max_debt_ratio: float = 80,
@@ -85,9 +99,9 @@ class FinancialFilter:
 
         avg_net_margin = sum(margins) / len(margins) if margins else 0
 
-        # 取負債比（先從 financial_statements）
-        debt_ratio = None
-        fs = self.db.financial_statements.find_one(
+        # 取負債比（優先 balance_sheet_detail 現行全市場;fallback 舊 financial_statements 只192檔停2025）
+        debt_ratio = self._debt_ratio_bsd(symbol)
+        fs = None if debt_ratio is not None else self.db.financial_statements.find_one(
             {'symbol': symbol}, sort=[('year', -1), ('season', -1)])
         if fs:
             bs = fs.get('balanceSheet', {})
@@ -100,6 +114,9 @@ class FinancialFilter:
                 debt_ratio = _tof(r.get('debtRatio'))
 
         # 4 項檢查
+        info = self.db.taiwan_stock_info.find_one({'stock_id': symbol}, {'industry_category': 1})
+        is_financial = bool(info and info.get('industry_category') in ('金融保險', '金融業'))
+
         checks = {
             'ttm_net_income_positive': {
                 'value': ttm_net_income,
@@ -122,8 +139,8 @@ class FinancialFilter:
             'debt_ratio_safe': {
                 'value': debt_ratio,
                 'threshold': max_debt_ratio,
-                'pass': (debt_ratio is None) or (debt_ratio < max_debt_ratio),
-                'desc': f'負債比 < {max_debt_ratio}%（資料缺失視為通過）',
+                'pass': is_financial or (debt_ratio is None) or (debt_ratio < max_debt_ratio),
+                'desc': f'負債比 < {max_debt_ratio}%（金融股/資料缺失視為通過）',
             },
         }
 
