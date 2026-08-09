@@ -12,6 +12,7 @@
   schema_contract_audit.py          dry-run（印報告，不寫警報）
   schema_contract_audit.py --alert  有 🔴 才寫一筆 schedule_alerts
 """
+import sys
 import argparse
 from datetime import datetime
 
@@ -160,6 +161,7 @@ def audit_table(col, spec):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--alert", action="store_true", help="有 🔴 才寫 schedule_alerts")
+    ap.add_argument("--strict", action="store_true", help="有 🔴 則以非零結束(供 deploy 硬閘 G5)")
     args = ap.parse_args()
     db = MongoClient("mongodb://localhost:27017/")["tw_stock_analysis"]
 
@@ -187,6 +189,9 @@ def main():
         print(f"\n[DRY-RUN] {len(problems)} 表違約（加 --alert 才寫網頁）")
     else:
         print("\n✅ 全部契約通過")
+
+    if args.strict and problems:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

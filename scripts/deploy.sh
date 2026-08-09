@@ -15,9 +15,14 @@ bash scripts/check_crontab_drift.sh || echo "  ⚠️ crontab 與版控快照不
 echo "== [3/6] 測試綠燈閘（未過→set -e 中止,不部署）=="
 "$PY" -m pytest tests/ -m "not slow" -k "not api" -q
 
-echo "== [4/6] 資料契約 + 新鮮度 smoke（警示;升硬閘=P8a G5,需先定 exit 語意）=="
-"$PY" scripts/schema_contract_audit.py  || echo "  ⚠️ 契約稽核回報非零(見上)"
-"$PY" scripts/data_freshness_audit.py   || echo "  ⚠️ 新鮮度稽核回報非零(見上)"
+echo "== [4/6] 資料契約 + 新鮮度 smoke 硬閘（有 🔴 即中止;transient 🔴 重試1次,G5）=="
+smoke() {  # $1=腳本 $2=名稱;失敗重試1次(避免 latest-batch 在批次寫入瞬間閃現 🔴 而誤擋)
+  "$PY" "$1" --strict && return 0
+  echo "  ⚠️ $2 首次未過,5s 後重試(可能為批次寫入瞬間)..."; sleep 5
+  "$PY" "$1" --strict
+}
+smoke scripts/schema_contract_audit.py 契約稽核 || { echo "  🔴 契約稽核兩次未過,中止部署"; exit 1; }
+smoke scripts/data_freshness_audit.py 新鮮度稽核 || { echo "  🔴 新鮮度稽核兩次未過,中止部署"; exit 1; }
 
 echo "== [5/6] 重啟服務 =="
 # API：kill -9 讓 systemd(Restart=on-failure,RestartSec=5) 自動重生。

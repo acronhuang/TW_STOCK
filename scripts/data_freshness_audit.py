@@ -7,6 +7,7 @@
 
 用法: python3 scripts/data_freshness_audit.py [--all]   # --all 連未列在 SPEC 的表也掃(視為 date/daily)
 """
+import sys
 import argparse
 from datetime import datetime, timedelta
 
@@ -100,6 +101,7 @@ def main():
     ap.add_argument("--alert", action="store_true",
                     help="有表超出頻率門檻(🔴)才寫一筆 schedule_alerts 進網頁;無則靜默")
     ap.add_argument("--uri", default="mongodb://localhost:27017")
+    ap.add_argument("--strict", action="store_true", help="有 🔴 則以非零結束(供 deploy 硬閘 G5)")
     args = ap.parse_args()
     db = MongoClient(args.uri)["tw_stock_analysis"]
     now = datetime.now()
@@ -164,6 +166,9 @@ def main():
                 print(f"[alert] schedule_alerts 寫入失敗:{e!r}")
         else:
             print("[alert] 無 🔴,不寫警報(靜默)")
+
+    if args.strict and worst:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
