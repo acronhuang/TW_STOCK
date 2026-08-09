@@ -48,3 +48,4 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 40 22 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/schema_contract_audit.py --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_contract_audit.log 2>&1  # contract_audit
 0 6 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/regression_gate.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_regression_gate.log 2>&1  # regression_gate
 0 6 1 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/verdict_orthogonality_backtest.py --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_verdict_sli.log 2>&1  # monthly_verdict_sli
+15 6 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/check_crontab_drift.sh --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_crontab_drift.log 2>&1  # crontab_drift_check
