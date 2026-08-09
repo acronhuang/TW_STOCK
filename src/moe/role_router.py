@@ -1,20 +1,21 @@
 """
 角色 → 模型 路由器
 
-7 角色精準分派到最適合的本地模型：
-  🎯 macro-analyst         → qwen3:8b           （快速大局判斷）
-  📈 technical-analyst     → deepseek-r1:14b   （指標計算 + 型態）
-  💰 fundamental-analyst   → deepseek-r1:14b   （財報數字）
-  💎 value-analyst         → deepseek-r1:14b   （DCF / DDM 計算）
-  🛡️ risk-manager          → deepseek-r1:14b   （VaR / Sharpe 計算）
-  🏦 chip-analyst          → qwen3:8b           （法人趨勢）
-  🎩 investment-advisor    → qwen3.6:27b        （最強整合）
-  🤝 stock-team-orchestrator → qwen3.6:27b      （團隊協調）
+7 分析角色 → 本地模型（實際映射以下方 ROLE_TO_MODEL 為準；env 可覆寫）：
+  🎩 investment-advisor      → MAIN_14B  (qwen3-14b @ .28)   最強整合
+  🤝 stock-team-orchestrator → MAIN_14B  (qwen3-14b @ .28)   團隊協調
+  📈 technical-analyst       → MAIN_14B  (qwen3-14b @ .28)   指標 + 型態
+  💰 fundamental-analyst     → MAIN_14B  (qwen3-14b @ .28)   財報數字
+  🎯 macro-analyst           → MAIN_14B  (qwen3-14b @ .28)   大局（2026-08 由 3b 升 14b）
+  💎 value-analyst           → VIEW_MODEL(gemma2:9b  @ .27)  換視角
+  🏦 chip-analyst            → VIEW_MODEL(gemma2:9b  @ .27)  法人趨勢
+  🛡️ risk-manager            → qwen2.5-3b:latest     @ .28   快速規則
 
-  📈 型態/看圖           → SenVision 蔡森演算法(非LLM，精準型態/頸線/目標價)，餵 technical-analyst
-  ⚙️ SQL/程式生成        → qwen2.5-coder:7b
-  📰 新聞情緒向量化      → nomic-embed-text
-  🇹🇼 繁中口語潤稿      → llama-3-taiwan:8b
+  合議委員(consensus.COMMITTEE) → gemma2:9b / qwen2.5:7b / qwen2.5-3b (@ .27)
+  facilitator                   → qwen3-14b (@ .28)
+  型態/看圖 → SenVision 蔡森演算法(非 LLM，精準型態/頸線)，結果餵 technical-analyst
+  工具型   → coder(qwen2.5-coder:7b) / embed(nomic-embed-text) / tw-polish(llama-3-taiwan)
+  env 覆寫 → TWSTOCK_MAIN_LLM / TWSTOCK_VIEW_LLM / CONSENSUS_MODELS / CONSENSUS_FACILITATOR
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────
 # 台股主力 14b:env TWSTOCK_MAIN_LLM 可覆寫(回退設 qwen2.5-14b:latest)。2026-08 由使用者決定切 qwen3。
 MAIN_14B = os.getenv('TWSTOCK_MAIN_LLM', 'qwen3-14b:latest')
-# 換視角模型(value/chip 角色):env TWSTOCK_VIEW_LLM 可覆寫(回退設 hermes3:8b)。2026-08 由使用者決定 hermes3→gemma2。
+# 換視角模型(value/chip 角色):env TWSTOCK_VIEW_LLM 可覆寫;預設 gemma2:9b(2026-08 由 hermes3→gemma2)。
 VIEW_MODEL = os.getenv('TWSTOCK_VIEW_LLM', 'gemma2:9b')
 
 ROLE_TO_MODEL = {
@@ -49,7 +50,7 @@ ROLE_TO_MODEL = {
     'technical-analyst':        MAIN_14B,
     'fundamental-analyst':      MAIN_14B,
 
-    # 換視角（hermes3 8b @ .27 合議節點）
+    # 換視角（gemma2:9b @ .27 合議節點）
     'value-analyst':            VIEW_MODEL,
     'chip-analyst':             VIEW_MODEL,
 
@@ -100,11 +101,10 @@ LLM_SEED = int(os.getenv('LLM_SEED', '42'))
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')       # 主力 .28
 OLLAMA_URL_27 = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議 .27
 
-# 模型 → 主機：hermes3 只在 .27，qwen2.5-* 在 .28（主力）。未列者走 OLLAMA_URL。
+# 模型 → 主機：gemma2 只在 .27（合議），qwen2.5-* 在 .28（主力）。未列者走 OLLAMA_URL。
 MODEL_TO_URL = {
     'qwen2.5-14b:latest': OLLAMA_URL,
     'qwen2.5-3b:latest':  OLLAMA_URL,
-    'hermes3:8b':         OLLAMA_URL_27,
     'gemma2:9b':          OLLAMA_URL_27,   # gemma2 在 .27,value/chip 路由到 .27
 }
 

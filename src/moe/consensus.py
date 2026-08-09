@@ -5,7 +5,7 @@
   .28 主力 qwen2.5-14b 出初稿+主持人整合 → 顧問草案(買/持/賣)
   .27 合議小組 多個 8B 模型獨立投票 → 匯總定案(多數決)
 
-委員會預設用 .27 上的「通用」模型(hermes3:8b + qwen2.5-3b)；
+委員會預設用 .27 上的「通用」模型(gemma2:9b + qwen2.5:7b + qwen2.5-3b)；
 .27 另有資安模型(foundation-sec/whiterabbitneo)對股票判斷較弱,不預設納入,
 可用 env CONSENSUS_MODELS 覆寫。完全不改動 Ollama 本身。
 """
@@ -28,7 +28,7 @@ FACILITATOR_MODEL = os.getenv('CONSENSUS_FACILITATOR', 'qwen3-14b:latest')
 # 產出『買進』風險論點併入逐字稿供主持人權衡(不投票、不扭曲票數)。預設 qwen2.5:7b(已常駐,免 pull)。
 DEVIL_ENABLED = os.getenv('CONSENSUS_DEVIL', '0') == '1'
 DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', 'qwen2.5:7b')
-# 合議委員全走 .27 合議節點(hermes3 + qwen2.5-3b 皆 GPU；.27 qwen2.5-3b 已設 num_gpu 99 上 GPU)。
+# 合議委員全走 .27 合議節點(gemma2 + qwen2.5:7b + qwen2.5-3b 皆 GPU；.27 qwen2.5-3b 已設 num_gpu 99 上 GPU)。
 
 
 def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
