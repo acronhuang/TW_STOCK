@@ -507,7 +507,7 @@ python3 scripts/backtest_patterns.py
 ### 1. 快速驗證（5 分鐘）
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 快速測試
 python3 scripts/quick_test_morphology.py
@@ -804,7 +804,7 @@ test_period = ('2023-01-01', '2023-12-31')   # Out-of-sample
 **下一步**: 執行快速測試
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/quick_test_morphology.py
 ```
 

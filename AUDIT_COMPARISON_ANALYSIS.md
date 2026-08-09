@@ -218,7 +218,7 @@ changePercent: number;
 
 ```bash
 # 🔴 P0: 补充股利数据（从 73 笔 → 13,000+ 笔）
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/main_download.py --categories 股利政策 --start-date 2015-01-01
 
 # 影响：覆盖率从 0.74% → 95%+

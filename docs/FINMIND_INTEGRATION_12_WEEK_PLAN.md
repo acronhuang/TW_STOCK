@@ -96,7 +96,7 @@ FINMIND_DATASETS = {
 
 **執行腳本**:
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 1. 完整數據下載（首次）
 export FINMIND_API_TOKEN="eyJ0eXAi..."
@@ -682,7 +682,7 @@ streamlit_dashboard_features = [
 **自動化流程**:
 ```bash
 # cron job 設定（每日 15:30 執行）
-30 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && \
+30 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && \
     python3 scripts/daily_auto_selection_v21.py 2>&1 | \
     tee logs/daily_selection_$(date +\%Y\%m\%d).log && \
     python3 scripts/send_daily_report.py
@@ -856,7 +856,7 @@ python3 scripts/validate_week_11_12.py
 **下一步行動**:
 ```bash
 # 1. 完成 Week 1-2（FinMind 對接）
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/finmind_full_sync.py --initial
 
 # 2. 驗證數據完整性

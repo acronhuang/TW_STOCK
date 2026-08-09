@@ -54,7 +54,7 @@ Response: {
 **步驟**：
 ```bash
 # 2026-02-24 22:13 之後執行
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 export FINMIND_API_TOKEN=""
 
@@ -112,7 +112,7 @@ python3 src/downloaders/unified_downloader.py --categories 基本面 --verbose
 #### 3.2 計算因子（使用現有數據）
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 計算技術因子（使用 stock_price）
 python3 scripts/parallel_factor_calculation.py \

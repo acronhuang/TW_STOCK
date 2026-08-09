@@ -370,7 +370,7 @@ if idx % 100 == 0:
 ### A. 执行命令
 ```bash
 # 主执行器
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/run_improvement_tasks.py
 
 # 单独执行

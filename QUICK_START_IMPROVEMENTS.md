@@ -3,7 +3,7 @@
 ## 🚀 快速開始（推薦）
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 賦予執行權限
 chmod +x scripts/execute_all_improvements.sh

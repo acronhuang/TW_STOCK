@@ -180,7 +180,7 @@ python3 pattern_recognition/pattern_cli.py stock 2330## ✨ 核心功能
 
 ```bash
 
-### 備份與還原cd /Users/ming/Desktop/Stock/tw-stock-analysis
+### 備份與還原cd /home/mdsadmin/Stock/tw-stock-analysis
 
 ```bashnpm install
 

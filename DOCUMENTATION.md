@@ -345,7 +345,7 @@ kill $(cat download.pid)
 ./backup_mongodb.sh
 
 # 設定自動備份（crontab）
-0 2 * * * /Users/ming/Desktop/Stock/tw-stock-analysis/backup_mongodb.sh
+0 2 * * * /home/mdsadmin/Stock/tw-stock-analysis/backup_mongodb.sh
 ```
 
 ---

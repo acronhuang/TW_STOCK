@@ -294,7 +294,7 @@ API 使用情況: 590/600 (98.33%)
 
 **下次下載命令：**
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)"
 python3 src/downloaders/unified_downloader_v2.py \
   --categories 基本面 \

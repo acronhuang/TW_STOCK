@@ -152,7 +152,7 @@
 ### 查看當前資料覆蓋率
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/check_financial_coverage.py
 ```
 

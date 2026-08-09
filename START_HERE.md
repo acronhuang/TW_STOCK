@@ -127,7 +127,7 @@
 
 ### 1. 啟動系統
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 npm run build
 npm start
 ```

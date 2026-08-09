@@ -182,7 +182,7 @@ class DailyUpdater:
 python3 scripts/finmind_daily_update.py
 
 # 設置 cron job（每日 15:30 執行）
-30 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && \
+30 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && \
     python3 scripts/finmind_daily_update.py >> logs/daily_update.log 2>&1
 ```
 
@@ -459,7 +459,7 @@ export FINMIND_API_TOKEN=""
 
 ### Step 2: 執行首次完整同步（5 年數據）
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 預計 2-4 小時
 python3 scripts/finmind_full_sync.py --initial
@@ -511,7 +511,7 @@ python3 scripts/backtest_integrated_v21.py \
 crontab -e
 
 # 新增每日 15:30 執行
-30 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && \
+30 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && \
     python3 scripts/finmind_daily_update.py >> logs/daily_update.log 2>&1
 ```
 

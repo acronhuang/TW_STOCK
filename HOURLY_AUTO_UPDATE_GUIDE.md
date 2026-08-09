@@ -40,7 +40,7 @@
 ### 方式一：立即執行一次（測試用）
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 執行每小時更新腳本
 ./scripts/hourly_data_update.sh
@@ -54,7 +54,7 @@ cd /Users/ming/Desktop/Stock/tw-stock-analysis
 ### 方式二：背景執行（不佔用終端機）
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 背景執行並將輸出導向日誌
 nohup ./scripts/hourly_data_update.sh > logs/hourly_cron.log 2>&1 &
@@ -69,7 +69,7 @@ tail -f logs/hourly_cron.log
 ### 方式三：只下載特定類別
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 手動下載技術面資料
 export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)"
@@ -95,7 +95,7 @@ crontab -e
 
 ```bash
 # 每小時第 5 分鐘執行（避開整點高峰）
-5 * * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /Users/ming/Desktop/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
+5 * * * * /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
 ```
 
 **執行時間範例**:
@@ -105,13 +105,13 @@ crontab -e
 
 ```bash
 # 交易日盤中：每 30 分鐘更新技術面
-0,30 9-13 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 技術面 --verbose >> logs/intraday_tech.log 2>&1
+0,30 9-13 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 技術面 --verbose >> logs/intraday_tech.log 2>&1
 
 # 交易日收盤後：更新籌碼面
-0 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 籌碼面 --verbose >> logs/daily_chips.log 2>&1
+0 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 籌碼面 --verbose >> logs/daily_chips.log 2>&1
 
 # 每天晚上：更新基本面
-0 21 * * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 基本面 --verbose >> logs/daily_fundamental.log 2>&1
+0 21 * * * cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 基本面 --verbose >> logs/daily_fundamental.log 2>&1
 ```
 
 ### 步驟 3：驗證設定
@@ -148,7 +148,7 @@ logs/
 ### 查看最新日誌
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 查看最新的每小時更新日誌
 ls -lt logs/hourly_updates/hourly_update_*.log | head -1 | awk '{print $NF}' | xargs tail -50
@@ -164,7 +164,7 @@ tail -f logs/hourly_cron.log
 
 ```bash
 # 加入 crontab：每週清理超過 30 天的日誌
-0 3 * * 0 find /Users/ming/Desktop/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
+0 3 * * 0 find /home/mdsadmin/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
 ```
 
 ---
@@ -242,7 +242,7 @@ export FINMIND_API_TOKEN="your_token_here"
 
 ```bash
 # 修改 crontab 為每 2 小時執行
-5 */2 * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /Users/ming/Desktop/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
+5 */2 * * * /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
 ```
 
 #### ❌ 問題 4：MongoDB 連線失敗

@@ -26,7 +26,7 @@
 # - 日誌：自動記錄到 logs/hourly_updates/
 # ----------------------------------------------------------------------------
 
-5 * * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /Users/ming/Desktop/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
+5 * * * * /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
 
 # ----------------------------------------------------------------------------
 # 方案二：分時段更新（節省 API 配額）
@@ -35,16 +35,16 @@
 # ----------------------------------------------------------------------------
 
 # 交易日盤中：每 30 分鐘更新技術面（股價、成交量等即時數據）
-0,30 9-13 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 技術面 --verbose >> logs/intraday_tech.log 2>&1
+0,30 9-13 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 技術面 --verbose >> logs/intraday_tech.log 2>&1
 
 # 交易日收盤後：更新籌碼面（三大法人、融資融券等）
-0 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 籌碼面 --verbose >> logs/daily_chips.log 2>&1
+0 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 籌碼面 --verbose >> logs/daily_chips.log 2>&1
 
 # 每天晚上：更新基本面（財報、股利等較少變動的數據）
-0 21 * * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 基本面 --verbose >> logs/daily_fundamental.log 2>&1
+0 21 * * * cd /home/mdsadmin/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 基本面 --verbose >> logs/daily_fundamental.log 2>&1
 
 # 每週一更新衍生性商品（期貨、選擇權）
-0 22 * * 1 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 衍生性商品 --verbose >> logs/weekly_derivatives.log 2>&1
+0 22 * * 1 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 衍生性商品 --verbose >> logs/weekly_derivatives.log 2>&1
 
 # ----------------------------------------------------------------------------
 # 方案三：流通股數定期更新（配合 P2-B 任務）
@@ -53,20 +53,20 @@
 # - 限制：最多執行 3 小時
 # ----------------------------------------------------------------------------
 
-0 2 * * 0 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
+0 2 * * 0 cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
 
 # ----------------------------------------------------------------------------
 # 監控與維護
 # ----------------------------------------------------------------------------
 
 # 每天早上 9:00 檢查資料新鮮度
-0 9 * * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 scripts/monitor_data_freshness.py >> logs/monitor.log 2>&1
+0 9 * * * cd /home/mdsadmin/Stock/tw-stock-analysis && python3 scripts/monitor_data_freshness.py >> logs/monitor.log 2>&1
 
 # 每週日凌晨 3:00 清理超過 30 天的日誌檔
-0 3 * * 0 find /Users/ming/Desktop/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
+0 3 * * 0 find /home/mdsadmin/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
 
 # 每月 1 號凌晨 4:00 備份 MongoDB 資料庫
-0 4 1 * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && ./backup_mongodb.sh >> logs/backup.log 2>&1
+0 4 1 * * cd /home/mdsadmin/Stock/tw-stock-analysis && ./backup_mongodb.sh >> logs/backup.log 2>&1
 
 # ============================================================================
 # 查看 Crontab 狀態

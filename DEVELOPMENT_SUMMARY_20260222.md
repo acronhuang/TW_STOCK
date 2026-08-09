@@ -280,7 +280,7 @@ stock_ids = get_missing_stocks()  # 只下载缺失的
 
 **执行方式**:
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)"
 
@@ -400,7 +400,7 @@ db.stock_price.findOne(
 **Crontab 配置**:
 ```bash
 # 每个交易日下午 3:30 更新股价（收盘后）
-30 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 股價 --execute >> logs/daily_price_update.log 2>&1
+30 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 股價 --execute >> logs/daily_price_update.log 2>&1
 ```
 
 #### 3.2 每季度财报更新
@@ -408,7 +408,7 @@ db.stock_price.findOne(
 **cc**:
 ```bash
 # 每季度第一个月 15 号更新财报
-0 9 15 1,4,7,10 * cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 基本面 --execute >> logs/quarterly_financial_update.log 2>&1
+0 9 15 1,4,7,10 * cd /home/mdsadmin/Stock/tw-stock-analysis && python3 src/downloaders/unified_downloader.py --categories 基本面 --execute >> logs/quarterly_financial_update.log 2>&1
 ```
 
 #### 3.3 每周流通股数增量更新
@@ -416,7 +416,7 @@ db.stock_price.findOne(
 **Crontab 配置**:
 ```bash
 # 每周日凌晨 2:00 增量下载缺失的流通股数
-0 2 * * 0 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
+0 2 * * 0 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
 ```
 
 #### 3.4 监控与告警
@@ -457,7 +457,7 @@ def check_data_freshness():
 **Crontab 配置**:
 ```bash
 # 每天早上 9:00 检查数据新鲜度
-0 9 * * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 scripts/monitor_data_freshness.py >> logs/monitor.log 2>&1
+0 9 * * * cd /home/mdsadmin/Stock/tw-stock-analysis && python3 scripts/monitor_data_freshness.py >> logs/monitor.log 2>&1
 ```
 
 **预期效果**:

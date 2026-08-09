@@ -12,13 +12,13 @@ crontab -e
 
 # 加入以下 3 行配置
 # 1. 每小時自動下載所有資料
-5 * * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /Users/ming/Desktop/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
+5 * * * * /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
 
 # 2. 每週日凌晨 2:00 更新流通股數
-0 2 * * 0 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
+0 2 * * 0 cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
 
 # 3. 每週日凌晨 3:00 清理舊日誌
-0 3 * * 0 find /Users/ming/Desktop/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
+0 3 * * 0 find /home/mdsadmin/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
 ```
 
 **API 消耗**: 約 1,200 次/天（每小時 50 次 × 24 小時）  
@@ -37,22 +37,22 @@ crontab -e
 
 # 加入以下 6 行配置
 # 1. 交易日盤中更新技術面（每 30 分鐘）
-0,30 9-13 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 技術面 --verbose >> logs/intraday_tech.log 2>&1
+0,30 9-13 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 技術面 --verbose >> logs/intraday_tech.log 2>&1
 
 # 2. 交易日收盤後更新籌碼面
-0 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 籌碼面 --verbose >> logs/daily_chips.log 2>&1
+0 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 籌碼面 --verbose >> logs/daily_chips.log 2>&1
 
 # 3. 每天晚上更新基本面
-0 21 * * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 基本面 --verbose >> logs/daily_fundamental.log 2>&1
+0 21 * * * cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 基本面 --verbose >> logs/daily_fundamental.log 2>&1
 
 # 4. 每週一晚上更新衍生性商品
-0 22 * * 1 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 衍生性商品 --verbose >> logs/weekly_derivatives.log 2>&1
+0 22 * * 1 cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/unified_downloader.py --categories 衍生性商品 --verbose >> logs/weekly_derivatives.log 2>&1
 
 # 5. 每週日凌晨 2:00 更新流通股數
-0 2 * * 0 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
+0 2 * * 0 cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
 
 # 6. 每週日凌晨 3:00 清理舊日誌
-0 3 * * 0 find /Users/ming/Desktop/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
+0 3 * * 0 find /home/mdsadmin/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
 ```
 
 **API 消耗**: 約 120-150 次/天（節省 85%）  
@@ -89,7 +89,7 @@ grep CRON /var/log/syslog
 ### 測試腳本是否正常
 ```bash
 # 手動執行一次測試
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 ./scripts/hourly_data_update.sh
 ```
 
@@ -134,11 +134,11 @@ https://finmindtrade.com/analysis/#/data/dashboard
 **檢查**:
 ```bash
 # 確認腳本有執行權限
-ls -la /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_data_update.sh
+ls -la /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_data_update.sh
 # 應該顯示 -rwxr-xr-x
 
 # 如果沒有，加上執行權限
-chmod +x /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_data_update.sh
+chmod +x /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_data_update.sh
 ```
 
 ### 問題 2：找不到 Python 或 MongoDB
@@ -155,7 +155,7 @@ SHELL=/bin/bash
 **檢查**:
 ```bash
 # 確認 .env 檔案存在且格式正確
-cat /Users/ming/Desktop/Stock/tw-stock-analysis/.env | grep FINMIND_API_TOKEN
+cat /home/mdsadmin/Stock/tw-stock-analysis/.env | grep FINMIND_API_TOKEN
 ```
 
 ---
@@ -166,9 +166,9 @@ cat /Users/ming/Desktop/Stock/tw-stock-analysis/.env | grep FINMIND_API_TOKEN
 
 ```bash
 # 每小時更新所有資料 + 每週流通股數 + 每週清理日誌
-5 * * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /Users/ming/Desktop/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
-0 2 * * 0 cd /Users/ming/Desktop/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
-0 3 * * 0 find /Users/ming/Desktop/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
+5 * * * * /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_data_update.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/hourly_cron.log 2>&1
+0 2 * * 0 cd /home/mdsadmin/Stock/tw-stock-analysis && export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" && python3 src/downloaders/hourly_outstanding_shares_downloader.py --all --max-hours 3 >> logs/weekly_outstanding_shares.log 2>&1
+0 3 * * 0 find /home/mdsadmin/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
 ```
 
 **完成！系統將每小時自動更新所有台股資料。**

@@ -235,7 +235,7 @@ python3 scripts/fix_database_roe.py
 如果想清理冗余文件:
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis/scripts
+cd /home/mdsadmin/Stock/tw-stock-analysis/scripts
 
 # 刪除已被取代的驗證腳本
 rm -f validate_system.py \

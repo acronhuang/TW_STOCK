@@ -131,7 +131,7 @@ python scripts/database/unify_field_names.py
 
 ### 選項 A：立即執行完整遷移
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 一鍵執行三步驟（需手動確認每步）
 python scripts/database/migrate_to_decimal128.py && \

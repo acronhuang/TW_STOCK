@@ -167,7 +167,7 @@ collection.create_index(indexes, background=True)
 export FINMIND_API_TOKEN=your_token_here
 
 # 2. 下載所有資料
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/main_download.py
 
 # 3. 查看日誌
@@ -203,7 +203,7 @@ python3 scripts/main_download.py --log-level DEBUG
 crontab -e
 
 # 加入排程（週一至週五下午 3:30）
-30 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 scripts/main_download.py >> logs/cron.log 2>&1
+30 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 scripts/main_download.py >> logs/cron.log 2>&1
 ```
 
 ---

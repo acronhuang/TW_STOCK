@@ -23,7 +23,7 @@ v2.1: 17 因子初選 30 支 → 形態過濾 → 最終 10 支
 ### 1. 驗證模組可用性
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 快速測試（1 分鐘）
 python3 scripts/quick_test_morphology.py

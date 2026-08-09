@@ -137,7 +137,7 @@ python3 scripts/main_download.py --help
 crontab -e
 
 # 加入排程（週一至週五 15:30）
-30 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 scripts/main_download.py >> logs/cron.log 2>&1
+30 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 scripts/main_download.py >> logs/cron.log 2>&1
 ```
 
 ---

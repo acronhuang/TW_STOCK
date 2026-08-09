@@ -25,7 +25,7 @@
 
 ```bash
 # 確認模組可用
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 -c "from src.morphology import PatternDetector; print('✓ 模組正常')"
 ```
 

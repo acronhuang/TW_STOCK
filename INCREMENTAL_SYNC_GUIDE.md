@@ -23,7 +23,7 @@
 ### 2. Cron Job
 ```bash
 # FinMind 每小時增量同步（每小時 00 分執行）
-0 * * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_finmind_sync_cron.sh
+0 * * * * /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_finmind_sync_cron.sh
 ```
 
 ### 3. 首次測試
@@ -74,7 +74,7 @@
 
 ### 1. 查看同步進度
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 查看進度檔案
 cat logs/finmind_sync_progress.json
@@ -137,12 +137,12 @@ print('涵蓋股票數:', db.stock_price.distinct('stock_id').length);
 ```bash
 crontab -e
 # 修改為：
-0 */2 * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_finmind_sync_cron.sh
+0 */2 * * * /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_finmind_sync_cron.sh
 ```
 
 **每 30 分鐘執行一次**：
 ```bash
-*/30 * * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_finmind_sync_cron.sh
+*/30 * * * * /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_finmind_sync_cron.sh
 ```
 
 ### 修改批次大小
@@ -169,7 +169,7 @@ rm logs/finmind_sync_progress.json
 # 註解掉 cron job
 crontab -e
 # 在行首加 #：
-# 0 * * * * /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/hourly_finmind_sync_cron.sh
+# 0 * * * * /home/mdsadmin/Stock/tw-stock-analysis/scripts/hourly_finmind_sync_cron.sh
 
 # 或直接移除
 crontab -l | grep -v "hourly_finmind_sync_cron.sh" | crontab -

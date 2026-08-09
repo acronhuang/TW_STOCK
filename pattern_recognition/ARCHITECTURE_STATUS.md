@@ -528,7 +528,7 @@ def scan_market():
 ### 快速開始
 ```bash
 # 方式1: 使用CLI工具
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python pattern_recognition/pattern_cli.py scan
 
 # 方式2: 使用啟動腳本
@@ -598,7 +598,7 @@ python pattern_cli.py stock 2330
 
 ### 專案位置
 ```
-/Users/ming/Desktop/Stock/tw-stock-analysis/pattern_recognition/
+/home/mdsadmin/Stock/tw-stock-analysis/pattern_recognition/
 ```
 
 ### 聯絡資訊
@@ -633,7 +633,7 @@ python pattern_cli.py stock 2330
 ### 開始使用
 ```bash
 # 立即開始掃描
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python pattern_recognition/pattern_cli.py scan --buy
 ```
 

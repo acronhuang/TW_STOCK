@@ -106,10 +106,10 @@ python3 scripts/test_date_formats.py
 ## 啟動 Dashboard
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 啟動 Streamlit Dashboard
-/Users/ming/Desktop/Stock/.venv/bin/python -m streamlit run dashboard/app.py --server.port 8501 --server.headless false
+/home/mdsadmin/Stock/.venv/bin/python -m streamlit run dashboard/app.py --server.port 8501 --server.headless false
 ```
 
 訪問：http://localhost:8501

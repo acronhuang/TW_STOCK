@@ -1286,7 +1286,7 @@ $ launchctl list | grep com.twstock
 
 1. **安裝 launchd 服務** (優先級 🔥🔥🔥)
    ```bash
-   cd /Users/ming/Desktop/Stock/tw-stock-analysis
+   cd /home/mdsadmin/Stock/tw-stock-analysis
    ./scripts/install_launchd.sh
    ```
    - 預計耗時: < 1 分鐘

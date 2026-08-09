@@ -274,7 +274,7 @@ mongosh tw_stock_analysis --eval "
 
 **行動：**
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 src/downloaders/unified_downloader_v2.py \
   --categories 基本面 \
   --auto-retry \

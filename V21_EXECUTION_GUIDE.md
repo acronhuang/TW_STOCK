@@ -33,7 +33,7 @@
 # 請在 Terminal ID: 71b1e582-255f-4581-bdf6-c4787fb053b0 中輸入 "yes"
 
 # 或者重新啟動同步（如果上一個已終止）：
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 export FINMIND_API_TOKEN=""
 
 # 執行完整同步（預計 2-4 小時）
@@ -59,19 +59,19 @@ python3 scripts/validate_finmind_data.py
 
 **步驟**:
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 方法 1: 手動設置 crontab
 crontab -e
 
 # 加入以下行（每週一至週五 15:30 執行）：
 # FinMind 每日自動更新（週一至週五 15:30）
-30 15 * * 1-5 /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/daily_update_cron.sh
+30 15 * * 1-5 /home/mdsadmin/Stock/tw-stock-analysis/scripts/daily_update_cron.sh
 
 # 方法 2: 使用命令直接設置
 (crontab -l 2>/dev/null | grep -v "daily_update_cron.sh"; \
  echo "# FinMind 每日自動更新"; \
- echo "30 15 * * 1-5 /Users/ming/Desktop/Stock/tw-stock-analysis/scripts/daily_update_cron.sh") | crontab -
+ echo "30 15 * * 1-5 /home/mdsadmin/Stock/tw-stock-analysis/scripts/daily_update_cron.sh") | crontab -
 ```
 
 **驗證**:
@@ -80,7 +80,7 @@ crontab -e
 crontab -l | grep finmind
 
 # 測試執行
-/Users/ming/Desktop/Stock/tw-stock-analysis/scripts/daily_update_cron.sh
+/home/mdsadmin/Stock/tw-stock-analysis/scripts/daily_update_cron.sh
 
 # 查看日誌
 ls -lt logs/daily_updates/ | head -5
@@ -99,7 +99,7 @@ ls -lt logs/daily_updates/ | head -5
 
 **步驟**:
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 執行完整回測（2022-2024，3 年）
 python3 scripts/backtest_integrated_v21.py \
@@ -143,7 +143,7 @@ cat results/backtest_v21_results_*.json | jq '.v2.1.trades[] | select(.action ==
 
 **步驟**:
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 執行參數優化（預計 12-24 小時）
 python3 scripts/optimize_v21_params.py \

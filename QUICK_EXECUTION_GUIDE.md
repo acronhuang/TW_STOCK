@@ -10,7 +10,7 @@
 ### 1.1 驗證 v2 參數
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/validate_best_params_v2.py
 ```
 
@@ -248,7 +248,7 @@ python3 scripts/parallel_factor_calculation.py --workers 4 --start-date 2024-01-
 
 ## 聯絡資訊
 
-**專案路徑**: `/Users/ming/Desktop/Stock/tw-stock-analysis`  
+**專案路徑**: `/home/mdsadmin/Stock/tw-stock-analysis`  
 **文檔路徑**: `docs/chat_history.md`  
 **報告路徑**: `reports/`  
 **結果路徑**: `results/`

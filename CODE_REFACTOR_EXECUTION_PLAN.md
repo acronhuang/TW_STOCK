@@ -39,7 +39,7 @@
 export FINMIND_API_TOKEN='your_token_here'
 
 # 測試下載（小範圍）
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python src/downloaders/unified_downloader.py --categories 技術面 --verbose
 
 # 預期結果：

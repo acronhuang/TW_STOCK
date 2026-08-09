@@ -37,7 +37,7 @@
 ### 方案 1: 使用启动脚本（推荐）
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 交互式启动
 ./scripts/start_hourly_download.sh
@@ -55,7 +55,7 @@ cd /Users/ming/Desktop/Stock/tw-stock-analysis
 #### 下载优先列表（核心 50 支股票）
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)"
 
@@ -378,7 +378,7 @@ python3 src/downloaders/hourly_outstanding_shares_downloader.py --priority-list
 
 **错误信息**:
 ```
-找不到优先列表: /Users/ming/Desktop/Stock/tw-stock-analysis/data/priority_stocks.txt
+找不到优先列表: /home/mdsadmin/Stock/tw-stock-analysis/data/priority_stocks.txt
 ```
 
 **解决**:
@@ -467,7 +467,7 @@ tail -f logs/hourly_nohup_*.log
 crontab -e
 
 # 每天晚上 11 点自动执行
-0 23 * * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" python3 src/downloaders/hourly_outstanding_shares_downloader.py --priority-list --max-hours 3 >> logs/cron_hourly_$(date +\%Y\%m\%d).log 2>&1
+0 23 * * * cd /home/mdsadmin/Stock/tw-stock-analysis && FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)" python3 src/downloaders/hourly_outstanding_shares_downloader.py --priority-list --max-hours 3 >> logs/cron_hourly_$(date +\%Y\%m\%d).log 2>&1
 ```
 
 ---

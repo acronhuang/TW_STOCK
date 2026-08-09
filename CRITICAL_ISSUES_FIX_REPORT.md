@@ -306,7 +306,7 @@ stock_price 字段覆盖率:
 
 ### A. 执行命令
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/fix_critical_issues.py
 ```
 

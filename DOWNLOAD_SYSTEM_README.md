@@ -100,7 +100,7 @@ export FINMIND_API_TOKEN=your_token_here
 
 #### 下載所有資料表
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/main_download.py
 ```
 
@@ -198,7 +198,7 @@ db.institutional_investors_detail.find({stock_id: "2330"}).limit(10)
 crontab -e
 
 # 每天下午 3:30 執行（收盤後）
-30 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 scripts/main_download.py >> logs/cron.log 2>&1
+30 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 scripts/main_download.py >> logs/cron.log 2>&1
 ```
 
 #### 使用 launchd（macOS 推薦）
@@ -213,7 +213,7 @@ crontab -e
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/python3</string>
-        <string>/Users/ming/Desktop/Stock/tw-stock-analysis/scripts/main_download.py</string>
+        <string>/home/mdsadmin/Stock/tw-stock-analysis/scripts/main_download.py</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -225,9 +225,9 @@ crontab -e
         <integer>1-5</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>/Users/ming/Desktop/Stock/tw-stock-analysis/logs/launchd.log</string>
+    <string>/home/mdsadmin/Stock/tw-stock-analysis/logs/launchd.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/ming/Desktop/Stock/tw-stock-analysis/logs/launchd_error.log</string>
+    <string>/home/mdsadmin/Stock/tw-stock-analysis/logs/launchd_error.log</string>
 </dict>
 </plist>
 ```

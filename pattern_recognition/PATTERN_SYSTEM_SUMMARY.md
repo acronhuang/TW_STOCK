@@ -231,7 +231,7 @@ pip install pandas numpy pymongo
 
 ```bash
 # 掃描全市場
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python pattern_recognition/pattern_cli.py scan
 
 # 查看前20個最佳買入機會
@@ -575,7 +575,7 @@ def multi_pattern_strategy():
 
 ### 檔案位置
 ```
-/Users/ming/Desktop/Stock/tw-stock-analysis/pattern_recognition/
+/home/mdsadmin/Stock/tw-stock-analysis/pattern_recognition/
 ```
 
 ---

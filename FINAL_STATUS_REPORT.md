@@ -260,7 +260,7 @@ const roe = netMargin * assetTurnover * equityMultiplier;
 mongod
 
 # 2. 建置並啟動 NestJS
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 npm run build
 npm start
 

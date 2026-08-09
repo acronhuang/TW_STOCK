@@ -16,7 +16,7 @@ brew services start mongodb-community
 
 ### 3️⃣ 執行下載
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/main_download.py
 ```
 
@@ -94,7 +94,7 @@ db.stock_price.countDocuments({stock_id: "2330"})
 crontab -e
 
 # 加入以下行
-30 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 scripts/main_download.py >> logs/cron.log 2>&1
+30 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 scripts/main_download.py >> logs/cron.log 2>&1
 ```
 
 ---

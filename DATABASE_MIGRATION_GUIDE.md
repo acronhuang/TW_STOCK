@@ -98,11 +98,11 @@ brew services stop mongodb-community@7.0
 # 編輯 /opt/homebrew/etc/mongod.conf
 # 將 dbPath 改為新路徑，例如：
 #   storage:
-#     dbPath: /Users/ming/Documents/mongodb_data
+#     dbPath: /var/lib/mongodb
 
 # 3. 建立新目錄並設定權限
-mkdir -p /Users/ming/Documents/mongodb_data
-chmod 755 /Users/ming/Documents/mongodb_data
+mkdir -p /var/lib/mongodb
+chmod 755 /var/lib/mongodb
 
 # 4. 啟動 MongoDB（會在新目錄建立資料庫）
 brew services start mongodb-community@7.0
@@ -179,7 +179,7 @@ ps aux | grep mongod  # 確認沒有 mongod 程序
 
 # 3. 複製整個資料目錄
 # 場景 1：複製到新位置
-sudo cp -R /opt/homebrew/var/mongodb /Users/ming/Documents/mongodb_data
+sudo cp -R /opt/homebrew/var/mongodb /var/lib/mongodb
 
 # 場景 2：複製到外接硬碟
 sudo cp -R /opt/homebrew/var/mongodb /Volumes/ExternalDrive/mongodb_data
@@ -189,7 +189,7 @@ cd /opt/homebrew/var
 tar -czf ~/Desktop/mongodb_data.tar.gz mongodb/
 
 # 4. 設定權限
-sudo chown -R ming:admin /Users/ming/Documents/mongodb_data
+sudo chown -R ming:admin /var/lib/mongodb
 
 # 5. 修改配置檔
 sudo nano /opt/homebrew/etc/mongod.conf
@@ -504,7 +504,7 @@ class DatabaseManager:
 crontab -e
 
 # 每天凌晨 3 點備份
-0 3 * * * /Users/ming/Desktop/Stock/tw-stock-analysis/backup_mongodb.sh
+0 3 * * * /home/mdsadmin/Stock/tw-stock-analysis/backup_mongodb.sh
 ```
 
 ---

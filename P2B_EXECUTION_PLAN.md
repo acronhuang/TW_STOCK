@@ -27,7 +27,7 @@
 **任务**: 优先下载核心 50 支股票
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 方式 1: 使用自动化脚本（推荐）
 export FINMIND_API_TOKEN="your_token_here"

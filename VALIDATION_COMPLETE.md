@@ -97,7 +97,7 @@
 mongod
 
 # 2. 啟動 NestJS 服務器
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 npm run build
 npm start
 

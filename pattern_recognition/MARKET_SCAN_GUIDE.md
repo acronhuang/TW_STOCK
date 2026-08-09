@@ -342,10 +342,10 @@ python3 pattern_recognition/market_multi_timeframe_scanner.py \
 
 ```bash
 # 每週日晚上22:00執行週線月線掃描
-0 22 * * 0 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 pattern_recognition/market_multi_timeframe_scanner.py --timeframes W M --bullish-only --save-csv
+0 22 * * 0 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 pattern_recognition/market_multi_timeframe_scanner.py --timeframes W M --bullish-only --save-csv
 
 # 每天下午15:00執行日線週線掃描
-0 15 * * 1-5 cd /Users/ming/Desktop/Stock/tw-stock-analysis && python3 pattern_recognition/market_multi_timeframe_scanner.py --timeframes D W --top 30 --save-csv
+0 15 * * 1-5 cd /home/mdsadmin/Stock/tw-stock-analysis && python3 pattern_recognition/market_multi_timeframe_scanner.py --timeframes D W --top 30 --save-csv
 ```
 
 ### Shell 腳本包裝
@@ -354,7 +354,7 @@ python3 pattern_recognition/market_multi_timeframe_scanner.py \
 
 ```bash
 #!/bin/bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 echo "開始每日掃描..."
 python3 pattern_recognition/market_multi_timeframe_scanner.py \

@@ -197,7 +197,7 @@ tail -50 logs/hourly_updates/hourly_update_*.log
 
 ### 1. 確認服務運行
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 檢查 3 個 launchd 服務
 launchctl list | grep com.twstock
@@ -254,7 +254,7 @@ python3 scripts/check_table_coverage.py
 
 ### 手動觸發更新
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 更新指定類別
 export FINMIND_API_TOKEN="$(grep FINMIND_API_TOKEN .env | cut -d'=' -f2)"

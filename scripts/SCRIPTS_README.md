@@ -36,7 +36,7 @@
 ## 📝 建議清理命令
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis/scripts
+cd /home/mdsadmin/Stock/tw-stock-analysis/scripts
 
 # 刪除冗余驗證腳本
 rm validate_system.py \

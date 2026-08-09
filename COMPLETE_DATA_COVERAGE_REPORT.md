@@ -166,7 +166,7 @@ choices=['技術面', '基本面', '籌碼面', '衍生性商品', '其他']
 
 **命令：**
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 查看自動更新狀態
 launchctl list | grep com.twstock

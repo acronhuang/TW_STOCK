@@ -28,7 +28,7 @@
 ### 方法 1: 自動執行（推薦）
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 一鍵執行所有改進（自動確認）
 ./scripts/execute_all_improvements_auto.sh
@@ -46,7 +46,7 @@ cd /Users/ming/Desktop/Stock/tw-stock-analysis
 ### 方法 2: 交互式執行
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 交互式執行（每個階段需確認）
 ./scripts/execute_all_improvements.sh
@@ -63,7 +63,7 @@ cd /Users/ming/Desktop/Stock/tw-stock-analysis
 #### P0: 精度修復（5-10分鐘）
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 預覽
 python3 src/migrations/p0_force_decimal_migration.py --dry-run

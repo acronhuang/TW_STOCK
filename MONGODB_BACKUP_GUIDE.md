@@ -25,7 +25,7 @@
 
 ### 立即執行備份
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 ./backup_mongodb.sh
 ```
 
@@ -36,7 +36,7 @@ ls -lht ~/Desktop/Stock/mongodb_backups/*.tar.gz | head -10
 
 ### 還原備份
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 ./restore_mongodb.sh ~/Desktop/Stock/mongodb_backups/tw_stock_analysis_YYYYMMDD_HHMMSS.tar.gz
 ```
 

@@ -76,11 +76,11 @@ brew services stop mongodb-community@7.0
 sudo nano /opt/homebrew/etc/mongod.conf
 # 修改 dbPath 為新路徑，例如：
 #   storage:
-#     dbPath: /Users/ming/Documents/mongodb_data
+#     dbPath: /var/lib/mongodb
 
 # 4. 建立新目錄
-mkdir -p /Users/ming/Documents/mongodb_data
-chmod 755 /Users/ming/Documents/mongodb_data
+mkdir -p /var/lib/mongodb
+chmod 755 /var/lib/mongodb
 
 # 5. 啟動 MongoDB
 brew services start mongodb-community@7.0
@@ -215,7 +215,7 @@ mongosh --eval "use tw_stock_analysis; db.stock_price.reIndex()"
 crontab -e
 
 # 加入以下行（每天凌晨 3 點備份）
-0 3 * * * cd /Users/ming/Desktop/Stock/tw-stock-analysis && ./backup_mongodb.sh
+0 3 * * * cd /home/mdsadmin/Stock/tw-stock-analysis && ./backup_mongodb.sh
 
 # 2. 或手動定期備份
 # 每週執行一次

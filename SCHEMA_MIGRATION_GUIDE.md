@@ -61,7 +61,7 @@
 
 ### 步驟 1：執行 Decimal128 遷移
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 執行遷移（會提示確認）
 python scripts/database/migrate_to_decimal128.py
@@ -146,7 +146,7 @@ data = {
 ### 步驟 5：測試 NestJS API
 ```bash
 # 啟動 NestJS 服務
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 npm run start:dev
 
 # 測試 API 端點
@@ -316,7 +316,7 @@ A: 過渡期可以混用，但建議儘快全部更新完成
 **準備好了嗎？執行以下命令開始遷移：**
 
 ```bash
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 chmod +x scripts/database/migrate_to_decimal128.py
 python scripts/database/migrate_to_decimal128.py
 ```

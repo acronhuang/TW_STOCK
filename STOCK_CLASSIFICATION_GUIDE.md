@@ -149,7 +149,7 @@ print(requirements)
 
 ```bash
 # 运行分类分析器
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 python3 scripts/classified_downloader.py > logs/classification_report.txt
 
 # 查看报告

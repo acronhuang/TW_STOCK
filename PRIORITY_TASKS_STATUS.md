@@ -54,7 +54,7 @@
 
 ```bash
 # 進入專案目錄
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 驗證 v2 參數
 python3 scripts/validate_best_params_v2.py
@@ -169,7 +169,7 @@ cat results/optimization_results_v2.json | python3 -m json.tool | head -30
 python3 -c "
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path('/Users/ming/Desktop/Stock/tw-stock-analysis')))
+sys.path.insert(0, str(Path('/home/mdsadmin/Stock/tw-stock-analysis')))
 from examples.multifactor_strategy import MultiFactorStrategy
 from examples.backtest_multifactor import MultiFactorBacktest
 print('✅ 導入成功')

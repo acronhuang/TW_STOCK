@@ -285,7 +285,7 @@ tw-stock-analysis/
 
 ```bash
 # 進入專案目錄
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 啟動虛擬環境
 source ../.venv/bin/activate
@@ -539,7 +539,7 @@ tail -100 logs/hourly_updates/$(ls -t logs/hourly_updates/ | head -1)
 
 ### 聯繫方式
 - **Dashboard**: http://localhost:8502
-- **文檔**: `/Users/ming/Desktop/Stock/tw-stock-analysis/`
+- **文檔**: `/home/mdsadmin/Stock/tw-stock-analysis/`
 - **日誌**: `logs/hourly_updates/`
 
 ---

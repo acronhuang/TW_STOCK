@@ -177,7 +177,7 @@
 
 ```bash
 # 1. 切換到專案目錄
-cd /Users/ming/Desktop/Stock/tw-stock-analysis
+cd /home/mdsadmin/Stock/tw-stock-analysis
 
 # 2. 確認環境
 mongosh --eval "db.adminCommand('ping')"  # MongoDB
