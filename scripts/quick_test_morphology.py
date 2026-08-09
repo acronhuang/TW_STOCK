@@ -291,7 +291,7 @@ def main():
         print(f"\n⚠️  部分測試失敗 ({total - passed} 個)")
         print("\n建議:")
         print("  1. 檢查依賴套件: pip install pandas numpy scipy pymongo")
-        print("  2. 確認 MongoDB 運行: brew services list | grep mongodb")
+        print("  2. 確認 MongoDB 運行: systemctl status mongod")
         print("  3. 查看錯誤訊息並修正")
         return 1
 

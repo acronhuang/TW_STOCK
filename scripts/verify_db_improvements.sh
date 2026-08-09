@@ -27,7 +27,7 @@ if mongosh tw_stock_analysis --quiet --eval "db.stats()" > /dev/null 2>&1; then
     echo -e "${GREEN}✓ MongoDB 連線正常${NC}"
 else
     echo -e "${RED}✗ MongoDB 連線失敗！請確保 MongoDB 正在運行${NC}"
-    echo "  提示: brew services start mongodb-community"
+    echo "  提示: sudo systemctl start mongod"
     exit 1
 fi
 echo ""

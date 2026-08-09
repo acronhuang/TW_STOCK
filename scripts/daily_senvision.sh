@@ -23,8 +23,6 @@
 
 set -euo pipefail
 
-# 確保 Homebrew 路徑在 PATH 中（launchd 環境下 PATH 不含 /opt/homebrew/bin）
-export PATH="/opt/homebrew/bin:$PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -48,9 +46,8 @@ check_mongodb() {
 echo "[pre] 檢查 MongoDB 連線..."
 if ! check_mongodb; then
     echo "  ⚠️  MongoDB 未連線，嘗試啟動..."
-    # 優先用 mongod --fork（brew services 在 launchd 環境下常失敗）
-    mongod --config /opt/homebrew/etc/mongod.conf --fork 2>/dev/null || \
-        brew services start mongodb-community 2>/dev/null || true
+    # Linux：MongoDB 由 systemd 常駐(mongod.service)自動重啟;此處等待其恢復(下方重試迴圈)
+    systemctl is-active --quiet mongod 2>/dev/null || true
     # 等待最多 30 秒
     for i in $(seq 1 6); do
         sleep 5

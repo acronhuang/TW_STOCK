@@ -7,8 +7,6 @@
 
 # 注意：不使用 set -e，允許單一類別失敗後繼續執行其他類別
 
-# 確保 Homebrew 路徑在 PATH 中（launchd 環境下 PATH 不含 /opt/homebrew/bin）
-export PATH="/opt/homebrew/bin:$PATH"
 
 # 設定路徑
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

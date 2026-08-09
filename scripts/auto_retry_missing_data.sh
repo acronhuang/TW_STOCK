@@ -44,7 +44,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
         echo ""
         echo "⏰ API 達到限制，等待 1 小時後重試..."
-        echo "   下次嘗試: $(date -v+1H '+%Y-%m-%d %H:%M:%S')"
+        echo "   下次嘗試: $(date -d '+1 hour' '+%Y-%m-%d %H:%M:%S')"
         sleep 3600
     fi
 done
