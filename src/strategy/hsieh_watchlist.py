@@ -26,7 +26,7 @@ from pymongo import MongoClient
 def _tof(v) -> float | None:
     if isinstance(v, Decimal128): return float(v.to_decimal())
     try: return float(v)
-    except: return None
+    except Exception: return None
 
 
 def _volume_tag(volume_ratio, vol_pct_60d, obv_slope, vp_divergence) -> str:
@@ -245,7 +245,7 @@ class HsiehWatchlist:
                 ex_dt = datetime.strptime(ex_date, '%Y-%m-%d')
                 days_to_ex = (ex_dt - today).days
                 ex_status = '🟡即將' if 0 < days_to_ex <= 30 else ('✅已過' if days_to_ex < 0 else f'{days_to_ex}天')
-            except:
+            except Exception:
                 days_to_ex = None
                 ex_status = '—'
 
@@ -520,7 +520,7 @@ class HsiehWatchlist:
                     trigger = datetime.strptime(info['trigger_date'][:10], '%Y-%m-%d')
                     days = (trigger - today).days
                     countdown = f"倒數{days}天" if days > 0 else "已到期"
-                except:
+                except Exception:
                     countdown = info['trigger_date']
                 lines.append(f"  ⏰ {sym} {name} {price:.0f} {info['type']} {countdown}")
 

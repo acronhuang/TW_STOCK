@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 def _tof(v) -> float | None:
     if isinstance(v, Decimal128): return float(v.to_decimal())
     try: return float(v)
-    except: return None
+    except Exception: return None
 
 
 class HsiehAnalysis:

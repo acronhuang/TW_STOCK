@@ -49,7 +49,7 @@ db = client['tw_stock_analysis']
 def tof(v):
     if isinstance(v, Decimal128): return float(v.to_decimal())
     try: return float(v)
-    except: return None
+    except Exception: return None
 
 
 def out(data):

@@ -268,7 +268,7 @@ class MacroAnalyzer:
                 return float(v.to_decimal())
             try:
                 return float(v)
-            except:
+            except Exception:
                 return None
 
         # 大盤近期（用 0050 代替）

@@ -48,3 +48,8 @@ markers = [
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+
+[tool.ruff.lint]
+# 本專案全程使用 naive datetime(Mongo 存 naive 本地時間);DTZ* 要求加時區會改變
+# naive->aware 語意、破壞既有比較與儲存,故整族排除(設計決策,非疏漏)。
+ignore = ["DTZ001", "DTZ005", "DTZ006", "DTZ007"]

@@ -10,7 +10,7 @@ import pandas as pd
 
 def calculate_ma(
     data: pd.Series | pd.DataFrame,
-    periods: int | list[int] = [5, 10, 20, 60, 120, 240],
+    periods: int | list[int] = None,
     price_column: str = 'close'
 ) -> pd.DataFrame:
     """
@@ -32,6 +32,8 @@ def calculate_ma(
         Index(['MA_5', 'MA_10', 'MA_20'], dtype='object')
     """
     # 將單一週期轉換為列表
+    if periods is None:
+        periods = [5, 10, 20, 60, 120, 240]
     if isinstance(periods, int):
         periods = [periods]
     
@@ -53,7 +55,7 @@ def calculate_ma(
 
 def calculate_ema(
     data: pd.Series | pd.DataFrame,
-    periods: int | list[int] = [12, 26],
+    periods: int | list[int] = None,
     price_column: str = 'close'
 ) -> pd.DataFrame:
     """
@@ -75,6 +77,8 @@ def calculate_ema(
         Index(['EMA_12', 'EMA_26'], dtype='object')
     """
     # 將單一週期轉換為列表
+    if periods is None:
+        periods = [12, 26]
     if isinstance(periods, int):
         periods = [periods]
     
