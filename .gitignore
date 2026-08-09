@@ -59,3 +59,8 @@ server.pid
 
 # 部署版本記錄(每台各自狀態,不入版控)
 deploy/DEPLOYED.txt
+
+# scratch scripts(勿入庫)
+scripts/finmind_watcher.sh
+scripts/run_fin13.sh
+scripts/run_resume.sh

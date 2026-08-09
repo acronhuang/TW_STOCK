@@ -183,7 +183,7 @@ ensure_mongodb() {
         return 0
     fi
     log_warn "MongoDB 未連線，嘗試啟動..."
-    mongod --config /opt/homebrew/etc/mongod.conf --fork 2>/dev/null || true
+    systemctl is-active --quiet mongod 2>/dev/null || true  # Linux:mongo 由 systemd 常駐
     for i in $(seq 1 6); do
         sleep 5
         if mongosh --eval "db.runCommand('ping').ok" --quiet 2>/dev/null | grep -q "1"; then
