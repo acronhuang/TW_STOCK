@@ -16,6 +16,9 @@ from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
 
 NET = ["foreign_net", "trust_net", "dealer_net", "total_net"]
+# TWSE T86(上市)比 TPEX(上櫃)晚~1天落地;只取「>wide最新日」會讓晚到的 T86 永遠漏。
+# 故每次重掃最近 RESYNC_DAYS 天(upsert 冪等,補進晚到的上市法人)。
+RESYNC_DAYS = 7
 
 
 def to_num(v):
@@ -45,11 +48,12 @@ def main():
         since = datetime.now() - timedelta(days=args.days)
     else:
         latest = wide.find_one({"date": {"$type": "date"}}, sort=[("date", -1)])
-        since = latest["date"] if latest else datetime(2023, 1, 1)
-    # 只取 flow 中「嚴格晚於 wide 最新日」的資料(避免重寫已存在的)
-    q = {"date": {"$gt": since}}
+        base = latest["date"] if latest else datetime(2023, 1, 1)
+        since = base - timedelta(days=RESYNC_DAYS)
+    # 滾動窗口:取 flow 中 date >= since 的資料重掃(upsert 冪等,補晚到的 T86 上市法人)
+    q = {"date": {"$gte": since}}
     docs = list(flow.find(q))
-    print(f"從 institutional_flow 取 date > {str(since)[:10]} 共 {len(docs):,} 筆")
+    print(f"從 institutional_flow 取 date >= {str(since)[:10]} 共 {len(docs):,} 筆")
     if not docs:
         print("wide 已是最新,無需同步"); return
 

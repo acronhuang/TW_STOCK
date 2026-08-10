@@ -658,18 +658,20 @@ def main() -> None:
         inst_new = 0
         inst_mod = 0
 
-        # 使用股價資料的實際交易日（T86 須指定日期才能抓到已收盤資料）
-        # twse_records 在此 scope 可能已定義（step 1 成功時）
-        inst_date = args.date
-        if inst_date is None:
-            try:
-                inst_date = twse_records[0]['date'].strftime('%Y-%m-%d')
-            except Exception:
-                pass
-
-        # TWSE T86（上市）
+        # T86 當日收盤後(~16:00)即可抓(端點實測當日有資料)。故用「實際最新交易日」:
+        # 指定日=args.date;否則從今天往回找第一個有資料的交易日,自動跳過假日/未公布。
+        # (舊版用 twse_records[0]['date']=STOCK_DAY_ALL 股價日,該端點落後1天→T86 恆 T+1。)
         try:
-            twse_inst = fetch_twse_institutional(inst_date)
+            if args.date:
+                twse_inst = fetch_twse_institutional(args.date)
+            else:
+                twse_inst = []
+                probe = datetime.now()
+                for _ in range(7):
+                    twse_inst = fetch_twse_institutional(probe.strftime('%Y-%m-%d'))
+                    if twse_inst:
+                        break
+                    probe -= timedelta(days=1)
             if twse_inst:
                 sample_date = twse_inst[0]['date'].strftime('%Y-%m-%d')
                 print(f"  TWSE 三大法人  日期: {sample_date}  筆數: {len(twse_inst)}")
