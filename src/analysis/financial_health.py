@@ -183,8 +183,27 @@ class FinancialHealthAnalyzer:
             'quarters_analyzed': len(recent4),
         }
 
+    def _balance_from_bsd(self, symbol: str):
+        """從 balance_sheet_detail(現行全市場)取最新資產負債表;取代舊 financial_statements(只192檔停2025Q3)。無則 None。"""
+        M = {'total_assets': 'TotalAssets', 'total_liabilities': 'Liabilities', 'equity': 'Equity',
+             'current_assets': 'CurrentAssets', 'current_liabilities': 'CurrentLiabilities',
+             'cash': 'CashAndCashEquivalents', 'inventory': 'Inventories'}
+        ta = self.db.balance_sheet_detail.find_one(
+            {'stock_id': symbol, 'type': 'TotalAssets'}, sort=[('date', -1)])
+        if not ta:
+            return None
+        rows = self.db.balance_sheet_detail.find(
+            {'stock_id': symbol, 'date': ta['date'], 'type': {'$in': list(M.values())}})
+        vals = {r['type']: _tof(r.get('value')) for r in rows}
+        out = {fld: vals.get(acct) for fld, acct in M.items()}
+        out['source'] = 'balance_sheet_detail'
+        return out
+
     def _latest_balance(self, symbol: str) -> dict:
-        """取資產負債表（優先 financial_statements，fallback quarterly_earnings.balance）。"""
+        """取資產負債表（優先 balance_sheet_detail 現行全市場;fallback financial_statements/quarterly_earnings）。"""
+        bsd = self._balance_from_bsd(symbol)
+        if bsd and bsd.get("total_assets"):
+            return bsd
         fs = self.db.financial_statements.find_one(
             {'symbol': symbol}, sort=[('year', -1), ('season', -1)])
         if fs:
