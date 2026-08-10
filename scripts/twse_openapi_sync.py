@@ -72,6 +72,22 @@ def fetch(path: str) -> list[dict]:
         return []
 
 
+TPEX_BASE = "https://www.tpex.org.tw/openapi/v1"
+
+
+def fetch_tpex(endpoint: str) -> list[dict]:
+    """TPEX OpenAPI(上櫃);需帶瀏覽器 UA,否則被擋轉址。回 list,失敗回 []。"""
+    url = f"{TPEX_BASE}/{endpoint}"
+    try:
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, verify=False)
+        r.raise_for_status()
+        data = r.json()
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        log.error(f"  TPEX 下載失敗 {endpoint}: {e}")
+        return []
+
+
 def roc_to_date(roc_str: str) -> datetime | None:
     """民國日期 (1150401) -> datetime"""
     try:
@@ -121,6 +137,22 @@ def sync_day_trading(db):
             "date": dt,
             "suspension": row.get("Suspension", ""),
             "updated_at": NOW,
+            "market": "TWSE",
+        }
+        col.update_one({"stock_id": doc["stock_id"], "date": dt}, {"$set": doc}, upsert=True)
+        inserted += 1
+    # ── 上櫃現股當沖標的(TPEX tpex_securities;中文欄名)──────────
+    for row in fetch_tpex("tpex_securities"):
+        code = str(row.get("證券代號", "")).strip()
+        if not code:
+            continue
+        doc = {
+            "stock_id": code,
+            "name": row.get("證券名稱", ""),
+            "date": dt,
+            "suspension": row.get("暫停現股賣出後現款買進當沖註記", ""),
+            "updated_at": NOW,
+            "market": "TPEX",
         }
         col.update_one({"stock_id": doc["stock_id"], "date": dt}, {"$set": doc}, upsert=True)
         inserted += 1
@@ -343,6 +375,24 @@ def sync_after_hours(db):
             "close": safe_float(row.get("ClosingPrice", row.get("成交價格", "0"))),
             "date": today,
             "updated_at": NOW,
+            "market": "TWSE",
+        }
+        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
+        inserted += 1
+    # ── 上櫃盤後定價行情(TPEX tpex_off_market)────────────────
+    for row in fetch_tpex("tpex_off_market"):
+        code = str(row.get("SecuritiesCompanyCode", "")).strip()
+        if not code:
+            continue
+        doc = {
+            "stock_id": code,
+            "name": row.get("CompanyName", ""),
+            "volume": safe_int(row.get("TradeVolume", "0")),
+            "value": safe_int(row.get("TradeAmount", "0")),
+            "close": safe_float(row.get("Close", "0")),
+            "date": today,
+            "updated_at": NOW,
+            "market": "TPEX",
         }
         col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
         inserted += 1
@@ -400,6 +450,24 @@ def sync_odd_lot(db):
             "close": safe_float(row.get("ClosingPrice", row.get("收盤價", "0"))),
             "date": today,
             "updated_at": NOW,
+            "market": "TWSE",
+        }
+        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
+        inserted += 1
+    # ── 上櫃零股交易(TPEX tpex_odd_stock;close←Price)──────────
+    for row in fetch_tpex("tpex_odd_stock"):
+        code = str(row.get("SecuritiesCompanyCode", "")).strip()
+        if not code:
+            continue
+        doc = {
+            "stock_id": code,
+            "name": row.get("CompanyName", ""),
+            "volume": safe_int(row.get("TradeVolume", "0")),
+            "value": safe_int(row.get("TradeAmount", "0")),
+            "close": safe_float(row.get("Price", "0")),
+            "date": today,
+            "updated_at": NOW,
+            "market": "TPEX",
         }
         col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
         inserted += 1
