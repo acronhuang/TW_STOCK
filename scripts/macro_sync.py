@@ -29,6 +29,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import requests
+import io
+import csv
+import re
+import zipfile
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from bson.decimal128 import Decimal128
 from pymongo import UpdateOne
 
@@ -118,6 +124,74 @@ def fetch_bot_usd():
     return today, month_ago
 
 
+# ── 政府免費開放源自動抓取(2026-08-10 取代 SEED 硬編碼;抓失敗保留舊值不 null) ──
+_UA = {'User-Agent': 'Mozilla/5.0'}
+CPI_XML_URL = 'https://ws.dgbas.gov.tw/001/Upload/461/relfile/11525/230555/pr0101a1m.xml'
+NDC_SIGNAL_ZIP = ('https://ws.ndc.gov.tw/Download.ashx?u=LzAwMS9hZG1pbmlzdHJhdG9yLzEwL3JlbGZpbGUvNTc4MS82MzkyL2VhMjM1YmQ5LWQwNTItNGE2OS1hYmZjLWQ1Yzc4NWQzZDBlMi56aXA%3d&n=5pmv5rCj5oyH5qiZ5Y%2bK54eI6JmfLnppcA%3d%3d&icon=.zip')
+CBC_MONEY_CSV = 'https://www.cbc.gov.tw/public/data/OpenData/經研處/EF15M01.csv'
+
+
+def _to_ym(pp):
+    """'2026M07' 或 '202606' → '2026-07'。"""
+    pp = (pp or '').strip()
+    m = re.match(r'(\d{4})M(\d{2})', pp) or re.match(r'(\d{4})(\d{2})$', pp)
+    return '{}-{}'.format(m.group(1), m.group(2)) if m else pp
+
+
+def fetch_cpi_yoy():
+    """主計總處基本分類指數 XML → (總指數年增率 float, 'YYYY-MM')。失敗回 None。
+    verify=False:ws.dgbas.gov.tw 憑證鏈不全(只讀公開資料)。TYPE 直接有『年增率(%)』免自算。"""
+    try:
+        r = requests.get(CPI_XML_URL, headers=_UA, timeout=45, verify=False)
+        txt = r.content.decode('utf-8')
+        obs = re.findall(
+            r'<Obs><Item>(總指數[^<]*)</Item><TIME_PERIOD>([^<]+)</TIME_PERIOD>'
+            r'<FREQ>[^<]*</FREQ><TYPE>(年增率[^<]*)</TYPE>\s*<Item_VALUE>([^<]*)</Item_VALUE>', txt)
+        rows = sorted((_to_ym(pp), v) for (_i, pp, _t, v) in obs if v.strip())
+        if not rows:
+            return None
+        ym, v = rows[-1]
+        return round(float(v), 2), ym
+    except Exception:
+        return None
+
+
+def fetch_business_signal():
+    """國發會 景氣指標及燈號 ZIP → (綜合分數 float, 燈號 str, 'YYYY-MM')。失敗回 None。"""
+    try:
+        r = requests.get(NDC_SIGNAL_ZIP, headers=_UA, timeout=45)
+        if r.content[:2] != b'PK':
+            return None
+        body = zipfile.ZipFile(io.BytesIO(r.content)).read('景氣指標與燈號.csv').decode('utf-8-sig')
+        rows = [row for row in csv.reader(io.StringIO(body))
+                if row and re.match(r'\d{6}', row[0].strip())]
+        if not rows:
+            return None
+        last = rows[-1]
+        light = last[-1].strip()
+        if light and not light.endswith('燈'):
+            light += '燈'
+        return float(last[-2]), light, _to_ym(last[0])
+    except Exception:
+        return None
+
+
+def fetch_money_supply():
+    """央行 貨幣總計數日平均數(月) CSV → (M1B年增率, M2年增率, 'YYYY-MM')。失敗回 None。
+    末四欄= M1B原始值,M1B年增率,M2原始值,M2年增率。"""
+    try:
+        r = requests.get(CBC_MONEY_CSV, headers=_UA, timeout=45)
+        body = r.content.decode('utf-8-sig')
+        rows = [row for row in csv.reader(io.StringIO(body))
+                if row and re.match(r'\d{4}M\d{2}', row[0])]
+        if not rows:
+            return None
+        last = rows[-1]
+        return round(float(last[-3]), 2), round(float(last[-1]), 2), _to_ym(last[0])
+    except Exception:
+        return None
+
+
 def main():
     ap = argparse.ArgumentParser(description='總經指標同步（混合版）')
     ap.add_argument('--set-cpi', type=float, help='CPI 年增率(百分比)')
@@ -165,33 +239,94 @@ def main():
                  30, args.set_rate)
     if msg: done.append(msg)
 
-    # CPI
-    cpi = args.set_cpi if args.set_cpi is not None else SEED['cpi_yoy'][0]
-    msg = ensure('cpi', {'date': args.set_cpi and today_str or SEED['cpi_yoy'][1], 'yoy': cpi,
-                         'note': '主計處 CPI 年增率(月更)'}, 30, args.set_cpi)
-    if msg: done.append(msg)
+    # CPI ← 主計總處自動抓;失敗保留舊值(不 null)
+    if args.set_cpi is not None:
+        ma._save_indicator('cpi', {'date': today_str, 'yoy': args.set_cpi,
+                                   'note': '主計處 CPI 年增率(手動)'})
+        done.append(f"cpi 手動更新 ← {args.set_cpi}%")
+    else:
+        got = fetch_cpi_yoy()
+        if got:
+            yoy, ym = got
+            ma._save_indicator('cpi', {'date': ym, 'yoy': yoy, 'note': '主計處 CPI 年增率(自動)'})
+            done.append(f"cpi 自動 ← {yoy}% @{ym}")
+        elif not ma.db.macro_indicators.find_one({'indicator': 'cpi'}):
+            ma._save_indicator('cpi', {'date': SEED['cpi_yoy'][1], 'yoy': SEED['cpi_yoy'][0],
+                                       'note': 'seed'})
+            done.append("⚠️ cpi 抓取失敗,以 seed 補")
+        else:
+            done.append("⚠️ cpi 抓取失敗,保留舊值")
 
-    # M1B/M2
-    if args.set_m1b is not None or args.set_m2 is not None or \
-       not ma.db.macro_indicators.find_one({'indicator': 'money_supply'}):
+    # M1B/M2 ← 央行自動抓;失敗保留舊值
+    if args.set_m1b is not None or args.set_m2 is not None:
         m1b = args.set_m1b if args.set_m1b is not None else SEED['m1b_yoy'][0]
         m2 = args.set_m2 if args.set_m2 is not None else SEED['m2_yoy'][0]
-        ma._save_indicator('money_supply', {'date': SEED['m1b_yoy'][1], 'm1b_yoy': m1b, 'm2_yoy': m2})
-        done.append(f"money_supply 寫入 M1B={m1b}% M2={m2}%")
+        ma._save_indicator('money_supply', {'date': today_str, 'm1b_yoy': m1b, 'm2_yoy': m2})
+        done.append(f"money_supply 手動 ← M1B={m1b}% M2={m2}%")
+    else:
+        got = fetch_money_supply()
+        if got:
+            m1b, m2, ym = got
+            ma._save_indicator('money_supply', {'date': ym, 'm1b_yoy': m1b, 'm2_yoy': m2})
+            done.append(f"money_supply 自動 ← M1B={m1b}% M2={m2}% @{ym}")
+        elif not ma.db.macro_indicators.find_one({'indicator': 'money_supply'}):
+            ma._save_indicator('money_supply', {'date': SEED['m1b_yoy'][1],
+                                                'm1b_yoy': SEED['m1b_yoy'][0], 'm2_yoy': SEED['m2_yoy'][0]})
+            done.append("⚠️ money_supply 抓取失敗,以 seed 補")
+        else:
+            done.append("⚠️ money_supply 抓取失敗,保留舊值")
 
-    # 景氣對策信號（indicator 名須為 'leading'，對應 _get_leading_indicator）
-    if args.set_signal is not None or not ma.db.macro_indicators.find_one({'indicator': 'leading'}):
-        score = args.set_signal if args.set_signal is not None else SEED['signal_score'][0]
-        light = args.set_signal_light or SEED['signal_light'][0]
-        sig_date = args.set_signal_date or SEED['signal_score'][1]
+    # 景氣對策信號 ← 國發會自動抓;失敗保留舊值(indicator 名須為 'leading')
+    if args.set_signal is not None:
         ma._save_indicator('leading', {
-            'date': sig_date, 'signal_score': score, 'signal_light': light,
-        })
-        done.append(f"景氣對策信號 寫入 {score}分 {light} ({sig_date})")
+            'date': args.set_signal_date or today_str, 'signal_score': args.set_signal,
+            'signal_light': args.set_signal_light or SEED['signal_light'][0]})
+        done.append(f"景氣 手動 ← {args.set_signal}分")
+    else:
+        got = fetch_business_signal()
+        if got:
+            score, light, ym = got
+            ma._save_indicator('leading', {'date': ym, 'signal_score': score, 'signal_light': light})
+            done.append(f"景氣 自動 ← {score}分 {light} @{ym}")
+        elif not ma.db.macro_indicators.find_one({'indicator': 'leading'}):
+            ma._save_indicator('leading', {'date': SEED['signal_score'][1],
+                                           'signal_score': SEED['signal_score'][0],
+                                           'signal_light': SEED['signal_light'][0]})
+            done.append("⚠️ 景氣 抓取失敗,以 seed 補")
+        else:
+            done.append("⚠️ 景氣 抓取失敗,保留舊值")
 
     print("總經指標同步完成：")
     for d in done:
         print("  " + d)
+
+    # 過期防呆:月頻指標 >=3 個月未更新→寫 schedule_alerts(進網頁「排程警報」)。
+    # 為何在此而非 data_freshness_audit:後者是 collection 層級,macro_indicators 混多指標,
+    # 最新的日頻 exchange_rate 會讓整表恆顯 ✅,遮蔽 per-indicator 的 cpi/景氣過期。
+    # 門檻 3 個月:月頻資料本有 1-2 月出版落後,>=3 才確定是政府源抓取持續失效(非正常 cadence)。
+    def _months_behind(ym):
+        m = re.match(r'(\d{4})-(\d{2})', str(ym or '')) or re.match(r'(\d{4})M(\d{2})', str(ym or ''))
+        if not m:
+            return 99
+        now = datetime.now()
+        return (now.year - int(m.group(1))) * 12 + (now.month - int(m.group(2)))
+
+    stale = []
+    for ind, label in [('cpi', 'CPI'), ('leading', '景氣信號'), ('money_supply', 'M1B/M2')]:
+        doc = ma.db.macro_indicators.find_one({'indicator': ind}, sort=[('date', -1)])
+        mb = _months_behind((doc or {}).get('date', ''))
+        if mb >= 3:
+            stale.append(f"{label}({ind}) 最新 {(doc or {}).get('date')} 落後 {mb} 個月")
+    if stale:
+        msg = "⚠️ 總經指標過期(政府免費源抓取疑失效):" + chr(10) + chr(10).join("- " + x for x in stale)
+        try:
+            ma.db.schedule_alerts.create_index([('ts', -1)])
+            ma.db.schedule_alerts.insert_one({
+                'ts': datetime.now(), 'level': 'error', 'source': 'macro_sync',
+                'message': msg, 'resolved': False})
+            print(f"[alert] 已寫入 schedule_alerts({len(stale)} 個過期指標)")
+        except Exception as e:
+            print(f"[alert] schedule_alerts 寫入失敗:{e!r}")
 
     # 立即驗證 market_signal 是否變真
     sig = ma.market_signal()

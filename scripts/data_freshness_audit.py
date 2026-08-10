@@ -43,6 +43,9 @@ SPEC = {
     },
 }
 THRESH = {"daily": 4, "weekly": 9, "monthly": 45, "quarterly": 135, "event": None}
+# per-table 門檻覆寫:shareholding(TDCC股權分散)資料日為週五,週二 cron 才抓上週五資料,
+# 週一/週二-pre-cron 最新資料日必為「上上週五」→最大落後~11天,故放寬到12免每週一誤報🔴(真漏一週會跳~18天仍🔴)。
+TH_OVERRIDE = {"shareholding": 12}
 
 
 def _season_end(year, season):
@@ -129,7 +132,7 @@ def main():
                 print(f"  ⚪ {coll:30} 無資料/無{kind}欄  總{tot:>12,}")
                 continue
             lag = (now.replace(hour=0, minute=0, second=0, microsecond=0) - dt).days
-            th = THRESH[cad]
+            th = TH_OVERRIDE.get(coll, THRESH[cad])
             if th is None:
                 flag = "✅"  # 事件型:未來日/事件排入,不判落後
             elif lag <= 1 or lag <= th * 0.5:
