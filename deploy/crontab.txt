@@ -29,7 +29,7 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 0 9 * * 6  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/data_health.py --finmind 30 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_data_health.log 2>&1  # data_health_weekly_finmind
 0 4 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/verify_backup.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_verify_backup.log 2>&1  # verify_backup_weekly
 0 8,14 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/watchdog.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_watchdog.log 2>&1  # watchdog
-0 9 * * 2  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/tdcc_shareholding_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_tdcc_shareholding.log 2>&1  # tdcc_shareholding
+0 13 * * 6  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/tdcc_shareholding_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_tdcc_shareholding.log 2>&1  # tdcc_shareholding
 50 17 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/twse_foreign_holding_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_foreign_holding.log 2>&1  # foreign_holding
 30 19 * * 5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/media_news_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_media_news.log 2>&1  # weekly_media_news
 0 20 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/evening_pipeline.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_evening_pipeline.log 2>&1  # evening_pipeline
@@ -49,3 +49,4 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 0 6 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/regression_gate.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_regression_gate.log 2>&1  # regression_gate
 0 6 1 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/verdict_orthogonality_backtest.py --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_verdict_sli.log 2>&1  # monthly_verdict_sli
 15 6 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/check_crontab_drift.sh --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_crontab_drift.log 2>&1  # crontab_drift_check
+0 5 * * 4  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/stockrag_ingest.py --resume >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_rag_ingest.log 2>&1  # weekly_rag_ingest
