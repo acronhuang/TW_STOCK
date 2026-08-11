@@ -51,6 +51,14 @@ else
     exit 1
 fi
 
+# RAG 知識庫索引在獨立的 stockrag DB(不含在 tw_stock_analysis)。一起打包;
+# stockrag 缺或失敗不中斷主備份(RAG 可用 stockrag_ingest.py 重建,主庫才是關鍵)。
+if mongodump --db stockrag --out "$BACKUP_PATH" --quiet 2>/dev/null; then
+    echo "✓ RAG(stockrag)備份完成"
+else
+    echo "⚠️ RAG(stockrag)備份略過(DB不存在或失敗,不影響主備份)"
+fi
+
 # 壓縮備份
 echo ""
 echo "壓縮備份檔案..."
