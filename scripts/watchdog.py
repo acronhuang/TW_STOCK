@@ -36,11 +36,11 @@ WATCHED = {
                   "grace_h": 2, "overdue_h": 1},
     "health":    {"name": "資料健康快照",   "hour": 22, "weekdays_only": True,
                   "grace_h": 2, "overdue_h": 1},
-    # 集保股權分散：cron `0 9 * * 2`（每週二 09:00）。
+    # 集保股權分散：cron `0 13 * * 6`（每週六 13:00；2026-08-11 由週二09:00改，TDCC出版落後）。
     # 為何非有不可：TDCC id=1-5 只供當週，這輪沒抓到＝該週資料永久遺失（補不回來）。
-    # 而週表的資料面檢查最長要兩週才看得出落後，心跳能當天就抓到「這週二沒跑」。
-    "tdcc_shareholding": {"name": "集保股權分散同步", "hour": 9, "weekdays_only": False,
-                          "weekdays": {1}, "grace_h": 2, "overdue_h": 2},
+    # 而週表的資料面檢查最長要兩週才看得出落後，心跳能當天就抓到「這週六沒跑」。
+    "tdcc_shareholding": {"name": "集保股權分散同步", "hour": 13, "weekdays_only": False,
+                          "weekdays": {5}, "grace_h": 2, "overdue_h": 2},
     # 歷史連續性檢查：cron `0 5 * * 0`（每週日 05:00）。偵測各表「中間缺日」型破洞
     # （TABLE_CHECKS 只驗最新日、掃不到歷史洞）。非即時關鍵，故 grace/overdue 較寬鬆。
     "continuity": {"name": "歷史連續性檢查", "hour": 5, "weekdays_only": False,

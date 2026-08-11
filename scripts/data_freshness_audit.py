@@ -43,8 +43,8 @@ SPEC = {
     },
 }
 THRESH = {"daily": 4, "weekly": 9, "monthly": 45, "quarterly": 135, "event": None}
-# per-table 門檻覆寫:shareholding(TDCC股權分散)資料日為週五,週二 cron 才抓上週五資料,
-# 週一/週二-pre-cron 最新資料日必為「上上週五」→最大落後~11天,故放寬到12免每週一誤報🔴(真漏一週會跳~18天仍🔴)。
+# per-table 門檻覆寫:shareholding(TDCC股權分散)資料日為週五,cron 週六13:00抓(2026-08-11 由週二09:00改),
+# 改週六後最大落後~8天(週六抓上週五),12天門檻對週六更寬鬆仍安全;真漏一週會跳~15天+仍🔴。
 TH_OVERRIDE = {"shareholding": 12}
 
 
