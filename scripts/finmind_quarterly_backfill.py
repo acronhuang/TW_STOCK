@@ -10,6 +10,22 @@ Usage:
     python finmind_quarterly_backfill.py                        # 無 Token（2s 間隔）
     python finmind_quarterly_backfill.py --resume --token <JWT> # 跳過已有資料續跑
     python finmind_quarterly_backfill.py --years 3 --token <JWT># 只下最近 3 年
+
+大量回填的實務做法（2026-07 全量回填 2015~2026Q2 時實測有效，經驗寫在這裡，
+原本散落成 scripts/{run_fin13,run_resume,finmind_watcher}.sh 三支一次性外包裝，
+內容只是下列指令、無額外邏輯，回填完成後已於 2026-08-12 移除）：
+
+    cd /home/mdsadmin/Stock/tw-stock-analysis
+    TOKEN=$(grep '^FINMIND_API_TOKEN=' .env | cut -d= -f2- | tr -d '\r\n"'"'")
+    /home/mdsadmin/Stock/.venv/bin/python3 scripts/finmind_quarterly_backfill.py \
+        --token "$TOKEN" --years 14 --delay 20 --resume
+
+  - `--delay 20`：全量回填時用 20s 間隔而非預設值。600 次/小時的上限換算是
+    6s，但長時間貼著上限跑會開始吃到 429；20s 犧牲速度換整段跑完不中斷。
+  - **要連跑 2~3 輪 `--resume` 才會收斂**：單輪必定殘留少量失敗（逾時、
+    偶發 5xx），第二輪補完大部分，第三輪確保歸零。`--resume` 會跳過已有
+    資料，重跑成本低，寧可多跑一輪也不要留洞。
+  - 每輪之間不需要等待；前一輪結束即可直接接下一輪。
 """
 
 from __future__ import annotations
