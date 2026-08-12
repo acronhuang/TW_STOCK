@@ -67,7 +67,7 @@ class BacktestV21:
         Args:
             db_connection: MongoDB 連接
             initial_capital: 初始資金
-            rebalance_frequency: 再平衡頻率 ('monthly' / 'weekly')
+            rebalance_frequency: 再平衡頻率 ('monthly' / 'quarterly' / 'semiannual')
         """
         self.db = db_connection
         self.initial_capital = initial_capital
@@ -137,20 +137,24 @@ class BacktestV21:
         current = pd.to_datetime(start_date)
         end = pd.to_datetime(end_date)
         
-        if self.rebalance_frequency == 'monthly':
-            # 每月第一個交易日
-            while current <= end:
-                # 找到該月第一個有數據的交易日
-                trading_day = self._find_next_trading_day(current.strftime('%Y-%m-%d'))
-                if trading_day:
-                    dates.append(trading_day)
-                
-                # 移到下個月
-                if current.month == 12:
-                    current = current.replace(year=current.year + 1, month=1)
-                else:
-                    current = current.replace(month=current.month + 1)
-        
+        # 頻率 → 間隔月數。未知值一律拋錯:先前只實作 monthly,傳其他值會安靜
+        # 回傳空清單,整段回測拿 0 個再平衡日還照跑,不會有任何錯誤訊息。
+        step_months = {'monthly': 1, 'quarterly': 3, 'semiannual': 6}
+        if self.rebalance_frequency not in step_months:
+            raise ValueError(
+                f"不支援的 rebalance_frequency: {self.rebalance_frequency!r}"
+                f"(可用:{'/'.join(step_months)})")
+        step = step_months[self.rebalance_frequency]
+
+        # 每期第一個交易日
+        while current <= end:
+            trading_day = self._find_next_trading_day(current.strftime('%Y-%m-%d'))
+            if trading_day:
+                dates.append(trading_day)
+
+            m = current.month - 1 + step
+            current = current.replace(year=current.year + m // 12, month=m % 12 + 1)
+
         return dates
     
     def _find_next_trading_day(self, date: str) -> str:
@@ -640,7 +644,7 @@ def main():
     parser.add_argument('--start-date', type=str, default='2022-01-01', help='開始日期')
     parser.add_argument('--end-date', type=str, default='2024-12-31', help='結束日期')
     parser.add_argument('--initial-capital', type=float, default=10_000_000, help='初始資金')
-    parser.add_argument('--rebalance-frequency', type=str, default='monthly', help='再平衡頻率')
+    parser.add_argument('--rebalance-frequency', type=str, default='monthly', choices=['monthly','quarterly','semiannual'], help='再平衡頻率(monthly/quarterly/semiannual)')
     parser.add_argument('--output', type=str, default='backtest_v21_results.json', help='輸出檔案')
     parser.add_argument('--fee-rate', type=float, default=0.001425, help='手續費率(公定 0.1425%%)')
     parser.add_argument('--fee-discount', type=float, default=0.6, help='手續費折扣(6 折=0.6)')

@@ -330,11 +330,22 @@ def verdict_for(name, res):
     spread = q[4] - q[0]
     mono = all(q[i] <= q[i + 1] for i in range(4))
 
+    # Q5−Q1 也必須檢定,不能只看正負號。單期分層均值的離散度極大
+    # (實測標準差 2.6~4.1pp,遠大於均值),沒檢定就拿符號去否決 IC,
+    # 等於用雜訊推翻有 t=7 的統計量。五個分層每期同時 append,故索引對齊。
+    sp_series = [res["quintile"][4][i] - res["quintile"][0][i]
+                 for i in range(len(res["quintile"][0]))]
+    sp_m, sp_sd = mean_std(sp_series)
+    sp_t = (sp_m / sp_sd * (len(sp_series) ** 0.5)) if sp_sd > 0 else 0.0
+    sp_sig = abs(sp_t) >= TH_T
+
     out.append(f"  IC 平均 {m:+.4f}  標準差 {sd:.4f}  ICIR {icir:+.2f}  "
                f"t {t:+.2f}  勝率 {win:.0%}")
     out.append("  五分層平均 " + str(int(PRIMARY_H)) + "M 報酬: "
                + " | ".join(f"Q{i+1} {v*100:+.2f}%" for i, v in enumerate(q)))
-    out.append(f"  Q5−Q1 = {spread*100:+.2f}pp   單調遞增: {'是' if mono else '否'}")
+    out.append(f"  Q5−Q1 = {spread*100:+.2f}pp (t {sp_t:+.2f}"
+               f"{'、顯著' if sp_sig else '、與 0 無法區分'})"
+               f"   單調遞增: {'是' if mono else '否'}")
     # 衰減要連 t 一起印。只印 IC 會讓人誤判:判定僅以 PRIMARY_H 為準,
     # 但有些因子(典型是動能)的訊號在較長 horizon 才出現,1M 不顯著不代表沒用。
     decay = []
@@ -353,17 +364,21 @@ def verdict_for(name, res):
                    f"上方判定僅以 {PRIMARY_H}M 為準,不代表該因子無用,"
                    f"應改用對應 horizon 的再平衡頻率重測。")
 
-    # 顯著性必須先判。IC 不顯著時它的正負號只是雜訊,拿它去跟分層比對方向
-    # 會得到「互相矛盾」的誤判 —— 實際上該說的是「與 0 無法區分」。
-    if abs(t) < TH_T:
-        note = ""
-        if abs(spread) > 0.005:
-            note = (f"(註:五分層 Q5−Q1 {spread*100:+.2f}pp 看似有差,但 IC 不顯著,"
-                    f"分層差異可能來自少數極端值,不足採信)")
-        out.append(f"  → FAIL:|t| {abs(t):.2f} < {TH_T},與 0 無法區分。{note}")
+    # IC 與 Q5−Q1 量的是不同東西:IC 看整體排序,分層只看兩端。
+    # 兩者都不顯著才是真的沒訊號;只有「兩者皆顯著且反號」才叫矛盾。
+    if abs(t) < TH_T and not sp_sig:
+        out.append(f"  → FAIL:IC |t| {abs(t):.2f} < {TH_T},Q5−Q1 |t| {abs(sp_t):.2f} 亦不顯著,"
+                   f"整體排序與極端分層都看不出訊號。")
         return "FAIL", out
-    if spread * (1 if m >= 0 else -1) < 0:
-        out.append("  → FAIL:IC 顯著但 Q5−Q1 與其反號,分層與相關性互相矛盾,結論不可用。")
+    if abs(t) < TH_T and sp_sig:
+        out.append(f"  → EXTREME_ONLY:整體排序不顯著(IC t {t:+.2f})但極端分層顯著"
+                   f"(Q5−Q1 {spread*100:+.2f}pp, t {sp_t:+.2f})。"
+                   f"訊號在兩端而非全體排序 —— 當「選前 N 檔」的篩選器可用,"
+                   f"當加權排序因子則不可用。")
+        return "EXTREME_ONLY", out
+    if sp_sig and spread * (1 if m >= 0 else -1) < 0:
+        out.append(f"  → FAIL:IC(t {t:+.2f})與 Q5−Q1(t {sp_t:+.2f})皆顯著卻反號,"
+                   f"整體排序與極端分層互相矛盾,結論不可用。")
         return "FAIL", out
     if abs(m) >= TH_IC and icir >= TH_ICIR:
         out.append("  → PASS:IC/ICIR/t 三項達標且分層同向。")
