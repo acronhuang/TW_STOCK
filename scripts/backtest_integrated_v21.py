@@ -57,7 +57,7 @@ class BacktestV21:
         fee_discount: float = 0.6,
         tax_rate: float = 0.003,
         min_fee: float = 20.0,
-        quality_source: str = 'none',   # none / fundamental / legacy
+        quality_source: str = 'fundamental',   # none / fundamental / legacy(對齊 production MFS)
         entry_lag: int = 1,
         stale_exit_days: int = 20
     ):
@@ -647,7 +647,7 @@ def main():
     parser.add_argument('--tax-rate', type=float, default=0.003, help='證交稅率(賣出 0.3%%)')
     parser.add_argument('--no-cost', action='store_true', help='關閉所有交易成本(對照用)')
     parser.add_argument('--quality-source', choices=['none', 'fundamental', 'legacy'],
-                        default='none',
+                        default='fundamental',
                         help='quality 因子來源:none=不用 / fundamental=財報落後後的真序列 '
                              '/ legacy=stock_factors 常數(有前視,僅對照)')
     parser.add_argument('--entry-lag', type=int, default=1,
