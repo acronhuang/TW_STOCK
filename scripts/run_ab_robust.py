@@ -11,9 +11,18 @@
 3. 洩漏判定:|fundamental − legacy| < 1pp → 標 FAIL(fundamental 疑似吃到前視),
    因為 legacy 是「有前視」的對照組,兩者接近代表落後機制沒真的擋住前視。
 
+verdict 檔自帶稽核軌跡(取值路徑 + 三個 JSON 的檔案時間),不需要另一支
+腳本來驗這支 —— 那種寫法會複製一份取值邏輯,主程式改了副本不會跟著改,
+最後驗的是舊副本、給出假綠燈。
+
+用法:
+  python3 scripts/run_ab_robust.py                # 完整重跑(三組回測,約數十分鐘)
+  python3 scripts/run_ab_robust.py --parse-only   # 不跑回測,只重新解析既有 JSON
+
 輸出:/home/mdsadmin/Stock/tw-stock-analysis/ab_verdict.txt(持久,非 /tmp)
 """
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -27,6 +36,12 @@ PY = "/home/mdsadmin/Stock/.venv/bin/python3"
 OUT = f"{ROOT}/ab_verdict.txt"
 MIN_COV = 0.85
 SAMPLE_DATES = ("2022-06-30", "2023-06-30", "2024-06-28")
+
+# 年化報酬在 JSON 裡的**明確**位置。刻意不用遞迴搜尋:JSON 內同時有
+# v2.0 與 v2.1 兩組 annual_return,「找第一個」會在欄位順序一變時
+# 靜默抓到 v2.1,產出一份看起來完全正常、數字卻來自另一欄的 verdict。
+# 寫死路徑後,結構一變就 KeyError 大聲炸掉,不會悄悄給錯數字。
+AR_PATH = ("v2.0", "metrics", "annual_return")
 
 
 def log(lines):
@@ -54,41 +69,53 @@ def coverage():
     return worst, detail
 
 
-def run_variant(src):
-    """跑一組,回傳 v2.0 欄的年化報酬(float, %),失敗回 None。"""
+def extract_ar(jf):
+    """依 AR_PATH 明確取值,回傳年化報酬(float, %)。
+
+    任何一層取不到就直接拋例外 —— 刻意不做 fallback。舊版在 JSON 解析
+    失敗時會退去 parse stdout 的「年化報酬 X%」第一行,那同樣可能撈到
+    v2.1 的數字,等於換個地方靜默出錯。寧可整組標成失敗,也不要一個
+    來路不明的數字混進結論。
+    """
+    with open(jf, encoding="utf-8") as f:
+        d = json.load(f)
+    node = d
+    for k in AR_PATH:
+        if not isinstance(node, dict) or k not in node:
+            raise KeyError(f"{jf} 找不到 {'.'.join(AR_PATH)}(斷在 '{k}')")
+        node = node[k]
+    if not isinstance(node, (int, float)):
+        raise TypeError(f"{jf} 的 annual_return 不是數字:{node!r}")
+    # JSON 存的是小數(0.2389 = 23.89%)。若已是百分比會得到荒謬值,
+    # 與其默默寫進 verdict,不如在這裡就炸掉。
+    if abs(node) > 1.5:
+        raise ValueError(f"{jf} 的 annual_return={node} 疑似已是百分比,單位假設有變")
+    return round(node * 100, 2)
+
+
+def mtime(jf):
+    return datetime.fromtimestamp(os.path.getmtime(jf)).strftime("%m-%d %H:%M:%S")
+
+
+def run_variant(src, parse_only=False):
+    """跑一組(或只解析既有 JSON),回傳 (年化%, 錯誤訊息)。成功時錯誤為 None。"""
     jf = f"{ROOT}/ab_{src}.json"
-    r = subprocess.run([PY, f"{ROOT}/scripts/backtest_integrated_v21.py",
+    if not parse_only:
+        subprocess.run([PY, f"{ROOT}/scripts/backtest_integrated_v21.py",
                         "--quality-source", src, "--output", jf],
                        capture_output=True, text=True, cwd=ROOT, timeout=2400)
-    # 優先從 JSON 取(比 parse stdout 穩)
     try:
-        with open(jf, encoding="utf-8") as f:
-            d = json.load(f)
-        # 結構:{v20:{metrics:{annual_return}}, ...} 或 {metrics:...};容錯找 annual_return
-        def dig(o):
-            if isinstance(o, dict):
-                if "annual_return" in o:
-                    return o["annual_return"]
-                for v in o.values():
-                    x = dig(v)
-                    if x is not None:
-                        return x
-            return None
-        ar = dig(d)
-        return round(ar * 100, 2) if ar is not None and abs(ar) < 100 else ar
-    except Exception:
-        # 退而求其次:從 stdout 抓「年化報酬 X%」第一個(v2.0)
-        for line in r.stdout.splitlines():
-            if line.strip().startswith("年化報酬"):
-                for tok in line.split():
-                    if tok.rstrip("%").replace(".", "").replace("-", "").isdigit():
-                        return float(tok.rstrip("%"))
-        return None
+        return extract_ar(jf), None
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"
 
 
 def main():
+    parse_only = "--parse-only" in sys.argv
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    out = [f"quality A/B verdict  ({ts})", "=" * 50]
+    out = [f"quality A/B verdict  ({ts})"
+           + ("  [--parse-only:未重跑回測,只重新解析既有 JSON]" if parse_only else ""),
+           "=" * 50]
 
     worst, detail = coverage()
     out.append("選股池 quality 覆蓋率:")
@@ -103,11 +130,27 @@ def main():
         print("GATE_FAILED"); return
 
     out += ["", "三組年化報酬(v2.0 欄):"]
-    res = {}
+    res, errs = {}, {}
     for src in ("none", "fundamental", "legacy"):
-        ar = run_variant(src)
+        ar, err = run_variant(src, parse_only=parse_only)
         res[src] = ar
-        out.append(f"  {src:<12} = {ar if ar is not None else '解析失敗'}%")
+        if err:
+            errs[src] = err
+        out.append(f"  {src:<12} = {ar if ar is not None else '取值失敗'}%")
+
+    # 稽核軌跡:取值路徑寫死在此,JSON 檔案時間可看出某組是否其實沒跑成
+    # (數字合理但檔案是上一輪的舊檔,光看數字看不出來)。
+    path_expr = "d" + "".join('["%s"]' % k for k in AR_PATH)
+    out += ["", f"取值來源: {path_expr}(明確路徑,取不到即報錯)", "JSON 檔案時間:"]
+    for src in ("none", "fundamental", "legacy"):
+        jf = f"{ROOT}/ab_{src}.json"
+        stamp = mtime(jf) if os.path.exists(jf) else "檔案不存在"
+        out.append("  %-22s %s" % (f"ab_{src}.json", stamp))
+    if errs:
+        out.append("")
+        out.append("🔴 取值錯誤(該組結論不可用):")
+        for src, e in errs.items():
+            out.append(f"  {src}: {e}")
 
     f, l = res.get("fundamental"), res.get("legacy")
     out.append("")
