@@ -34,6 +34,16 @@ MIN_COVERAGE = 0.85   # 任一期覆蓋率低於此 → 該因子拒判(選樣�
 MIN_PERIODS = 36      # 有效期數低於此 → 拒判(統計量不可信)
 MIN_POOL = 300        # 單期股票數低於此 → 該期跳過
 
+# 上市未滿此天數的標的一律排除出股票池。
+#
+# 為什麼(2026-08-13 加):TTM 財報指標需要連續四季,上市未滿一年的公司**結構上
+# 不可能有**。先前把它們算進覆蓋率分母,等於拿「本來就不存在的資料」扣自己分數:
+# 實測 fundamental_factors 缺 net_income_ttm 的 4360 列中,**58% 的 TTM 窗落在
+# 上市前**,查 MOPS(權威來源)同樣沒有 —— 那不是同步漏抓,是資料不存在。
+# 這使 quality_roe_pit 的覆蓋率出現假性不足(卡在 80%)而被閘門擋下。
+# 上市日以 stock_price 最早一筆為代理(taiwan_stock_info 沒有上市日欄位)。
+MIN_LISTED_DAYS = 365
+
 # ── PASS 門檻(四項全過才 PASS)────────────────────────────────────────
 TH_IC = 0.02          # |IC 平均|
 TH_ICIR = 0.30        # ICIR = IC 平均 / IC 標準差
@@ -145,6 +155,23 @@ def load_prices(db, dates, log):
     return out
 
 
+def load_listing_dates(db, log):
+    """{symbol: 最早有股價的日期} —— 上市日的代理。
+
+    taiwan_stock_info 沒有上市日欄位(`date` 是同步日,不是掛牌日),
+    只能用第一筆股價回推。一次 aggregate 撈完,不逐檔查。
+    """
+    out = {}
+    for r in db.stock_price.aggregate(
+            [{"$group": {"_id": "$symbol", "first": {"$min": "$date"}}}],
+            allowDiskUse=True):
+        s = str(r["_id"])
+        if len(s) == 4 and r["first"]:
+            out[s] = r["first"]
+    log(f"  上市日代理載入 {len(out)} 檔")
+    return out
+
+
 def load_sf_factors(db, dates, fields, log):
     """{date_str: {symbol: {field: value}}} —— 來自 stock_factors。"""
     out = {}
@@ -207,13 +234,22 @@ def factor_values(name, cfg, d, sf, pit):
     return vals
 
 
-def analyse(name, cfg, dates, prices, sf, pit):
+def analyse(name, cfg, dates, prices, sf, pit, listed=None):
     """回傳該因子的完整統計,含各 horizon 的 IC 序列與分層結果。"""
     res = {"coverage": [], "ic": {h: [] for h in HORIZONS},
-           "quintile": [[] for _ in range(5)], "skipped": 0, "lag_samples": []}
+           "quintile": [[] for _ in range(5)], "skipped": 0,
+           "lag_samples": [], "excluded_new": 0}
 
     for i, d in enumerate(dates):
         pool = prices.get(d, {})
+        # 排除上市未滿 MIN_LISTED_DAYS 的標的:它們結構上不可能有 TTM 財報,
+        # 留在分母只會製造假性的覆蓋率不足(見常數區說明)。
+        if listed:
+            dt = datetime.strptime(d, "%Y-%m-%d")
+            kept = {s: p for s, p in pool.items()
+                    if s in listed and (dt - listed[s]).days >= MIN_LISTED_DAYS}
+            res["excluded_new"] += len(pool) - len(kept)
+            pool = kept
         if len(pool) < MIN_POOL:
             res["skipped"] += 1
             continue
@@ -422,6 +458,8 @@ def main():
 
     log("載入價格…")
     prices = load_prices(db, dates, log)
+    log("載入上市日代理(排除上市未滿一年者)…")
+    listed = load_listing_dates(db, log)
     log("載入 stock_factors…")
     sf = load_sf_factors(db, dates, need_sf, log) if need_sf else {}
     pit = {}
@@ -429,13 +467,15 @@ def main():
         log("載入 point-in-time quality(逐期呼叫 _fundamental_quality)…")
         pit = load_pit_quality(db, dates, log)
 
-    buf.append(f"股票池:每期取當日有 adj_close 的 4 碼標的,單期不足 {MIN_POOL} 檔則跳過")
+    buf.append(f"股票池:每期取當日有 adj_close 的 4 碼標的,單期不足 {MIN_POOL} 檔則跳過;"
+               f"**排除上市未滿 {MIN_LISTED_DAYS} 天者**(結構上不可能有 TTM 財報,"
+               f"留在分母會造成假性覆蓋率不足)")
     buf.append("")
 
     grades = {}
     for name, cfg in todo.items():
         log(f"分析 {name}…")
-        res = analyse(name, cfg, dates, prices, sf, pit)
+        res = analyse(name, cfg, dates, prices, sf, pit, listed)
         dirtxt = "越大越好" if cfg["direction"] > 0 else "越小越好"
         buf.append(f"── {name}  ({cfg['src']}.{cfg['field']}, {dirtxt}) ──")
         g, lines = verdict_for(name, res)
