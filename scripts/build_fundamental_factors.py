@@ -80,7 +80,12 @@ def compute(sid, inc_rows, bal_rows):
         window = dates[max(0, i - 3):i + 1]
         if len(window) < 4:
             continue
-        ni = sum((inc[w].get("IncomeAfterTaxes") or 0) for w in window)
+        # 稅後淨利的欄名有兩種:一般產業用 IncomeAfterTaxes(複數),部分金融/
+        # 保險業用 IncomeAfterTax(單數)。原本只取複數,單數那批整條 TTM 算不出來
+        # → net_income_ttm 為 null → roe 也是 null。2026-08-12 實測 2024Q2 有 24 檔
+        # 屬此情況(全市場該期用單數者 28 檔)。兩者不會同時出現(實測 both=0)。
+        ni = sum((inc[w].get("IncomeAfterTaxes")
+                  or inc[w].get("IncomeAfterTax") or 0) for w in window)
         rev = sum((inc[w].get("Revenue") or 0) for w in window)
 
         b = bal[d]
