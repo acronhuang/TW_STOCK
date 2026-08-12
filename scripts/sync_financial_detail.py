@@ -123,6 +123,71 @@ def load_universe(db, syms=None):
     return sorted(db.taiwan_stock_info.distinct("stock_id", q))
 
 
+RUNLOG_COL = "financial_detail_runlog"   # 每次執行一筆,供告警判斷連續失敗
+ALERT_AFTER = 6          # 連續幾次「402 且零寫入」才告警(cron 每小時一次 → 約半天)
+ALERT_COOLDOWN_H = 12    # 告警冷卻,避免每小時重複轟炸
+
+
+def _alert(msg):
+    """LINE 告警。刻意不讓失敗中斷主流程,但會把失敗印出來。
+
+    ⚠ LINE 本身也可能靜默失效(額度爆掉 / 少 load_dotenv),所以告警**同時**
+    寫進 DB(見 record_run),不單靠 LINE。
+    """
+    try:
+        import sys as _sys
+        _sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis")
+        load_dotenv("/home/mdsadmin/Stock/tw-stock-analysis/.env")
+        from src.alerts.line_notifier import LineNotifier
+        n = LineNotifier()
+        if n.enabled:
+            n.send(f"📉 {datetime.now():%Y-%m-%d %H:%M} 財報明細同步\n{msg}")
+            return True
+        print("LINE 未啟用(notifier.enabled=False),僅記錄於 DB")
+    except Exception as e:
+        print("LINE 發送失敗:", e)
+    return False
+
+
+def record_run(db, *, quota_hit, written, calls, processed, dry_run=False):
+    """記錄本次執行並在連續空轉時告警。
+
+    為什麼需要這個(2026-08-13 加):本腳本碰 402 是「優雅停」+ SystemExit(0),
+    cron 不噴紅;而「寫入 0 筆」在輸出上與「資料已是最新」完全無法區分。
+    結果是 91 次執行只有 3 次真的寫入資料,其餘全是 402 空轉,**長達數日無人察覺**。
+    有 log 不等於有告警。
+    """
+    if dry_run:
+        return
+    doc = {"ts": datetime.now(), "quota_hit": quota_hit, "written": written,
+           "calls": calls, "processed": processed}
+    db[RUNLOG_COL].insert_one(doc)
+
+    # 連續「402 且零寫入」判定:任何一次有寫入就重置
+    recent = list(db[RUNLOG_COL].find(sort=[("ts", -1)]).limit(ALERT_AFTER))
+    streak = 0
+    for r in recent:
+        if r.get("quota_hit") and not r.get("written"):
+            streak += 1
+        else:
+            break
+    if streak < ALERT_AFTER:
+        return
+
+    last = db[RUNLOG_COL].find_one({"alerted": True}, sort=[("ts", -1)])
+    if last and (datetime.now() - last["ts"]) < timedelta(hours=ALERT_COOLDOWN_H):
+        return                                    # 冷卻中,不重複發
+
+    msg = (f"連續 {streak} 次配額用盡且零寫入。\n"
+           f"缺季資料補不進來(fundamental_factors.roe 會卡住)。\n"
+           f"請查 FinMind 帳號方案與實際上限 —— API 無用量端點。")
+    sent = _alert(msg)
+    db[RUNLOG_COL].update_one({"_id": doc["_id"]},
+                              {"$set": {"alerted": True, "alert_sent_line": sent,
+                                        "alert_msg": msg}})
+    print(f"🔴 已觸發告警(連續 {streak} 次):{msg}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="財報明細三表 FinMind 同步")
     ap.add_argument("--full", action="store_true", help="全回填模式(2015起,resume via state);否則增量只補缺最新季")
@@ -207,6 +272,9 @@ def main():
         for coll in [c for c, _ in targets]:
             mx = db[coll].find_one(sort=[("date", -1)])
             log.info(f"  {coll}: 總 {db[coll].estimated_document_count():,} 筆,最新 {str(mx['date'])[:10] if mx else '無'}")
+    record_run(db, quota_hit=quota_hit, written=written, calls=calls,
+               processed=processed, dry_run=args.dry_run)
+
     if quota_hit:
         raise SystemExit(0)  # 配額停不算錯,cron 不噴紅
 
