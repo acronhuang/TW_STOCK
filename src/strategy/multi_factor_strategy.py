@@ -99,6 +99,9 @@ class MultiFactorStrategy:
         # quality 因子來源:'legacy'=stock_factors(常數,有前視偏誤)
         #                  'fundamental'=fundamental_factors(以 available_from 落後,正確)
         self.quality_source = 'fundamental'   # Config C:走PIT正確源(原legacy有前視偏誤)
+        # None = 動能照常當加權排序因子(現行行為);設為 0~1 則改當篩選器:
+        # 先留下動能前 N% 的標的,再只用 value/quality 排序。見 calculate_composite_score。
+        self.momentum_filter_pct = None
 
         self.factor_config = {
             # 動能因子（權重 50%）
@@ -217,13 +220,22 @@ class MultiFactorStrategy:
         factors_df = pd.DataFrame(factors_data).set_index('symbol')
 
         if self.quality_source == 'fundamental':
-            # 以財報公告期限落後後的真實時間序列,覆蓋 stock_factors 裡的常數值
+            # 以財報公告期限落後後的真實時間序列,覆蓋 stock_factors 裡的常數值。
+            #
+            # 2026-08-12 修:原本只涵蓋 roe/roa/profit_margin/debt_ratio,且要求
+            # 「欄位已存在於 factors_df」才覆蓋。但 factor_config 的 quality 用的是
+            # op_margin(0.40) / fcf_margin(0.30) / roe(0.30),而 stock_factors 裡
+            # 根本沒有 op_margin、fcf_margin 這兩欄(只有 operating_margin)
+            # → 這兩個因子在下方 `if factor_name not in factors_df.columns: continue`
+            #   被靜默跳過,佔 quality 權重 70% 卻從未生效,實際 quality 只有 roe。
+            # 修法:改為「建欄」而非「僅覆蓋既有欄」,並涵蓋 _fundamental_quality()
+            # 回傳的全部欄位。
             qmap = self._fundamental_quality(date)
-            for col in ('roe', 'roa', 'profit_margin', 'debt_ratio'):
-                if col in factors_df.columns:
-                    factors_df[col] = [
-                        (qmap.get(sym) or {}).get(col) for sym in factors_df.index
-                    ]
+            for col in ('roe', 'roa', 'profit_margin', 'debt_ratio',
+                        'op_margin', 'fcf_margin'):
+                factors_df[col] = [
+                    (qmap.get(sym) or {}).get(col) for sym in factors_df.index
+                ]
 
         # 計算每個因子的得分
         factor_scores = {}
@@ -243,16 +255,52 @@ class MultiFactorStrategy:
                     'weight': factor_weight
                 }
         
+        # 動能當篩選器而非排序因子(momentum_filter_pct 不為 None 時啟用)。
+        #
+        # 依據 2026-08-12 的 IC 分析(scripts/factor_ic_analysis.py):動能的
+        # **整體排序**不顯著(return_6m 1M IC t=+0.08),但**極端分層**顯著
+        # (Q5−Q1 +1.19pp, t=+3.38)→ 訊號在兩端,不在全體排序。
+        # 把它當加權排序因子是誤用;正確用法是先用它篩掉弱動能的一段,
+        # 再用真正有排序能力的 value/quality 排名。
+        momentum_names = set(self.factor_config.get('momentum', {})
+                             .get('factors', {}))
+        keep = None
+        if self.momentum_filter_pct and momentum_names:
+            mom = {}
+            for sym in factors_df.index:
+                tot = w_tot = 0.0
+                for fn in momentum_names:
+                    if fn not in factors_df.columns:
+                        continue
+                    sc = factor_scores[fn]['scores'].get(sym, np.nan)
+                    if not np.isnan(sc):
+                        w = factor_scores[fn]['weight']
+                        tot += sc * w
+                        w_tot += w
+                if w_tot > 0:
+                    mom[sym] = tot / w_tot
+            if mom:
+                ranked = sorted(mom, key=mom.get, reverse=True)
+                keep = set(ranked[:max(1, int(len(ranked) * self.momentum_filter_pct))])
+
         # 計算加權綜合得分
         composite_scores = []
         valid_factors_count = []
-        
+
         for symbol in factors_df.index:
             total_score = 0
             total_weight = 0
             valid_count = 0
-            
+
+            if keep is not None and symbol not in keep:
+                composite_scores.append(np.nan)      # 未通過動能篩選 → 不參與排名
+                valid_factors_count.append(0)
+                continue
+
             for factor_name, factor_data in factor_scores.items():
+                # 篩選模式下,動能已用於篩選,不再進入加權排序(避免重複計入)
+                if keep is not None and factor_name in momentum_names:
+                    continue
                 score = factor_data['scores'].get(symbol, np.nan)
                 weight = factor_data['weight']
 

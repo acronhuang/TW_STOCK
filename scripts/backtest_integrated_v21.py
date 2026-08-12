@@ -659,8 +659,39 @@ def main():
     parser.add_argument('--stale-exit-days', type=int, default=20,
                         help='連續無報價幾日後強制出場')
     
+    parser.add_argument('--momentum-filter', type=float, default=None,
+                        help='把動能改當篩選器:先留動能前 N%%(如 0.5),再只用 '
+                             'value/quality 排序。不給則維持動能當加權排序因子。'
+                             '依據:2026-08-12 IC 分析顯示動能是 EXTREME_ONLY')
+    parser.add_argument('--weights', type=str, default=None,
+                        help='覆寫三大類權重,格式 momentum:value:quality(如 0.2:0.5:0.3),'
+                             '會自動正規化為總和 1')
+
     args = parser.parse_args()
-    
+
+    def _tune(bt):
+        """把 CLI 的策略層設定套到兩個 strategy 實例上。"""
+        strats = [bt.strategy_v20, bt.strategy_v21.factor_strategy]
+        if args.momentum_filter is not None:
+            for s in strats:
+                s.momentum_filter_pct = args.momentum_filter
+            print(f"✓ 動能改當篩選器:保留前 {args.momentum_filter:.0%},"
+                  f"排序僅用 value/quality")
+        if args.weights:
+            parts = [float(x) for x in args.weights.split(':')]
+            if len(parts) != 3:
+                raise ValueError("--weights 需三個值:momentum:value:quality")
+            tot = sum(parts)
+            if tot <= 0:
+                raise ValueError("--weights 總和必須 > 0")
+            w = dict(zip(('momentum', 'value', 'quality'), (p / tot for p in parts)))
+            for s in strats:
+                for cat, val in w.items():
+                    if cat in s.factor_config:
+                        s.factor_config[cat]['weight'] = val
+            print("✓ 權重覆寫:" + ", ".join(f"{k} {v:.0%}" for k, v in w.items()))
+        return bt
+
     cost_kw = dict(fee_rate=args.fee_rate, fee_discount=args.fee_discount,
                    tax_rate=args.tax_rate,
                    quality_source=args.quality_source,
@@ -683,6 +714,7 @@ def main():
         rebalance_frequency=args.rebalance_frequency,
         **cost_kw
     )
+    _tune(backtester_v20)
     results_v20 = backtester_v20.run(args.start_date, args.end_date, strategy_version='v2.0')
     
     # 回測 v2.1
@@ -693,6 +725,7 @@ def main():
         rebalance_frequency=args.rebalance_frequency,
         **cost_kw
     )
+    _tune(backtester_v21)
     results_v21 = backtester_v21.run(args.start_date, args.end_date, strategy_version='v2.1')
     
     # 列印報告
