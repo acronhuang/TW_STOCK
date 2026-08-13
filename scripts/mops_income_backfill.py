@@ -67,9 +67,16 @@ def qdate(year, q):
     return datetime(year, m, d)
 
 
-COL_NI = "本期淨利（淨損）"
-COL_REV = "營業收入"
 COL_ID = "公司 代號"
+
+# 同一個 TYPEK 的回應裡有多張子表,各業別用不同範本、欄名不同。
+# 實測 sii 114Q1 共 7 張:一般業 1024 家用「本期淨利（淨損）」,但銀行(表1,10家)
+# 與金控/保險(表4,13家)用「本期**稅後**淨利（淨損）」—— 只認前者會整張跳過,
+# 149 檔金融保險證券全部漏掉(中信金 2891 就在表4)。
+NI_COLS = ("本期淨利（淨損）", "本期稅後淨利（淨損）")
+# 收入側各業別差異更大:一般業「營業收入」、銀行/金控「淨收益」、
+# 其他「收益」或「收入」。順序即優先序。
+REV_COLS = ("營業收入", "淨收益", "收益", "收入")
 
 
 def fetch_market(roc_year, season, typek, session):
@@ -85,15 +92,21 @@ def fetch_market(roc_year, season, typek, session):
     out = {}
     for t in pd.read_html(io.StringIO(r.text)):
         cols = [str(c) for c in t.columns]
-        if COL_ID not in cols or COL_NI not in cols:
-            continue                      # 不是我們要的那張表(還有小表混在裡面)
+        if COL_ID not in cols:
+            continue
+        ni_col = next((c for c in NI_COLS if c in cols), None)
+        if ni_col is None:
+            continue                      # 這張表沒有可用的淨利欄(例如目錄小表)
+        rev_col = next((c for c in REV_COLS if c in cols), None)
         t.columns = cols
         for _, row in t.iterrows():
             sid = str(row[COL_ID]).strip()
             if len(sid) != 4 or not sid.isdigit():
                 continue
             rec = {}
-            for key, col in (("IncomeAfterTaxes", COL_NI), ("Revenue", COL_REV)):
+            for key, col in (("IncomeAfterTaxes", ni_col), ("Revenue", rev_col)):
+                if col is None:
+                    continue
                 v = str(row.get(col, "")).replace(",", "").strip()
                 if v and v not in ("--", "nan", ""):
                     try:
