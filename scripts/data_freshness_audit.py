@@ -119,14 +119,10 @@ EXEMPT = {
     "dividend_results": "股利計算結果,由 dividend_detail 推導;主表已監控",
     "major_shareholders": "大戶持股,shareholding 的衍生檢視;主表已監控",
     "media_news": "新聞語料,無固定節奏(事件驅動)",
-    # 🔴 已知停更的舊表 —— 刻意豁免以免噪音,但**不代表健康**,退場另案處理
-    "financial_statements": "🔴 停更於 2026-02,已被 *_detail 三表取代(見 financial-tables-migration-state),待退場",
-    "margin_trading": "🔴 停更於 2026-02,已被 margin_purchase_short_sale 取代,待退場",
-    "tickers": "🔴 Node 遺留表(camelCase+__v),已被 taiwan_stock_info 取代,待退場",
-    "stocks": "🔴 Node 遺留表,同上,待退場",
-    "stock_list": "🔴 舊股票清單,已被 taiwan_stock_info 取代,待退場",
-    "dividend": "🔴 0 筆空表,待退場",
-    "institutional_holdings": "🔴 0 筆空表,待退場",
+    # 🔴 停更但**仍有活躍讀取端**,不可刪
+    "financial_statements": ("🔴 停更範圍窄(192 檔,到 2025Q4)但 **hsieh_dividend 是主路徑**"
+                             "(負債比/速動比/未分配盈餘三門檻),經 API server 使用;"
+                             "刪掉會讓那三項靜默不加分。2026-08-13 六查後刻意保留"),
     "system.views": "MongoDB 系統表",
 }
 
