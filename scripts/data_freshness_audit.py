@@ -42,6 +42,23 @@ SPEC = {
     },
     "事件/公司行動": {
         "corporate_actions": ("event_date", "event"), "dividend_detail": ("date", "event"),
+        # 2026-08-13 納管:每交易日更新的事件型表,先前不在 SPEC
+        "punished_stocks": ("date", "daily"), "noticed_stocks": ("date", "daily"),
+        "margin_suspension": ("date", "daily"), "insider_transfer": ("date", "daily"),
+        "major_news": ("date", "daily"),
+    },
+    "每日周邊": {
+        # 2026-08-13 納管:皆由 twse_openapi_sync 每交易日更新
+        "foreign_top20": ("date", "daily"),
+        "total_institutional_investors": ("date", "daily"),
+        "total_margin": ("date", "daily"),
+        "etf_dca_rank": ("date", "daily"),
+        "gold_price": ("date", "daily"),
+    },
+    "分析產出": {
+        # 2026-08-13 納管:pipeline 產物,停更代表 pipeline 出事
+        "team_analysis": ("date", "daily"),
+        "risk_analysis": ("date", "daily"),
     },
 }
 THRESH = {"daily": 4, "weekly": 9, "monthly": 45, "quarterly": 135, "event": None}
@@ -82,6 +99,35 @@ EXEMPT = {
     "trading_dates": "交易日曆,年度更新",
     "corporate_actions": "公司行動事件表,event 型",
     "delisting": "下市清單,event 型",
+    # ── 2026-08-13 分類:以下逐一判定過,非「懶得管」──────────────────
+    # 續跑進度(同上分類)
+    "institutional_rebuild_progress": "續跑進度表",
+    "market_perdate_price_state": "續跑進度表",
+    "twse_perdate_price_state": "續跑進度表",
+    "monthly_revenue_backfill_state": "續跑進度表",
+    "price_early_backfill_state": "續跑進度表",
+    "price_history_backfill_state": "續跑進度表",
+    # 使用者持倉:有交易才變動,無更新是正常狀態,不該報警
+    "portfolio_positions": "使用者持倉,有交易才變動",
+    "portfolio_lots": "使用者持倉批次,同上",
+    "portfolio_trades": "使用者交易紀錄,同上",
+    "portfolio_dividends": "使用者股利紀錄,同上(目前 0 筆)",
+    "core_watchlist": "核心池設定,人工維護",
+    "verdict_performance": "決策績效回顧,週期性產出",
+    # 衍生/中繼資料:由主表推導,主表有監控即可
+    "adjustment_factors": "除權息係數,由 corporate_actions 推導;主表已監控",
+    "dividend_results": "股利計算結果,由 dividend_detail 推導;主表已監控",
+    "major_shareholders": "大戶持股,shareholding 的衍生檢視;主表已監控",
+    "media_news": "新聞語料,無固定節奏(事件驅動)",
+    # 🔴 已知停更的舊表 —— 刻意豁免以免噪音,但**不代表健康**,退場另案處理
+    "financial_statements": "🔴 停更於 2026-02,已被 *_detail 三表取代(見 financial-tables-migration-state),待退場",
+    "margin_trading": "🔴 停更於 2026-02,已被 margin_purchase_short_sale 取代,待退場",
+    "tickers": "🔴 Node 遺留表(camelCase+__v),已被 taiwan_stock_info 取代,待退場",
+    "stocks": "🔴 Node 遺留表,同上,待退場",
+    "stock_list": "🔴 舊股票清單,已被 taiwan_stock_info 取代,待退場",
+    "dividend": "🔴 0 筆空表,待退場",
+    "institutional_holdings": "🔴 0 筆空表,待退場",
+    "system.views": "MongoDB 系統表",
 }
 
 
