@@ -45,6 +45,13 @@ WATCHED = {
     # （TABLE_CHECKS 只驗最新日、掃不到歷史洞）。非即時關鍵，故 grace/overdue 較寬鬆。
     "continuity": {"name": "歷史連續性檢查", "hour": 5, "weekdays_only": False,
                    "weekdays": {6}, "grace_h": 3, "overdue_h": 3},
+    # 財報 OpenAPI 同步：cron `45 6 * * *`（每日 06:45，全年跑）。
+    # 為何非有不可：它正常的結果就是「可寫入 0 筆」（該季已補齊），與「整支掛掉
+    # 沒跑」在資料面上完全無法區分 —— 這正是 FinMind 那條路踩過的坑（91 次執行
+    # 只有 3 次有寫入，卻長達數日無人察覺）。只有心跳分得出死活。
+    # 全年每日跑故無 weekdays 限制；非即時關鍵，grace/overdue 給寬鬆值。
+    "openapi_financial": {"name": "財報 OpenAPI 同步", "hour": 6, "weekdays_only": False,
+                          "grace_h": 3, "overdue_h": 3},
 }
 REALERT_HOURS = 12  # 同一 job 兩次告警至少間隔（去重，避免每輪都吵）
 DISK_WARN_PCT = 85  # 根檔案系統使用率超過此值即告警（曾因 runaway log 逼近磁碟滿）

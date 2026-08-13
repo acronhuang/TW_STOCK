@@ -94,6 +94,24 @@ def prior_sum(db, sid, year, q):
     return tot
 
 
+def write_heartbeat(db, status, written, exists, no_prior):
+    """記錄本次已執行,供 watchdog.py 判斷排程是否還活著。
+
+    為什麼需要:本腳本正常結果就是「可寫入 0 筆」(該季已補齊),與「整支掛掉
+    沒跑」在資料面上無法區分 —— 跟 FinMind 那個「寫入 0 筆」看不出死活的坑
+    同一種。心跳才分得出來。
+    """
+    try:
+        db.system_heartbeat.update_one(
+            {"_id": "openapi_financial"},
+            {"$set": {"last_run": datetime.now(), "status": status,
+                      "written": written, "exists": exists, "no_prior": no_prior}},
+            upsert=True,
+        )
+    except Exception as e:
+        print(f"心跳寫入失敗: {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
@@ -156,7 +174,7 @@ def main():
     print(f"\n可寫入 {stats['written']} 筆;已存在跳過 {stats['exists']}、"
           f"前季不齊無法回推 {stats['no_prior']}(共讀 {stats['rows']} 列)")
     if not args.apply:
-        print("(dry-run,未寫入。加 --apply 才會實際更新)")
+        print("(dry-run,未寫入。加 --apply 才會實際更新;dry-run 不寫心跳)")
         return
     if ops:
         before = db[COL].count_documents({})
@@ -164,6 +182,9 @@ def main():
         after = db[COL].count_documents({})
         print(f"寫入:upsert {res.upserted_count} / 更新 {res.modified_count};"
               f"總筆數 {before:,} → {after:,}")
+
+    # 心跳最後才寫:前面任何一步拋例外就不該留下「我跑成功了」的紀錄
+    write_heartbeat(db, "ok", stats["written"], stats["exists"], stats["no_prior"])
     print("提醒:本腳本只含已申報公司,同一季需重複跑才會補齊(如台積電 Q2 於 8/14 前未報)")
 
 
