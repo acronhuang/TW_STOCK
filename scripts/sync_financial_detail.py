@@ -47,6 +47,18 @@ DATASETS = {
     "cash_flows_detail":          "TaiwanStockCashFlowsStatement",
 }
 STATE_COL = "financial_detail_backfill_state"  # {stock_id, done_full, updated_at}
+EMPTY_COL = "financial_detail_empty"           # {_id: "sid:dataset", last_empty_at}
+
+# 空回應退避天數。
+#
+# 為什麼需要(2026-08-13 加):增量模式原本是「該檔落後於應有最新季 → 打 API →
+# 空回應就 continue」,**空回應不留任何記號**。於是 FinMind 根本沒有其最新季的
+# 那批股票會被每小時重試一次、永遠重試。實測落後檔數為三張表各 607 檔
+# = 每輪最多 1821 次 call,而每小時配額只有約 300 → 配額全被這批吃光,
+# 真正有新資料的檔永遠排不到。這才是「91 次執行只有 3 次有寫入」的成因,
+# 不是配額太小。
+# 財報是季度資料,14 天不重試完全足夠(季報公告後隔天就會被下一輪抓到)。
+EMPTY_BACKOFF_DAYS = 14
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger(__name__)
@@ -123,6 +135,32 @@ def load_universe(db, syms=None):
     return sorted(db.taiwan_stock_info.distinct("stock_id", q))
 
 
+def _empty_key(sid, dataset):
+    return f"{sid}:{dataset}"
+
+
+def is_backed_off(db, sid, dataset, days):
+    """此 (股票, 資料集) 近期是否已回過空 → 是則本輪不再打 API。"""
+    if days <= 0:
+        return False
+    d = db[EMPTY_COL].find_one({"_id": _empty_key(sid, dataset)})
+    if not d or not d.get("last_empty_at"):
+        return False
+    return (datetime.now() - d["last_empty_at"]) < timedelta(days=days)
+
+
+def mark_empty(db, sid, dataset):
+    db[EMPTY_COL].update_one(
+        {"_id": _empty_key(sid, dataset)},
+        {"$set": {"last_empty_at": datetime.now()},
+         "$inc": {"empty_count": 1}}, upsert=True)
+
+
+def clear_empty(db, sid, dataset):
+    """一旦真的拿到資料就解除退避 —— 不然公司補申報後會被鎖住 14 天。"""
+    db[EMPTY_COL].delete_one({"_id": _empty_key(sid, dataset)})
+
+
 RUNLOG_COL = "financial_detail_runlog"   # 每次執行一筆,供告警判斷連續失敗
 ALERT_AFTER = 6          # 連續幾次「402 且零寫入」才告警(cron 每小時一次 → 約半天)
 ALERT_COOLDOWN_H = 12    # 告警冷卻,避免每小時重複轟炸
@@ -196,6 +234,8 @@ def main():
     ap.add_argument("--delay", type=float, default=0.35, help="每次 API call 間隔秒(限流)")
     ap.add_argument("--sym", help="只處理指定代號(逗號分隔)")
     ap.add_argument("--datasets", help="只處理指定表(逗號分隔 collection 名)")
+    ap.add_argument("--empty-backoff-days", type=int, default=EMPTY_BACKOFF_DAYS,
+                    help="某(檔,資料集)回空後,幾天內不再重試(預設 %d;0=關閉退避)" % EMPTY_BACKOFF_DAYS)
     ap.add_argument("--dry-run", action="store_true", help="只印不寫")
     args = ap.parse_args()
 
@@ -223,7 +263,7 @@ def main():
         universe = [s for s in universe if s not in done]
         log.info(f"  已完成全回填 {len(done)} 檔,剩 {len(universe)} 檔待處理")
 
-    processed = calls = written = skipped = 0
+    processed = calls = written = skipped = backed_off = 0
     quota_hit = False
     for sid in universe:
         if calls >= args.limit:  # 以 API call 為上限(整檔原子:在檔起點才 break)
@@ -240,6 +280,10 @@ def main():
                     if mx and mx["date"] >= exp_latest:
                         skipped += 1
                         continue  # 已到位,免 call
+                    # 上次打是空的且還在退避期 → 不再浪費配額(見 EMPTY_BACKOFF_DAYS)
+                    if is_backed_off(db, sid, dataset, args.empty_backoff_days):
+                        backed_off += 1
+                        continue
                     start = ((mx["date"] + timedelta(days=1)).strftime("%Y-%m-%d")
                              if mx else args.start)
                 rows = fetch(dataset, sid, start)
@@ -247,7 +291,11 @@ def main():
                 if args.delay:
                     time.sleep(args.delay)
                 if not rows:
+                    if not args.full and not args.dry_run:
+                        mark_empty(db, sid, dataset)
                     continue
+                if not args.full and not args.dry_run:
+                    clear_empty(db, sid, dataset)
                 if args.dry_run:
                     log.info(f"  [dry] {sid}/{coll}: {len(rows)} 筆(start={start})")
                     continue
@@ -267,7 +315,8 @@ def main():
             log.info(f"  進度 {processed}/{min(args.limit, len(universe))} | calls={calls} 寫入={written:,} 跳過={skipped}")
 
     log.info("=" * 60)
-    log.info(f"完成:處理 {processed} 檔 | API calls {calls} | 寫入 {written:,} 筆 | 跳過(已到位) {skipped}")
+    log.info(f"完成:處理 {processed} 檔 | API calls {calls} | 寫入 {written:,} 筆 | "
+             f"跳過(已到位) {skipped} | 跳過(空回應退避) {backed_off}")
     if not args.full:
         for coll in [c for c, _ in targets]:
             mx = db[coll].find_one(sort=[("date", -1)])
