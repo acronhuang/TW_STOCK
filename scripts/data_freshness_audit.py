@@ -47,6 +47,41 @@ THRESH = {"daily": 4, "weekly": 9, "monthly": 45, "quarterly": 135, "event": Non
 # 改週六後最大落後~8天(週六抓上週五),12天門檻對週六更寬鬆仍安全;真漏一週會跳~15天+仍🔴。
 TH_OVERRIDE = {"shareholding": 12}
 
+# ── 未納管偵測(2026-08-13 加)────────────────────────────────────────────
+#
+# 為什麼:SPEC 是**明確列入才檢查**的清單,新增的 collection 預設不受監控,
+# 而且不會有任何徵兆。實測抓到 securities_lending_detail(140 萬筆)自 2026-07-24
+# 起停更 20 天無人知 —— 它由一次性搬移腳本 move_lending_detail.py 建立,
+# 既無每日同步管道也不在 SPEC 裡。
+#
+# 改為「預設納管、豁免要寫理由」:凡 DB 裡有、SPEC 沒有、EXEMPT 也沒有的表,
+# 一律列為未納管並進入告警。要豁免就得在下方寫一行理由 —— 讓「不監控」
+# 變成一個需要明說的決定,而不是預設值。
+EXEMPT = {
+    # 執行狀態 / 續跑進度,非資料源
+    "adj_close_backfill_state": "續跑進度表",
+    "balance_equity_backfill_state": "續跑進度表",
+    "dividend_2013_2014_backfill_state": "續跑進度表",
+    "financial_detail_backfill_state": "續跑進度表",
+    "fundamental_backfill_state": "續跑進度表",
+    "financial_detail_empty": "空回應退避記錄(2026-08-13 加)",
+    "financial_detail_runlog": "執行記錄,供告警判連續失敗",
+    "dividend_sync_nodata": "查無資料的負向記錄",
+    # 告警 / 系統自身
+    "alert_history": "告警歷史",
+    "alert_rules": "告警規則設定",
+    "schedule_alerts": "排程告警佇列",
+    "system_heartbeat": "心跳,由 watchdog 監控",
+    "data_continuity_alerted": "去重用的告警記錄",
+    "data_health_history": "健康快照歷史",
+    "digest_history": "推播歷史",
+    # 靜態 / 低頻參考資料
+    "taiwan_stock_info": "股票清單,每日由 info sync 更新但非時序資料",
+    "trading_dates": "交易日曆,年度更新",
+    "corporate_actions": "公司行動事件表,event 型",
+    "delisting": "下市清單,event 型",
+}
+
 
 def _season_end(year, season):
     m, d = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}.get(int(season), (12, 31))
@@ -153,7 +188,41 @@ def main():
         print("✅ 無任何表超出其更新頻率的落後門檻。")
 
     # 只有真 🔴 才寫 schedule_alerts 進網頁(無則靜默),不發 LINE
+    # ── 未納管偵測 ──────────────────────────────────────────────────
+    known = {t for grp in SPEC.values() for t in (grp if isinstance(grp, dict) else {})}
+    if not known:
+        # 對照:SPEC 是巢狀({分類:{表:...}}),當成扁平取鍵會得到分類名而非表名,
+        # 交集為 0 卻看起來「都沒納管」。2026-08-13 我就這樣誤報過一次。
+        print("🔴 SPEC 解析後為空 —— 結構可能已改變,未納管偵測不可信,跳過")
+        unregistered = []
+    else:
+        assert "stock_price" in known, "對照失敗:stock_price 應在 SPEC 內 → SPEC 解析有誤"
+        actual = set(db.list_collection_names())
+        unregistered = sorted(actual - known - set(EXEMPT))
+
+    if unregistered:
+        print(f"\n⚠️  未納管的 collection({len(unregistered)} 個)"
+              f" —— 既不在 SPEC 也不在 EXEMPT,等於沒有任何新鮮度監控:")
+        for c in unregistered:
+            try:
+                n = db[c].estimated_document_count()
+            except Exception:
+                n = -1
+            print(f"     {c:<38} {n:>10} 筆")
+        print("   要監控 → 加進 SPEC;不需要 → 加進 EXEMPT 並寫明理由。")
+
     if args.alert:
+        if unregistered:
+            try:
+                db.schedule_alerts.insert_one({
+                    "ts": datetime.now(), "level": "warn", "source": "freshness_audit",
+                    "message": (f"⚠️ {len(unregistered)} 個 collection 未納管新鮮度監控:"
+                                + ", ".join(unregistered[:10])
+                                + ("…" if len(unregistered) > 10 else "")),
+                    "resolved": False})
+                print(f"[alert] 未納管清單已寫入 schedule_alerts({len(unregistered)} 個)")
+            except Exception as e:
+                print(f"[alert] 未納管告警寫入失敗:{e!r}")
         if worst:
             detail = chr(10).join(
                 f"- {coll} 最新 {disp} 落後 {lag} 天(>{THRESH[cad]}天 {cad}門檻)"
