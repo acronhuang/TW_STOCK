@@ -146,6 +146,12 @@ def main():
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--limit", type=int, default=0, help="最多處理幾個 (季,市場)")
     ap.add_argument("--delay", type=float, default=DELAY)
+    ap.add_argument("--sector", default=None,
+                    help="改為依產業補洞(正規表示式比對 industry_category),"
+                         "例如 --sector '金融|保險|證券'。這批公司多半連一筆損益都沒有,"
+                         "無法從 fundamental_factors 的 null 反推,故需另一種取樣方式")
+    ap.add_argument("--from-year", type=int, default=2013,
+                    help="--sector 模式的起始年(預設 2013,配合 IFRS 後的資料深度)")
     args = ap.parse_args()
 
     db = MongoClient(DB_URI)[DB_NAME]
@@ -158,8 +164,35 @@ def main():
         return
     time.sleep(args.delay)
 
-    market = {d["stock_id"]: ("otc" if d.get("type") == "tpex" else "sii")
+    def typek_of(t):
+        return {"tpex": "otc", "emerging": "rotc"}.get(t, "sii")
+
+    market = {d["stock_id"]: typek_of(d.get("type"))
               for d in db.taiwan_stock_info.find({}, {"stock_id": 1, "type": 1})}
+
+    if args.sector:
+        # 依產業補洞。這批(典型是金融保險證券)多半在 financial_statement_detail
+        # 連一筆都沒有,所以 fundamental_factors 也生不出列 —— 無法用「net_income_ttm
+        # 為 null」反推,必須直接以「該檔該季有沒有資料」為準逐季掃。
+        syms = [d["stock_id"] for d in db.taiwan_stock_info.find(
+            {"industry_category": {"$regex": args.sector}, "security_type": "Stock"},
+            {"stock_id": 1})]
+        latest_year = db.stock_price.find_one(sort=[("date", -1)])["date"].year
+        need = {}
+        for sid in syms:
+            p = db.stock_price.find_one({"symbol": sid}, sort=[("date", 1)])
+            if not p:
+                continue
+            for y in range(max(args.from_year, p["date"].year), latest_year + 1):
+                for q in (1, 2, 3, 4):
+                    dt = qdate(y, q)
+                    if dt < p["date"] or dt > datetime.now():
+                        continue          # 上市前 / 未來季,來源不會有
+                    if local_quarter(db, sid, dt, "IncomeAfterTaxes") is None:
+                        need.setdefault((y, q, market.get(sid, "sii")), set()).add(sid)
+        print(f"--sector '{args.sector}':{len(syms)} 檔符合,"
+              f"需補 {sum(len(v) for v in need.values())} 個(股票,季)")
+        return run(db, session, need, args)
 
     # 找「上市後仍缺」的 (股票, 季);上市前的任何來源都沒有,不必浪費請求
     need = {}
@@ -177,7 +210,11 @@ def main():
                 yy -= 1
             if not local_quarter(db, sid, qdate(yy, qq), "IncomeAfterTaxes"):
                 need.setdefault((yy, qq, market.get(sid, "sii")), set()).add(sid)
+    return run(db, session, need, args)
 
+
+def run(db, session, need, args):
+    """共用的抓取/差分/寫入流程。兩種取樣模式(缺 TTM 反推 vs 依產業掃)共用。"""
     keys = sorted(need)
     if args.limit:
         keys = keys[:args.limit]
