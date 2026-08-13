@@ -8,6 +8,7 @@
 用法: backfill_sbl_history.py [--start 201301] [--end 202607]
 """
 import argparse
+import calendar
 import time
 from datetime import datetime
 
@@ -40,11 +41,21 @@ def _num(x):
 def fetch_month(session, ym):
     y, m = ym // 100, ym % 100
     start = f"{y}{m:02d}01"
-    end = f"{y}{m:02d}31"
+    # endDate 不可超過今日。原本寫死 f"{y}{m:02d}31",查當月時區間會含未來日,
+    # TWSE 回 stat="查詢日期大於今日,請重新查詢!" → 下方 return None 靜默跳過。
+    # 後果:歷史月份都抓得到、**當月永遠抓不到**,資料就停在最後一次跑完整月的日子
+    # (實測停在 2026-07-24 達 20 天無人知)。2026-08-13 修:上限夾到今天。
+    today = datetime.now()
+    last_day = calendar.monthrange(y, m)[1]
+    end_dt = min(datetime(y, m, last_day), today)
+    if end_dt < datetime(y, m, 1):
+        return None                      # 整個月都在未來,不必查
+    end = end_dt.strftime("%Y%m%d")
     r = session.get(URL, params={"startDate": start, "endDate": end, "response": "json"},
                     headers={"User-Agent": UA}, timeout=40)
     j = r.json()
     if j.get("stat") != "OK":
+        print(f"    {ym} 取得失敗:stat={j.get('stat')!r}(區間 {start}~{end})")
         return None
     docs = []
     for row in j.get("data", []):

@@ -20,6 +20,8 @@ SPEC = {
         "stock_price": ("date", "daily"), "stock_factors": ("date", "daily"),
         "after_hours_trading": ("date", "daily"), "odd_lot_trading": ("date", "daily"),
         "day_trading_targets": ("date", "daily"), "securities_lending": ("date", "daily"),
+        # 2026-08-13 納管:先前不在 SPEC,停更 20 天無人知(見 EXEMPT 上方說明)
+        "securities_lending_detail": ("date", "daily"),
     },
     "籌碼法人": {
         "margin_purchase_short_sale": ("date", "daily"), "institutional_flow": ("date", "daily"),
