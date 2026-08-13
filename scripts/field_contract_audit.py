@@ -90,12 +90,19 @@ def declared_fields(db):
         for f in cfg.get("factors", {}):
             out.append((f"MultiFactorStrategy.{cat}", "stock_factors", f))
 
-    try:
-        from src.analysis import stock_ranker as sr
-        for f in getattr(sr, "FIELDS", []):
-            out.append(("StockRanker.FIELDS", "stock_factors", f))
-    except Exception as e:
-        print(f"  ⚠ StockRanker 設定讀取失敗:{type(e).__name__}: {e}")
+    # 🔴 讀不到欄位必須拋錯,不能當成「沒問題」。
+    # 第三版就是這裡出錯:原本寫 getattr(sr_module, "FIELDS", []),但 FIELDS 是
+    # _load_candidates 內的**區域變數**,getattr 拿到空清單、又有預設值不拋錯
+    # → StockRanker 從頭到尾沒被稽核,而報告看起來一切正常。
+    # 「我什麼都沒檢查」與「我檢查了且沒問題」在輸出上必須可區分。
+    from src.analysis.stock_ranker import StockRanker
+    ranker_fields = list(getattr(StockRanker, "FIELDS", []))
+    if not ranker_fields:
+        raise RuntimeError(
+            "StockRanker.FIELDS 讀不到(空清單)。稽核不能在『沒讀到設定』的情況下"
+            "回報正常 —— 那與『檢查過且無問題』無法區分。請確認 FIELDS 在類別層級。")
+    for f in ranker_fields:
+        out.append(("StockRanker.FIELDS", "stock_factors", f))
 
     for f in ("roe", "roa", "profit_margin", "debt_ratio", "op_margin", "fcf_margin"):
         out.append(("_fundamental_quality 回傳", "fundamental_factors", f))

@@ -41,6 +41,14 @@ class StockRanker:
     """綜合選股評分器"""
 
     # 評分權重
+    # 從 stock_factors 取用的欄位。
+    # 提到類別層級的原因(2026-08-13):原本是 _load_candidates 內的區域變數,
+    # 外部無法內省 → 欄位契約稽核用 getattr(module,"FIELDS",[]) 只拿到空清單,
+    # **StockRanker 從頭到尾沒被稽核過,而輸出看起來一切正常**。
+    # 靜默的 no-op 長得像成功,正是本專案反覆踩到的那一類。
+    FIELDS = ['pe_ratio', 'pb_ratio', 'dividend_yield', 'roe',
+              'operating_margin', 'rsi_14', 'return_1m', 'volatility_30d']
+
     WEIGHTS = {
         'value': 0.25,       # 估值（PE/PB/殖利率）
         'quality': 0.20,     # 品質（ROE/營業利益率）
@@ -56,6 +64,41 @@ class StockRanker:
         self.client = MongoClient(mongo_uri)
         self.db = self.client[db_name]
         self._health_cache: dict[str, dict] = {}
+        self._validate_fields()
+
+    def _validate_fields(self):
+        """建構時檢查 FIELDS 宣告的欄位真的存在於 stock_factors。
+
+        為什麼(2026-08-13):_score_stock_data 用
+        `if roe is not None: qual_scores.append(...)` —— 欄位若消失或改名,
+        分數會**靜默退化**成較少的成分,取不到就 fallback 到預設 50,
+        不拋例外也不留 log。這正是 MultiFactorStrategy 的 op_margin 白跑
+        十年的同一種失效(修好後回測十年年化 21.04%→26.64%)。
+        StockRanker 是**每晚實際選股**的路徑,更不該讓它靜默降級。
+
+        量不到時(DB 無資料)只提示不擋 —— 無法區分「設定錯」與「量不到」,
+        不在測不準的情況下阻斷 live 路徑。
+        """
+        try:
+            latest = self.db.stock_factors.find_one(sort=[('date', -1)])
+            if not latest:
+                print('⚠️  StockRanker 欄位驗證跳過:stock_factors 無資料')
+                return
+            # 同一日不同標的的欄位並不一致(pe_ratio 僅約 68% 標的有),
+            # 故取整日所有文件的欄名聯集,只看一筆會誤判成不存在。
+            fields = set()
+            for doc in self.db.stock_factors.find({'date': latest['date']}):
+                fields.update(doc.keys())
+        except Exception as e:
+            print(f'⚠️  StockRanker 欄位驗證跳過:{type(e).__name__}: {e}')
+            return
+        missing = [f for f in self.FIELDS if f not in fields]
+        if missing:
+            raise ValueError(
+                'StockRanker.FIELDS 引用了 stock_factors 沒有的欄位:'
+                + ', '.join(missing)
+                + ' —— 這些欄位會靜默取不到,評分成分減少或退化成預設值 50。'
+                + ' 請確認欄名與 stock_factors 一致(注意 op_margin vs operating_margin)。')
 
     def _get_health(self, symbol: str) -> dict | None:
         """惰性快取財報分析結果，避免對同一股呼叫多次。"""
@@ -226,8 +269,7 @@ class StockRanker:
         注意：stock_factors 為多來源（TWSE 寫 pe/pb/殖利率；factor_calc 寫 roe/rsi 等，
         且最新一筆常是 factor_calc 無 pe）。故用『近30天取每欄首個非null』而非 naive $first，
         否則最新筆無 pe → 候選全被剔除（與 senvision scanner.load_fundamentals_cache 同模式）。"""
-        FIELDS = ['pe_ratio', 'pb_ratio', 'dividend_yield', 'roe',
-                  'operating_margin', 'rsi_14', 'return_1m', 'volatility_30d']
+        FIELDS = self.FIELDS
         cutoff = datetime.now() - timedelta(days=30)
         pipeline = [
             {'$match': {'date': {'$gte': cutoff}}},
