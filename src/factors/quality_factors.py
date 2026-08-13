@@ -99,21 +99,18 @@ class QualityFactors:
                 '_source': 'quarterly_earnings',
             }
 
-        # 次選: financial_statements（含已計算 ratios/margins）
-        report = self.db.financial_statements.find_one(
-            query,
-            sort=[('fiscalYear', -1), ('fiscalPeriod', -1)]
-        )
-        if report:
-            return report
-
-        # 末選: financial_reports（排除 netIncome=0 的無效資料）
-        query['incomeStatement.netIncome'] = {'$gt': 0}
-        report = self.db.financial_reports.find_one(
-            query,
-            sort=[('fiscalYear', -1), ('fiscalPeriod', -1)]
-        )
-        return report
+        # 2026-08-13 移除次選與末選,兩層皆已證實不可達:
+        #
+        # 次選 financial_statements —— **全集證明**(不是抽樣):該表 192 檔的 symbol
+        #   全部被首選 quarterly_earnings(2,058 檔)涵蓋,差集為空集合,
+        #   首選必先命中,次選在任何輸入下都到不了。
+        # 末選 financial_reports —— 該 collection **已於 2026-08-10 刪除**,
+        #   查詢一個不存在的表只會靜默回 None,徒增誤導。
+        #
+        # 保留它們的風險不是浪費:financial_statements 停更範圍窄(192 檔),
+        # 哪天首選出問題時會靜默退回窄且舊的資料,把「沒資料」變成「有資料但是舊的」。
+        # 取不到就回 None,讓呼叫端自己決定怎麼處理。
+        return None
     
     def calculate_roe(self, symbol: str, date: datetime) -> float | None:
         """
