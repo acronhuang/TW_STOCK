@@ -98,7 +98,10 @@ class MultiFactorStrategy:
         # 因子配置
         # quality 因子來源:'legacy'=stock_factors(常數,有前視偏誤)
         #                  'fundamental'=fundamental_factors(以 available_from 落後,正確)
-        self.quality_source = 'fundamental'   # Config C:走PIT正確源(原legacy有前視偏誤)
+        self._quality_source = 'fundamental'  # Config C:走PIT正確源(原legacy有前視偏誤)
+        # 註:用 property 而非普通屬性 —— 呼叫端(如 BacktestV21)是**建構之後**才設
+        # strat.quality_source = 'legacy'/'none',建構時驗證看不到那次變更。
+        # 設值即重驗,才擋得住「切換來源後某些欄位就取不到」的情況。
         # None = 動能照常當加權排序因子(現行行為);設為 0~1 則改當篩選器:
         # 先留下動能前 N% 的標的,再只用 value/quality 排序。見 calculate_composite_score。
         self.momentum_filter_pct = None
@@ -136,9 +139,101 @@ class MultiFactorStrategy:
                 }
             }
         }
-        
+
         self.name = "多因子選股策略"
-    
+        self._validate_config_against_schema()
+
+    @property
+    def quality_source(self):
+        return self._quality_source
+
+    @quality_source.setter
+    def quality_source(self, value):
+        self._quality_source = value
+        # 建構過程中 factor_config 尚未建立 → 此時不驗(建構末尾會統一驗一次)
+        if getattr(self, 'factor_config', None):
+            self._validate_config_against_schema()
+
+    # ── 設定 × schema 契約驗證 ──────────────────────────────────────────
+    # 由 _fundamental_quality() 注入的欄位。這些**不在** stock_factors,
+    # 而是在 calculate_composite_score 裡從 fundamental_factors 建欄補上,
+    # 故驗證時要查那張表而非 stock_factors。
+    _INJECTED_FIELDS = ("roe", "roa", "profit_margin", "debt_ratio",
+                        "op_margin", "fcf_margin")
+    _schema_cache = {}      # {collection: set(欄名)} —— 類別層快取,避免每次建構都掃
+
+    @classmethod
+    def _collection_fields(cls, db, coll, date_field, sample_periods=2):
+        """取該 collection 近幾期出現過的所有欄名。
+
+        為什麼取「近幾期的所有文件」而非單一文件:同一期不同標的的欄位並不一致
+        (例:pe_ratio 只有約 68% 的標的有),只看一筆會把存在的欄位誤判成不存在。
+        又為什麼限定近幾期:全表掃太貴,而近期足以判斷「欄位是否存在於 schema」。
+        """
+        if coll in cls._schema_cache:
+            return cls._schema_cache[coll]
+        try:
+            periods = sorted(db[coll].distinct(date_field, {}), reverse=True)[:sample_periods]
+            fields = set()
+            for p in periods:
+                for doc in db[coll].find({date_field: p}):
+                    fields.update(doc.keys())
+        except Exception:
+            return None                      # 查不動 → 回 None,呼叫端會跳過驗證
+        cls._schema_cache[coll] = fields if fields else None
+        return cls._schema_cache[coll]
+
+    def _validate_config_against_schema(self):
+        """建構時檢查 factor_config 引用的欄位真的取得到,取不到就拋錯。
+
+        為什麼要在建構時擋(2026-08-13 加):
+            calculate_composite_score 對不存在的欄位執行
+            `if factor_name not in factors_df.columns: continue` —— **靜默跳過**。
+            這行把兩件本質不同的事混為一談:
+              ① 欄位根本不在該表 schema → 設定錯誤,應立刻失敗
+              ② 欄位存在但這筆是 null   → 資料缺漏,跳過才是對的
+            混淆的代價:op_margin(0.40)+fcf_margin(0.30)佔 quality 權重 70%,
+            因 stock_factors 無此二欄而從未生效,而且**不拋例外、不留 log**,
+            直到 2026-08-13 才被發現。修好後十年年化 21.04% → 26.64%。
+
+        刻意只在「確實測得到」時才判定失敗:若 DB 連不上或該表無資料,
+        無法區分「設定錯」與「量不到」,此時跳過驗證並印提示 —— 不要在
+        測不準的情況下擋住啟動。
+        """
+        checks = []      # (欄位, 來源 collection, 日期欄)
+        for cat, cfg in self.factor_config.items():
+            for f in cfg.get('factors', {}):
+                if self.quality_source == 'fundamental' and f in self._INJECTED_FIELDS:
+                    checks.append((f, 'fundamental_factors', 'period_end'))
+                else:
+                    checks.append((f, 'stock_factors', 'date'))
+
+        problems, unmeasurable = [], set()
+        for field, coll, date_field in checks:
+            fields = self._collection_fields(self.db, coll, date_field)
+            if fields is None:
+                unmeasurable.add(coll)
+                continue
+            if field not in fields:
+                hint = ""
+                near = [x for x in fields if field.replace('_', '') in x.replace('_', '')
+                        or x.replace('_', '') in field.replace('_', '')]
+                if near:
+                    hint = f"(該表有相近欄名:{', '.join(sorted(near)[:3])})"
+                problems.append(f"{coll} 沒有欄位 `{field}`{hint}")
+
+        if unmeasurable:
+            print(f"⚠️  設定契約驗證跳過({', '.join(sorted(unmeasurable))} 取不到樣本)"
+                  f" —— 無法區分『設定錯』與『量不到』,不在此時擋住啟動")
+        if problems:
+            raise ValueError(
+                "factor_config 引用了取不到的欄位,該因子會被靜默跳過(權重照算、貢獻為零):\n  - "
+                + "\n  - ".join(problems)
+                + f"\n\n目前 quality_source={self.quality_source!r}。"
+                  "\n若欄位應由 _fundamental_quality() 注入,請確認它有回傳該欄;"
+                  "\n若應直接來自 stock_factors,請確認欄名與該表一致。")
+
+
     def calculate_factor_score(self, 
                                factors_df: pd.DataFrame,
                                factor_name: str,
