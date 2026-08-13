@@ -265,6 +265,13 @@ def run(db, session, need, args):
                     val = cur - pv
                 else:
                     val = cur
+                # 只補「這個 type 本身也缺」的:need 是以 IncomeAfterTaxes 有無決定的,
+                # 但同一季的 Revenue 可能已存在(來自 FinMind)。不加這道檢查會連帶
+                # 覆寫它 —— 2026-08-13 首次跑 --sector 時就這樣「更新 585 筆」。
+                # 兩邊都源自官方申報,值本身不算錯,但金融業的 MOPS 欄位是「淨收益」
+                # 而 FinMind 是「Revenue」,語意未必等價,不該無聲替換。
+                if local_quarter(db, sid, dt, typ) is not None:
+                    continue
                 ops.append(UpdateOne(
                     {"stock_id": sid, "date": dt, "type": typ},
                     {"$set": {"value": val * 1000, "origin_name": f"{typ}(MOPS差分)",
