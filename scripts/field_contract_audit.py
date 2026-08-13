@@ -54,6 +54,8 @@ sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis")
 
 from pymongo import MongoClient
 
+from src.audit.guard import AuditGuard
+
 SPARSE_THRESHOLD = 0.30   # 覆蓋率低於此 → SPARSE(權重實際被稀釋)
 SAMPLE_DATES = 8          # 抽幾個交易日(跨日抽樣,避開單日未補齊的偏誤)
 
@@ -147,20 +149,14 @@ def main():
             date_cache[coll] = pick_dates(db, coll, args.dates)
         return date_cache[coll]
 
-    # ── 對照組先跑:不通過就完全不輸出結論 ──────────────────────────
-    print("對照組(不通過即中止,避免又產生一份看似正常的假結論):")
-    control_ok = True
+    # ── 對照組:交由 AuditGuard 強制執行 ────────────────────────────
+    # 刻意不自己寫這段迴圈:第二版就是自己寫、只涵蓋一個 collection,
+    # 另一條路徑沒被驗證就吐假警報。護欄會在 finish() 檢查涵蓋完整性。
+    guard = AuditGuard("欄位契約稽核")
     for coll, field, expect in CONTROLS:
-        cov, _ = coverage(db, coll, field, dates_for(coll))
-        got = grade(cov, args.sparse_threshold)
-        ok = (got == expect)
-        control_ok &= ok
-        print(f"  {'✅' if ok else '🔴'} {coll}.{field:<16} 期望 {expect:<7} "
-              f"實得 {got:<7}(最佳單期覆蓋 {cov:.0%})")
-    if not control_ok:
-        print("\n🔴 對照組未通過 —— 取樣或判定邏輯有問題,本次不輸出任何結論。")
-        print("   (第一版就是在這裡出錯:用 _id 倒序取樣,把存在的欄位報成 MISSING)")
-        raise SystemExit(1)
+        guard.add_control(coll, field, expect)
+    guard.verify(lambda coll, field: grade(
+        coverage(db, coll, field, dates_for(coll))[0], args.sparse_threshold))
 
     # ── 正式稽核 ────────────────────────────────────────────────────
     buckets = {"MISSING": [], "SPARSE": [], "OK": []}
@@ -169,6 +165,7 @@ def main():
         if (coll, field) in seen:
             continue
         seen.add((coll, field))
+        guard.audited(coll)            # 登記:這個來源有被稽核 → finish() 會查它有無對照
         cov, per = coverage(db, coll, field, dates_for(coll))
         buckets[grade(cov, args.sparse_threshold)].append((src, coll, field, cov, per))
 
@@ -186,6 +183,10 @@ def main():
             print(f"     {detail}")
             if per:
                 print(f"     各日覆蓋:{', '.join(f'{p:.0%}' for p in per)}")
+
+    # 收尾檢查:每個被稽核的來源都要有雙向對照,缺一個就拋 ControlCoverageGap。
+    # 這才是護欄的核心 —— 2026-08-13 的失敗不是「沒對照」,是「對照漏了一個來源」。
+    guard.finish()
 
     print("\n" + "=" * 74)
     if buckets["MISSING"]:
