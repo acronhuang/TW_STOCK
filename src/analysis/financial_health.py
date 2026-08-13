@@ -204,22 +204,12 @@ class FinancialHealthAnalyzer:
         bsd = self._balance_from_bsd(symbol)
         if bsd and bsd.get("total_assets"):
             return bsd
-        fs = self.db.financial_statements.find_one(
-            {'symbol': symbol}, sort=[('year', -1), ('season', -1)])
-        if fs:
-            bs = fs.get('balanceSheet', {})
-            if bs:
-                return {
-                    'total_assets': _tof(bs.get('totalAssets')),
-                    'total_liabilities': _tof(bs.get('totalLiabilities')),
-                    'equity': _tof(bs.get('totalEquity') or bs.get('equity')),
-                    'current_assets': _tof(bs.get('currentAssets')),
-                    'current_liabilities': _tof(bs.get('currentLiabilities')),
-                    'cash': _tof(bs.get('cashAndCashEquivalents') or bs.get('cash')),
-                    'inventory': _tof(bs.get('inventory') or bs.get('inventories')),
-                    'source': 'financial_statements',
-                }
-
+        # 2026-08-13 移除 financial_statements fallback:
+        # 該表停更於 2026-02、僅 192 檔,已被 balance_sheet_detail(全市場)取代。
+        # 實測抽樣 300 檔的來源分布:balance_sheet_detail 217、無資料 82、
+        # quarterly_earnings 1、**financial_statements 0** —— 這條分支不可達。
+        # 留著的風險不是浪費,而是主路徑哪天失效時會靜默退回停更半年的資料,
+        # 把「沒資料」變成「看似有資料但是舊的」,後者更難發現。
         qe = self.db.quarterly_earnings.find_one(
             {'symbol': symbol}, sort=[('year', -1), ('season', -1)])
         if qe and qe.get('balance'):

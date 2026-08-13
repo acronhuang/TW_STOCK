@@ -99,19 +99,11 @@ class FinancialFilter:
 
         avg_net_margin = sum(margins) / len(margins) if margins else 0
 
-        # 取負債比（優先 balance_sheet_detail 現行全市場;fallback 舊 financial_statements 只192檔停2025）
+        # 取負債比。2026-08-13 移除 financial_statements fallback:
+        # 該表停更於 2026-02、僅 192 檔,已被 balance_sheet_detail(全市場)取代,
+        # 實測不可達。留著只會在主路徑失效時靜默給出停更半年的負債比 ——
+        # 「有數字但是舊的」比「沒數字」更難察覺。取不到就讓它是 None。
         debt_ratio = self._debt_ratio_bsd(symbol)
-        fs = None if debt_ratio is not None else self.db.financial_statements.find_one(
-            {'symbol': symbol}, sort=[('year', -1), ('season', -1)])
-        if fs:
-            bs = fs.get('balanceSheet', {})
-            ta = _tof(bs.get('totalAssets'))
-            tl = _tof(bs.get('totalLiabilities'))
-            if ta and tl and ta > 0:
-                debt_ratio = tl / ta * 100
-            else:
-                r = fs.get('ratios', {})
-                debt_ratio = _tof(r.get('debtRatio'))
 
         # 4 項檢查
         info = self.db.taiwan_stock_info.find_one({'stock_id': symbol}, {'industry_category': 1})

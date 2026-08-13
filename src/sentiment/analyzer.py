@@ -449,7 +449,7 @@ class SentimentAnalyzer:
         return '強烈看空'
 
     def _get_stock_name(self, symbol: str) -> str:
-        for col in ['taiwan_stock_info', 'stock_list']:
+        for col in ['taiwan_stock_info']:
             try:
                 rec = self.db[col].find_one({'stock_id': symbol}, {'stock_name': 1, 'name': 1})
                 if rec:

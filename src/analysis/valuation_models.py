@@ -420,11 +420,9 @@ class ValuationAnalyzer:
             if shares and shares > 0:
                 return shares * 1000  # 千股 → 股
 
-        info2 = self.db.stock_list.find_one({'stock_id': symbol})
-        if info2:
-            shares = _to_float(info2.get('outstanding_shares'))
-            if shares and shares > 0:
-                return shares * 1000
+        # 2026-08-13 移除 stock_list fallback:taiwan_stock_info 有 3,134 筆、
+        # 每日更新且永遠先命中,此分支實測不可達;而 stock_list 是停更的舊表,
+        # 真被觸發只會給出過期股數,靜默算錯市值。詳見同日的死碼清理 commit。
 
         return None
 

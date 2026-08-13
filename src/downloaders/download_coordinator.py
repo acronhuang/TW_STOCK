@@ -261,20 +261,14 @@ class DownloadCoordinator:
     def _get_symbols(self) -> list[str]:
         """從資料庫獲取股票代碼（過濾 ETF）"""
         try:
-            # 嘗試從 taiwan_stock_info 獲取
+            # 2026-08-13 移除 tickers / stocks 兩層備用:
+            # taiwan_stock_info 有 3,134 筆且每日更新,第一層永遠命中 → 後兩層
+            # 實測不可達。而 tickers/stocks 是 Node 時代遺留(stocks 停更於
+            # 2026-02),真被觸發只會拿到過期股票池、靜默下載錯的標的集合。
+            # 寧可回空清單讓呼叫端察覺,也不要拿舊資料裝作正常。
             symbols = list(self.db.taiwan_stock_info.distinct('stock_id'))
-            if symbols:
-                return self._filter_etf(symbols)
-            
-            # 備用：從 tickers 獲取
-            symbols = list(self.db.tickers.distinct('symbol'))
-            if symbols:
-                return self._filter_etf(symbols)
-            
-            # 再備用：從 stocks 獲取
-            symbols = list(self.db.stocks.distinct('symbol'))
             return self._filter_etf(symbols)
-            
+
         except Exception as e:
             self.logger.warning(f"獲取股票代碼失敗: {e}")
             return []
