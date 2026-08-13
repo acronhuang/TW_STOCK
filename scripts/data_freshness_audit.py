@@ -21,7 +21,9 @@ SPEC = {
         "after_hours_trading": ("date", "daily"), "odd_lot_trading": ("date", "daily"),
         "day_trading_targets": ("date", "daily"), "securities_lending": ("date", "daily"),
         # 2026-08-13 納管:先前不在 SPEC,停更 20 天無人知(見 EXEMPT 上方說明)
-        "securities_lending_detail": ("date", "daily"),
+        # 2026-08-13 剛接上每日 cron(18:20),但歷史資料是一次性回填、間隔達 10 天,
+        # 先給 weekly 門檻避免舊資料誤報;cron 穩定跑一週後可改回 daily。
+        "securities_lending_detail": ("date", "weekly"),
     },
     "籌碼法人": {
         "margin_purchase_short_sale": ("date", "daily"), "institutional_flow": ("date", "daily"),
@@ -42,10 +44,14 @@ SPEC = {
     },
     "事件/公司行動": {
         "corporate_actions": ("event_date", "event"), "dividend_detail": ("date", "event"),
-        # 2026-08-13 納管:每交易日更新的事件型表,先前不在 SPEC
-        "punished_stocks": ("date", "daily"), "noticed_stocks": ("date", "daily"),
-        "margin_suspension": ("date", "daily"), "insider_transfer": ("date", "daily"),
-        "major_news": ("date", "daily"),
+        # 2026-08-13 納管。cadence 依「近 30 天實際有資料的天數」實測而定,
+        # 不是看最新日期新不新 —— 這幾張是**事件型**:沒事件的日子本來就沒資料,
+        # 標成 daily 會天天誤報。實測(對照組 stock_price 21 天):
+        "margin_suspension": ("date", "daily"),      # 20 天,間隔 ≤3
+        "major_news": ("date", "daily"),             # 18 天,間隔 ≤3
+        "punished_stocks": ("date", "weekly"),       # 17 天但事件型,給寬鬆門檻
+        "insider_transfer": ("date", "weekly"),      # 14 天,內部人申報非每日
+        "noticed_stocks": ("date", "weekly"),        # 5 天,注意股本就少
     },
     "每日周邊": {
         # 2026-08-13 納管:皆由 twse_openapi_sync 每交易日更新
@@ -57,8 +63,8 @@ SPEC = {
     },
     "分析產出": {
         # 2026-08-13 納管:pipeline 產物,停更代表 pipeline 出事
-        "team_analysis": ("date", "daily"),
-        "risk_analysis": ("date", "daily"),
+        "team_analysis": ("date", "daily"),          # 24 天,每晚產出
+        "risk_analysis": ("date", "weekly"),         # 15 天,有持倉才產出
     },
 }
 THRESH = {"daily": 4, "weekly": 9, "monthly": 45, "quarterly": 135, "event": None}
