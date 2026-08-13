@@ -53,10 +53,10 @@ EMPTY_COL = "financial_detail_empty"           # {_id: "sid:dataset", last_empty
 #
 # 為什麼需要(2026-08-13 加):增量模式原本是「該檔落後於應有最新季 → 打 API →
 # 空回應就 continue」,**空回應不留任何記號**。於是 FinMind 根本沒有其最新季的
-# 那批股票會被每小時重試一次、永遠重試。實測落後檔數為三張表各 607 檔
-# = 每輪最多 1821 次 call,而每小時配額只有約 300 → 配額全被這批吃光,
-# 真正有新資料的檔永遠排不到。這才是「91 次執行只有 3 次有寫入」的成因,
-# 不是配額太小。
+# 那批股票會被每小時重試一次、永遠重試。實測落後 159 檔 = 每輪 477 次 call,
+# 而每小時配額只有約 300 → 配額全被這批吃光,真正有新資料的檔永遠排不到。
+# 這才是「91 次執行只有 3 次有寫入」的成因,不是配額太小。
+# (加上 load_universe 的存活過濾後,落後檔數 159 → 5、每輪 call 477 → 15。)
 # 財報是季度資料,14 天不重試完全足夠(季報公告後隔天就會被下一輪抓到)。
 EMPTY_BACKOFF_DAYS = 14
 
@@ -125,14 +125,37 @@ def upsert_rows(col, sid, rows):
     return len(ops), latest
 
 
-def load_universe(db, syms=None):
-    """上市+上櫃、普通股/KY股、4 位數代號。回 [stock_id,...] 排序。"""
+ALIVE_DAYS = 20   # 近 N 天有報價才算仍在交易(台股連假最長約 9 天,20 天有餘裕)
+
+
+def load_universe(db, syms=None, include_delisted=False):
+    """上市+上櫃、普通股/KY股、4 位數代號、**且仍在交易**。回 [stock_id,...] 排序。
+
+    為什麼要濾掉下市(2026-08-13 加):taiwan_stock_info 保留已下市公司,而它們
+    **永遠**不會再申報財報。實測 2120 檔股票池中有 159 檔落後於應有最新季,
+    其中 **154 檔已停牌/下市** —— 每輪 477 次 API call 幾乎全花在它們身上,
+    而每小時配額只有約 300,真正有新資料的檔永遠排不到。
+
+    這與 EMPTY_BACKOFF_DAYS 互補:存活過濾擋掉「永遠不會有」的,
+    退避擋掉「還在市但這季剛好還沒公告」的。只有退避的話,下市股每 14 天
+    仍會被重試一輪。
+
+    全回填歷史資料時可能需要下市股的舊財報 → --include-delisted 保留退路。
+    """
     if syms:
         return syms
     q = {"type": {"$in": ["twse", "tpex"]},
          "security_type": {"$in": ["Stock", "KY-Stock"]},
          "stock_id": {"$regex": "^[0-9]{4}$"}}
-    return sorted(db.taiwan_stock_info.distinct("stock_id", q))
+    ids = sorted(db.taiwan_stock_info.distinct("stock_id", q))
+    if include_delisted:
+        return ids
+    latest = db.stock_price.find_one(sort=[("date", -1)])
+    if not latest:
+        return ids                       # 無股價資料可判斷 → 不過濾,寧可多打
+    cutoff = latest["date"] - timedelta(days=ALIVE_DAYS)
+    alive = set(db.stock_price.distinct("symbol", {"date": {"$gte": cutoff}}))
+    return [s for s in ids if s in alive]
 
 
 def _empty_key(sid, dataset):
@@ -234,6 +257,8 @@ def main():
     ap.add_argument("--delay", type=float, default=0.35, help="每次 API call 間隔秒(限流)")
     ap.add_argument("--sym", help="只處理指定代號(逗號分隔)")
     ap.add_argument("--datasets", help="只處理指定表(逗號分隔 collection 名)")
+    ap.add_argument("--include-delisted", action="store_true",
+                    help="連已下市/停牌的股票也處理(預設排除)。全回填歷史時可能需要")
     ap.add_argument("--empty-backoff-days", type=int, default=EMPTY_BACKOFF_DAYS,
                     help="某(檔,資料集)回空後,幾天內不再重試(預設 %d;0=關閉退避)" % EMPTY_BACKOFF_DAYS)
     ap.add_argument("--dry-run", action="store_true", help="只印不寫")
@@ -253,7 +278,7 @@ def main():
         targets = [(c, d) for c, d in targets if c in want]
 
     syms = [s.strip() for s in args.sym.split(",")] if args.sym else None
-    universe = load_universe(db, syms)
+    universe = load_universe(db, syms, include_delisted=args.include_delisted)
     exp_latest = expected_latest_quarter()
     log.info(f"股票池 {len(universe)} 檔 | 模式={'全回填' if args.full else '增量'} | "
              f"應有最新季底={exp_latest:%Y-%m-%d} | limit={args.limit}")
