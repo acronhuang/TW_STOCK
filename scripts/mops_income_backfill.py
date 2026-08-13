@@ -151,7 +151,10 @@ def main():
                          "例如 --sector '金融|保險|證券'。這批公司多半連一筆損益都沒有,"
                          "無法從 fundamental_factors 的 null 反推,故需另一種取樣方式")
     ap.add_argument("--from-year", type=int, default=2013,
-                    help="--sector 模式的起始年(預設 2013,配合 IFRS 後的資料深度)")
+                    help="--sector/--symbols 模式的起始年(預設 2013,配合 IFRS 後的資料深度)")
+    ap.add_argument("--symbols", default=None,
+                    help="直接指定代號(逗號分隔),逐季掃該檔缺哪些。"
+                         "用於零星補洞,例如 FinMind 排除下市股後仍落後的個位數檔")
     args = ap.parse_args()
 
     db = MongoClient(DB_URI)[DB_NAME]
@@ -170,13 +173,16 @@ def main():
     market = {d["stock_id"]: typek_of(d.get("type"))
               for d in db.taiwan_stock_info.find({}, {"stock_id": 1, "type": 1})}
 
-    if args.sector:
-        # 依產業補洞。這批(典型是金融保險證券)多半在 financial_statement_detail
+    if args.sector or args.symbols:
+        # 依產業或指定代號補洞。這批(典型是金融保險證券)多半在 financial_statement_detail
         # 連一筆都沒有,所以 fundamental_factors 也生不出列 —— 無法用「net_income_ttm
         # 為 null」反推,必須直接以「該檔該季有沒有資料」為準逐季掃。
-        syms = [d["stock_id"] for d in db.taiwan_stock_info.find(
-            {"industry_category": {"$regex": args.sector}, "security_type": "Stock"},
-            {"stock_id": 1})]
+        if args.symbols:
+            syms = [x.strip() for x in args.symbols.split(",") if x.strip()]
+        else:
+            syms = [d["stock_id"] for d in db.taiwan_stock_info.find(
+                {"industry_category": {"$regex": args.sector}, "security_type": "Stock"},
+                {"stock_id": 1})]
         latest_year = db.stock_price.find_one(sort=[("date", -1)])["date"].year
         need = {}
         for sid in syms:
@@ -190,7 +196,7 @@ def main():
                         continue          # 上市前 / 未來季,來源不會有
                     if local_quarter(db, sid, dt, "IncomeAfterTaxes") is None:
                         need.setdefault((y, q, market.get(sid, "sii")), set()).add(sid)
-        print(f"--sector '{args.sector}':{len(syms)} 檔符合,"
+        print(f"{'--symbols' if args.symbols else '--sector'} :{len(syms)} 檔,"
               f"需補 {sum(len(v) for v in need.values())} 個(股票,季)")
         return run(db, session, need, args)
 
