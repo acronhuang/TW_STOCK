@@ -51,6 +51,7 @@ MOM_FILTER_PCT = 0.30
 # 長期無人察覺。此監控就是為了讓同類問題不再靜默。
 COMMITTEE_BIAS_MAX = 0.75
 COMMITTEE_NULL_MAX = 0.05   # 抽不到票（棄權）比例上限：超過代表回覆格式常態不合規
+ACTIVE_DAYS = 5             # 現任委員判定：最近幾個分析日投過票才算在職
 
 SYN = [('賣出', ('賣出', '賣', '減碼', '出場', '看空')),
        ('買進', ('買進', '買', '加碼', '進場', '看多')),
@@ -106,6 +107,25 @@ def prior_return(ser, sym, p0d, back):
         return None
     p_prev, p0 = s[i - back][1], s[i][1]
     return (p0 / p_prev - 1.0) if p_prev else None
+
+
+def _config_drift(active):
+    """設定檔的委員名單 vs 最近實際投票的名單。
+
+    兩者不一致有兩種可能：(a) 剛改設定、尚未跑到 —— 正常，過幾輪就會收斂；
+    (b) 設定沒生效（env 覆寫、模型不存在、pull 失敗）—— 這種會靜默持續。
+    本專案的教訓是設定檔不等於現實，故這裡只據**實際投票紀錄**判在職，
+    設定僅作對照輸出，不參與 gate。
+    """
+    try:
+        sys.path.insert(0, '/home/mdsadmin/Stock/tw-stock-analysis')
+        from src.moe.consensus import COMMITTEE as CFG
+    except Exception:
+        return {'configured': None, 'drift': None}
+    cfg = set(CFG)
+    return {'configured': sorted(cfg),
+            'drift': {'設定有但沒在投': sorted(cfg - active),
+                      '在投但設定沒有': sorted(active - cfg)} if cfg != active else None}
 
 
 def compute(fwd):
@@ -171,15 +191,34 @@ def compute(fwd):
     mv = defaultdict(dict)
     seat = Counter()      # 出席次（含抽不到票）
     null_v = Counter()    # 抽不到票次數 —— mv 只收得到有效票，棄權會靜默消失
+    tenure = {}           # 模型 → (首次, 最後) 投票日
     for d in docs:
+        dt = d.get('date')
         for v in (d.get('consensus') or {}).get('votes') or []:
             if not v.get('model'):
                 continue
-            seat[v['model']] += 1
+            m = v['model']
+            seat[m] += 1
+            if dt:
+                f, l = tenure.get(m, (dt, dt))
+                tenure[m] = (min(f, dt), max(l, dt))
             if v.get('vote') in V:
-                mv[str(d['_id'])][v['model']] = V[v['vote']]
+                mv[str(d['_id'])][m] = V[v['vote']]
             else:
-                null_v[v['model']] += 1
+                null_v[m] += 1
+
+    # 現任委員 = 最近 ACTIVE_DAYS 個分析日實際投過票的模型。
+    # 用「實際投票紀錄」而非 consensus.COMMITTEE 設定，因為設定改了不代表已生效，
+    # 而已退役委員的歷史數據會一直留在庫裡 —— 若拿全歷史判退化，
+    # 會對早已換掉的委員天天告警（hermes3:8b 2026-08-06 退役即為此例）。
+    all_days = sorted({d['date'] for d in docs if d.get('date')})
+    recent_days = set(all_days[-ACTIVE_DAYS:])
+    active = set()
+    for d in docs:
+        if d.get('date') in recent_days:
+            for v in (d.get('consensus') or {}).get('votes') or []:
+                if v.get('model'):
+                    active.add(v['model'])
     models = sorted({m for x in mv.values() for m in x})
     pairs = []
     for i in range(len(models)):
@@ -205,12 +244,19 @@ def compute(fwd):
             if m in x:
                 cnt[x[m]] += 1; tot += 1
         if tot:
+            f, l = tenure.get(m, (None, None))
             b = {'seats': seat[m], 'buy%': round(cnt[1] * 100 / tot, 1),
                  'hold%': round(cnt[0] * 100 / tot, 1),
                  'sell%': round(cnt[-1] * 100 / tot, 1),
-                 'null%': round(null_v[m] * 100 / seat[m], 1) if seat[m] else 0.0}
+                 'null%': round(null_v[m] * 100 / seat[m], 1) if seat[m] else 0.0,
+                 'active': m in active,
+                 'first_seen': f, 'last_seen': l}
             bias[m] = b
-            # 退化委員偵測：恆說同一句話，或常態棄權 —— 兩者都是「出席但沒貢獻資訊」
+            # 退化委員偵測：恆說同一句話，或常態棄權 —— 兩者都是「出席但沒貢獻資訊」。
+            # 只對現任委員告警：已退役者的歷史數據無法再改變，天天報只會變成噪音，
+            # 但仍留在 bias 表中供追溯（見 print 的「已退役」列）。
+            if m not in active:
+                continue
             top = max(b['buy%'], b['hold%'], b['sell%']) / 100
             if top > COMMITTEE_BIAS_MAX:
                 degenerate.append({'model': m, 'reason': '單一票種佔比過高',
@@ -258,7 +304,9 @@ def compute(fwd):
             'prior_strata': strat,
             'independent_days': {'buy': days_buy, 'sell': days_sell},
             'committee': {'models': models, 'pairs': pairs, 'max_corr_pair': max_pair,
-                          'bias': bias, 'degenerate': degenerate},
+                          'bias': bias, 'degenerate': degenerate,
+                          'active': sorted(active), 'active_days': ACTIVE_DAYS,
+                          **_config_drift(active)},
             '_rows': usable}
 
 
@@ -302,13 +350,28 @@ def run_one(window, a):
     mp = r['committee']['max_corr_pair']
     if mp:
         print(f"委員最高相關: {mp['a']} × {mp['b']} 同票{mp['agree']*100:.1f}% corr={mp['corr']:+.2f}")
-    deg = r['committee'].get('degenerate') or []
+    cm = r['committee']
+    deg = cm.get('degenerate') or []
+    if cm.get('active'):
+        print(f"現任委員(最近 {cm.get('active_days')} 個分析日有投票): {', '.join(cm['active'])}")
+    # 注意：這裡不可用 b 當迴圈變數 —— b 是上面的 r['buy']，被遮蔽會讓下面的
+    # NFR 判定拋 KeyError（2026-08-14 實測踩過，會讓每日 cron 整支掛掉）
+    retired = [(m, x) for m, x in (cm.get('bias') or {}).items() if not x.get('active')]
+    for m, rb in sorted(retired, key=lambda x: str(x[1].get('last_seen')), reverse=True):
+        top = max(rb['buy%'], rb['hold%'], rb['sell%'])
+        print(f"   (已退役 {str(rb.get('last_seen'))[:10]}) {m}: 出席{rb['seats']} "
+              f"最高票種{top:.1f}%" + ("  ← 當年未被察覺的退化委員" if top > COMMITTEE_BIAS_MAX * 100 else ""))
+    if cm.get('drift'):
+        d = cm['drift']
+        print(f"ⓘ 設定 vs 實際投票不一致: 設定有但沒在投={d['設定有但沒在投'] or '—'} / "
+              f"在投但設定沒有={d['在投但設定沒有'] or '—'}")
+        print("   (剛改設定尚未跑到屬正常；若持續多輪不收斂代表設定沒生效)")
     if deg:
-        print("🔴 退化委員(出席但不提供資訊):")
+        print("🔴 退化現任委員(出席但不提供資訊):")
         for x in deg:
             print(f"   {x['model']}: {x['reason']} {x['value']*100:.1f}% > 上限 {x['limit']*100:.0f}%")
-    elif r['committee'].get('bias'):
-        print("✅ 委員票種偏態檢查通過(無單一票種>75%、無棄權>5%)")
+    elif cm.get('bias'):
+        print("✅ 現任委員票種偏態檢查通過(無單一票種>75%、無棄權>5%)")
 
     # NFR-QUAL 判定 —— 命中率用超額基準（與均超額同基準，見檔頭）
     qual_pass = None

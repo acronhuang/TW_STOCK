@@ -213,18 +213,31 @@ def show():
     # ── 委員偏態 ────────────────────────────────────────────────────
     st.markdown("### 委員票種偏態")
     st.caption("單一票種佔比 >75% 的委員等於「恆說同一句話」，出席但不提供資訊。"
-               "本專案曾有 hermes3:8b 出席 8,913 次、84.7% 都投買進而長期無人察覺。")
+               "本專案曾有 hermes3:8b 出席 8,913 次、84.7% 都投買進而長期無人察覺，"
+               "直到 2026-08-06 才被 gemma2:9b 取代。"
+               "**只有現任委員會觸發告警**——已退役者的歷史無法再改變，列出僅供追溯。")
     snap = _snapshot()
     cm = (snap or {}).get("committee") or {}
     if cm.get("bias"):
         rows = []
-        for m, b in sorted(cm["bias"].items(), key=lambda x: -(x[1].get("seats") or 0)):
+        for m, b in sorted(cm["bias"].items(),
+                           key=lambda x: (not x[1].get("active"), -(x[1].get("seats") or 0))):
             top = max(b.get("buy%", 0), b.get("hold%", 0), b.get("sell%", 0))
-            rows.append({"模型": m, "出席": b.get("seats"), "買進%": b.get("buy%"),
+            act = b.get("active")
+            rows.append({"模型": m, "在職": "現任" if act else "已退役",
+                         "任期迄": str(b.get("last_seen"))[:10],
+                         "出席": b.get("seats"), "買進%": b.get("buy%"),
                          "持有%": b.get("hold%"), "賣出%": b.get("sell%"),
                          "棄權%": b.get("null%"),
-                         "狀態": "🔴 退化" if top > 75 else "✅"})
+                         "狀態": ("🔴 退化" if top > 75 else "✅") if act
+                                 else ("⚪ 已退役(當年退化)" if top > 75 else "⚪ 已退役")})
         st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
+        if cm.get("drift"):
+            d = cm["drift"]
+            st.info(f"ⓘ 設定檔與實際投票名單不一致 —— "
+                    f"設定有但沒在投：`{d.get('設定有但沒在投') or '—'}`；"
+                    f"在投但設定沒有：`{d.get('在投但設定沒有') or '—'}`。"
+                    f"剛改設定尚未跑到屬正常；若持續多輪不收斂，代表設定沒生效。")
         mp = cm.get("max_corr_pair")
         if mp:
             st.caption(f"最高相關委員對：**{mp['a']} × {mp['b']}**　"
