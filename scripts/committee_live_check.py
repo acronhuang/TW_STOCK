@@ -52,8 +52,12 @@ def main():
         # 用 _id 的內嵌時間戳判「最近寫入」,不能用 date 欄位 ——
         # team_analysis.date 是**分析日**(午夜時間戳),不是寫入時間,
         # 拿它跟 now-N 小時比會把當天整批排除掉,靜默回 0 筆。
+        # 必須用 **tz-aware UTC**:ObjectId.from_datetime 把 naive datetime 當成 UTC,
+        # 傳本地時間(UTC+8)會讓切點變成未來 8 小時,查詢永遠靜默回 0 筆。
+        # 2026-08-14 實測踩過:週跑正在寫入,檢查卻回報「沒有分析文件」。
         from bson import ObjectId
-        cut = datetime.datetime.now() - datetime.timedelta(hours=a.since_hours)
+        cut = (datetime.datetime.now(datetime.timezone.utc)
+               - datetime.timedelta(hours=a.since_hours))
         q = {'_id': {'$gte': ObjectId.from_datetime(cut)},
              'consensus.votes': {'$exists': True}}
         scope = f"最近 {a.since_hours} 小時內寫入"
