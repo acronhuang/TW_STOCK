@@ -49,9 +49,14 @@ def main():
     print(f"設定的委員會 = {cfg}")
 
     if a.since_hours:
+        # 用 _id 的內嵌時間戳判「最近寫入」,不能用 date 欄位 ——
+        # team_analysis.date 是**分析日**(午夜時間戳),不是寫入時間,
+        # 拿它跟 now-N 小時比會把當天整批排除掉,靜默回 0 筆。
+        from bson import ObjectId
         cut = datetime.datetime.now() - datetime.timedelta(hours=a.since_hours)
-        q = {'date': {'$gte': cut}, 'consensus.votes': {'$exists': True}}
-        scope = f"最近 {a.since_hours} 小時"
+        q = {'_id': {'$gte': ObjectId.from_datetime(cut)},
+             'consensus.votes': {'$exists': True}}
+        scope = f"最近 {a.since_hours} 小時內寫入"
     else:
         days = sorted({d['date'] for d in DB.team_analysis.find(
             {'consensus.votes': {'$exists': True}}, {'date': 1}) if d.get('date')})
