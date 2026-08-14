@@ -182,6 +182,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", help="YYYYMMDD，預設最近一個交易日")
     ap.add_argument("--backfill", nargs=2, metavar=("START", "END"), help="YYYYMMDD YYYYMMDD")
+    ap.add_argument("--repair", action="store_true",
+                    help="找出列數不足的日期(margin<3 或 inst<6)重抓。"
+                         "密集回填時 TWSE 會限流,少數日期會靜默抓不到,用這個補")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--skip-check", action="store_true", help="跳過已知答案對照（不建議）")
     ap.add_argument("--sleep", type=float, default=1.2, help="回填時每日間隔秒數（禮貌性節流）")
@@ -192,6 +195,33 @@ def main():
             print("🔴 已知答案對照未通過 —— 端點格式可能已變，不寫入。")
             return 1
         print()
+
+    if a.repair:
+        # 只挑「已知是交易日、但列數不足」的日期重抓。
+        # 判交易日用 trading_dates（本專案的權威日曆），不靠 TWSE 回傳與否，
+        # 否則抓失敗與非交易日會被混為一談，永遠修不完也查不出。
+        from collections import Counter
+        tds = set(DB.trading_dates.distinct("date"))
+        need = set()
+        for coll, exp in (("total_margin", 3), ("total_institutional_investors", 6)):
+            per = Counter(d["date"] for d in DB[coll].find({}, {"date": 1}))
+            need |= {d for d, n in per.items() if n < exp and d in tds}
+        days = sorted(datetime.datetime.strptime(d, "%Y-%m-%d").date() for d in need)
+        print(f"待修復日期 {len(days)} 天"
+              + (f"（{days[0]} ~ {days[-1]}）" if days else ""))
+        fixed = still = 0
+        for i, d in enumerate(days, 1):
+            m, n = sync_day(d, a.dry_run, quiet=True)
+            if m == 3 and n == 6:
+                fixed += 1
+            else:
+                still += 1
+                print(f"  ⚠️ {d} 仍不完整: margin {m} / inst {n}")
+            if i % 10 == 0:
+                print(f"  [{i}/{len(days)}] 已修 {fixed} / 仍缺 {still}")
+            time.sleep(max(a.sleep, 3.0))     # 修復模式放慢，避免再次被限流
+        print(f"完成:修復 {fixed} 天 / 仍不完整 {still} 天")
+        return 0 if still == 0 else 1
 
     if a.backfill:
         s = datetime.datetime.strptime(a.backfill[0], "%Y%m%d").date()
