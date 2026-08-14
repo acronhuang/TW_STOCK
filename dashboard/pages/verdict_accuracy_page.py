@@ -246,6 +246,15 @@ def show():
                           if (mp.get("corr") or 0) > 0.7 else ""))
         for x in (cm.get("degenerate") or []):
             st.error(f"🔴 {x['model']}：{x['reason']} {x['value']*100:.1f}% > 上限 {x['limit']*100:.0f}%")
+        red = cm.get("redundant") or []
+        for p in red:
+            st.error(f"🔴 冗餘委員對 **{p['a']} × {p['b']}**：同票 {p['agree']*100:.1f}%"
+                     f"（上限 {p['limit']*100:.0f}%）corr {p['corr']:+.2f} —— "
+                     f"三人合議實際上只有兩個獨立意見")
+        if red:
+            st.caption("⚠️ 冗餘與模型家族無關：2026-08-15 實測 gemma2:9b × qwen2.5:7b "
+                       "雖是不同家族，同票率仍達 86.7%、corr +0.91，比換血前的 qwen 手足對更高。"
+                       "換家族不保證拿到多樣性，只能換完後實測同票率。")
     else:
         st.info("尚無 verdict_performance 快照（跑一次 SLI 不加 --dry-run 即可產生）")
 

@@ -52,6 +52,17 @@ MOM_FILTER_PCT = 0.30
 COMMITTEE_BIAS_MAX = 0.75
 COMMITTEE_NULL_MAX = 0.05   # 抽不到票（棄權）比例上限：超過代表回覆格式常態不合規
 ACTIVE_DAYS = 5             # 現任委員判定：最近幾個分析日投過票才算在職
+# 委員對同票率上限：超過代表兩人幾乎在說同一件事，三人委員會實際只有兩個獨立意見。
+# 依據（2026-08-15 實測，30 題真實顧問草案、同提示詞、temp0 固定 seed）：
+#   llama3.1 × gemma2 = 56.7%/+0.41　llama3.1 × qwen2.5:7b = 56.7%/+0.41
+#   gemma2 × qwen2.5:7b = 86.7%/+0.91  ← 不同家族卻高度重疊
+# 這推翻了「換不同家族就能拿到多樣性」的假設 —— 冗餘與模型家族無關，
+# 只能靠實測同票率發現，故必須有這個告警而不是靠選型時的直覺。
+PAIR_AGREE_MAX = 0.85
+# 判偏態所需的最低票數：新委員剛上線時票數個位數，100% 買進只是雜訊不是偏態。
+# 2026-08-15 實測踩過：llama3.1 上線數小時、10 票全買，SLI 直接報 100% 破門檻，
+# 而 committee_live_check.py 因為有這道門檻所以正確地不判定。兩支要一致。
+MIN_MODEL_VOTES = 20
 
 SYN = [('賣出', ('賣出', '賣', '減碼', '出場', '看空')),
        ('買進', ('買進', '買', '加碼', '進場', '看多')),
@@ -237,6 +248,9 @@ def compute(fwd):
                 pairs.append({'a': models[i], 'b': models[j], 'n': n,
                               'agree': round(agree, 3), 'corr': round(corr, 3) if corr is not None else None})
     max_pair = max((p for p in pairs if p['corr'] is not None), key=lambda p: p['corr'], default=None)
+    # 冗餘委員對：只看**現任**兩兩組合（已退役的重疊無法再改變，報了只是噪音）
+    redundant = [dict(p, limit=PAIR_AGREE_MAX) for p in pairs
+                 if p['a'] in active and p['b'] in active and p['agree'] > PAIR_AGREE_MAX]
     bias, degenerate = {}, []
     for m in models:
         cnt = Counter(); tot = 0
@@ -255,7 +269,7 @@ def compute(fwd):
             # 退化委員偵測：恆說同一句話，或常態棄權 —— 兩者都是「出席但沒貢獻資訊」。
             # 只對現任委員告警：已退役者的歷史數據無法再改變，天天報只會變成噪音，
             # 但仍留在 bias 表中供追溯（見 print 的「已退役」列）。
-            if m not in active:
+            if m not in active or tot < MIN_MODEL_VOTES:
                 continue
             top = max(b['buy%'], b['hold%'], b['sell%']) / 100
             if top > COMMITTEE_BIAS_MAX:
@@ -304,7 +318,7 @@ def compute(fwd):
             'prior_strata': strat,
             'independent_days': {'buy': days_buy, 'sell': days_sell},
             'committee': {'models': models, 'pairs': pairs, 'max_corr_pair': max_pair,
-                          'bias': bias, 'degenerate': degenerate,
+                          'bias': bias, 'degenerate': degenerate, 'redundant': redundant,
                           'active': sorted(active), 'active_days': ACTIVE_DAYS,
                           **_config_drift(active)},
             '_rows': usable}
@@ -372,6 +386,15 @@ def run_one(window, a):
             print(f"   {x['model']}: {x['reason']} {x['value']*100:.1f}% > 上限 {x['limit']*100:.0f}%")
     elif cm.get('bias'):
         print("✅ 現任委員票種偏態檢查通過(無單一票種>75%、無棄權>5%)")
+    red = cm.get('redundant') or []
+    if red:
+        print(f"🔴 冗餘委員對(同票率>{PAIR_AGREE_MAX*100:.0f}%,三人會實際少一個獨立意見):")
+        for p in red:
+            print(f"   {p['a']} × {p['b']}: 同票 {p['agree']*100:.1f}% corr {p['corr']:+.2f} (n={p['n']})")
+        print("   註:冗餘與模型家族無關 —— 實測 gemma2 × qwen2.5:7b 雖不同家族仍達 86.7%,"
+              "換家族不保證有效,要換就得實測同票率")
+    elif cm.get('pairs'):
+        print(f"✅ 現任委員無冗餘對(同票率皆 ≤{PAIR_AGREE_MAX*100:.0f}%)")
 
     # NFR-QUAL 判定 —— 命中率用超額基準（與均超額同基準，見檔頭）
     qual_pass = None
@@ -440,14 +463,15 @@ def run_one(window, a):
 
     # 退化委員獨立告警 —— 與 NFR gate 分開,因為它是「委員會組成」的問題,
     # 不是「判斷準不準」的問題,兩者要能各自被看見(hermes3 就是被整體數字蓋過去的)
-    if a.alert and deg:
+    if a.alert and (deg or red):
+        msgs = [f"{x['model']} {x['reason']} {x['value']*100:.1f}%" for x in deg]
+        msgs += [f"{p['a']}×{p['b']} 同票 {p['agree']*100:.1f}%" for p in red]
         DB.schedule_alerts.create_index([('ts', -1)])
         DB.schedule_alerts.insert_one({
             'ts': datetime.datetime.now(), 'level': 'warning', 'source': 'consensus_committee',
-            'message': "⚠️ 退化委員: " + "; ".join(
-                f"{x['model']} {x['reason']} {x['value']*100:.1f}%" for x in deg),
-            'detail': deg, 'resolved': False})
-        print("[alert] 已寫退化委員告警")
+            'message': "⚠️ 委員會組成問題: " + "; ".join(msgs),
+            'detail': {'degenerate': deg, 'redundant': red}, 'resolved': False})
+        print("[alert] 已寫委員會組成告警")
     return qual_pass
 
 
