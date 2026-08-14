@@ -1186,6 +1186,9 @@ def main():
                         help="自癒後若殘留『疑似上游延遲』（筆數不足），等此分鐘再重試一次（預設 10）")
     parser.add_argument("--no-delay-retry", action="store_true",
                         help="關閉上述延遲重試（測試用，或確定不想等）")
+    parser.add_argument("--final-confirm-wait", type=int, default=60,
+                        help="升級為『需人工』前,等此秒數讓寫入落地再確認一次"
+                             "（預設 60；0=不等待直接重查）。防的是複檢撞上寫入的 race")
     args = parser.parse_args()
 
     client = MongoClient("localhost", 27017)
@@ -1231,6 +1234,35 @@ def main():
             ok2, fail2 = check_integrity(db)
             for item in ok2 + fail2:
                 print(f"  {item}")
+
+        # ── 升級前最終確認(2026-08-13 加)──────────────────────────────
+        #
+        # 為什麼:自癒觸發的 backfill 是非同步的,複檢可能在「寫入正在進行」的
+        # 當下讀到舊值 → 判成「需人工」但資料其實好好的。
+        # 2026-08-13 實例:三次檢查都讀到 stock_price 2,139 筆並升級為需人工,
+        # 但該日資料在 **20:12-20:13 才寫入 6,558 筆**,複檢(20:13)正好撞上寫入,
+        # 事後查 DB 是 6,559 筆、完全正常。8/11、8/12 都自癒成功,故屬偶發 race。
+        #
+        # 「需人工」是最高等級的結論,值得為它多花一次查詢:寫入落地後再確認一次,
+        # 數字有改善就以新結果為準。假紅燈的代價不只是白跑一趟 —— 它會讓下次
+        # 真的壞掉時被當成「又是那個假警報」。
+        #
+        # 刻意帶等待:立即重查對這個 race 無效(寫入與複檢只差幾秒)。
+        if fail2:
+            wait_s = args.final_confirm_wait
+            if wait_s > 0:
+                print(f"\n  ⏳ 準備升級為「需人工」前,等 {wait_s} 秒讓寫入落地再確認一次…")
+                time.sleep(wait_s)
+            ok3, fail3 = check_integrity(db)
+            print("\n  ── 升級前最終確認 ──")
+            for item in ok3 + fail3:
+                print(f"  {item}")
+            if len(fail3) < len(fail2):
+                print(f"\n  ✅ 最終確認:異常由 {len(fail2)} 項降為 {len(fail3)} 項 "
+                      f"—— 先前是寫入未落地造成的假紅燈,以本次結果為準")
+                ok2, fail2 = ok3, fail3
+            else:
+                print(f"\n  (最終確認結果相同,維持 {len(fail2)} 項)")
 
         if fail2:
             print(f"\n  🚨 自癒後仍 {len(fail2)} 項異常，需人工")
