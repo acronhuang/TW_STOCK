@@ -137,9 +137,19 @@ DATA_TABLES = {
             "name": "整體市場融資融劵表",
             "dataset": "TaiwanStockTotalMarginPurchaseShortSale",
             "collection": "total_margin",
+            "disabled": True,
+            "disabled_reason": (
+                "2026-08-15 改由 scripts/twse_market_totals_sync.py 走 TWSE RWD"
+                "(MI_MARGN?selectType=MS)取得。原因:FinMind 此資料集回 402 已 14 天、"
+                "累積 130 則告警,靠每小時重試 24 次硬撈,浪費配額且造成告警疲勞。"
+                "實測 TWSE 與 FinMind 同日數值完全相同(抽 12 天涵蓋全部 3 種 name,0 不符),"
+                "換源不改變語意。"),
             "params": {"start_date": "2020-01-01"},
-            "indexes": [("date", DESCENDING)],
-            "unique_keys": ["date"],
+            "indexes": [("date", DESCENDING), ("name", ASCENDING)],
+            # 🔴 原本是 ["date"] —— 此資料集每日回 3 列(融資/融券/融資金額),
+            # 只用 date 當鍵會讓同日各列互相覆蓋,每天只活下一列且哪一列隨機。
+            # 實測遺失 67%(1607 天全部只有 1 筆),且同一欄 buy 在不同日期語意不同。
+            "unique_keys": ["date", "name"],
             "needs_symbols": False,
             "description": "全市場融資融券統計"
         },
@@ -160,9 +170,16 @@ DATA_TABLES = {
             "name": "整體三大市場法人買賣表",
             "dataset": "TaiwanStockTotalInstitutionalInvestors",
             "collection": "total_institutional_investors",
+            "disabled": True,
+            "disabled_reason": (
+                "2026-08-15 改由 scripts/twse_market_totals_sync.py 走 TWSE RWD"
+                "(BFI82U)取得。實測同日數值與 FinMind 逐位元相同"
+                "(合計買 511,271,838,131;抽 24 天涵蓋全部 6 類法人,0 不符)。"
+                "換源理由同 total_margin。"),
             "params": {"start_date": "2020-01-01"},
-            "indexes": [("date", DESCENDING)],
-            "unique_keys": ["date"],
+            "indexes": [("date", DESCENDING), ("name", ASCENDING)],
+            # 🔴 原本是 ["date"] —— 此資料集每日回 6 列(六類法人),同上,實測遺失 83%。
+            "unique_keys": ["date", "name"],
             "needs_symbols": False,
             "description": "三大法人市場總買賣"
         },
