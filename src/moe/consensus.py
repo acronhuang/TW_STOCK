@@ -94,9 +94,53 @@ def _advisor_rating(draft: str):
     return None
 
 
+_committee_verified = False
+
+
+def verify_committee(force: bool = False) -> dict:
+    """確認 COMMITTEE 每位委員在合議節點上真的存在。首次 deliberate() 時自動跑一次。
+
+    為什麼需要：委員名單只是一個字串常數，模型被 ollama rm 掉、或名稱有出入時，
+    _ask() 會拿到 ERR:／格式外的回覆，_extract_vote 回 None，該委員就**安靜地棄權**——
+    流程照跑、日誌照綠，只是三人會變兩人。本專案已有同類前例（hermes3:8b 出席
+    8913 次、84.7% 都投買進而長期無人察覺）。
+
+    不中止流程（中止會讓 14 小時的週跑整個白跑），但會大聲印出並寫 schedule_alerts，
+    讓它在網頁上看得見。真正的把關由 scripts/committee_live_check.py 每天做。
+    """
+    global _committee_verified
+    if _committee_verified and not force:
+        return {}
+    _committee_verified = True
+    try:
+        r = requests.get(f'{CONSENSUS_URL}/api/tags', timeout=10)
+        r.raise_for_status()
+        have = {m.get('name') for m in r.json().get('models', [])}
+    except Exception as e:
+        print(f"⚠️ [committee] 無法查詢 {CONSENSUS_URL} 的模型清單：{e}")
+        return {'error': str(e)}
+    missing = [m for m in COMMITTEE if m not in have]
+    print(f"🗳️ [committee] 本次合議委員 = {COMMITTEE}"
+          + (f"  🔴 節點上不存在：{missing}" if missing else "  ✅ 節點上皆存在"))
+    if missing:
+        try:
+            from pymongo import MongoClient
+            import datetime as _dt
+            db = MongoClient('mongodb://localhost:27017/')['tw_stock_analysis']
+            db.schedule_alerts.insert_one({
+                'ts': _dt.datetime.now(), 'level': 'warning', 'source': 'consensus_committee',
+                'message': f"🔴 合議委員在 {CONSENSUS_URL} 上不存在：{missing}"
+                           f"（該委員會靜默棄權，三人會實際變 {len(COMMITTEE)-len(missing)} 人）",
+                'detail': {'committee': COMMITTEE, 'missing': missing}, 'resolved': False})
+        except Exception:
+            pass
+    return {'committee': list(COMMITTEE), 'missing': missing}
+
+
 def deliberate(symbol: str, name: str, advisor_draft: str, data_summary: str,
                timeout: int = 120) -> dict:
     """委員會對顧問草案投票。回 {votes, tally, final, dissent}。"""
+    verify_committee()
     prompt = (f"你是投資決策委員會成員。以下是主分析師對 {symbol} {name} 的整合建議草案與關鍵數據，"
               f"請獨立判斷後投一票。\n\n"
               f"【主分析師草案】\n{advisor_draft}\n\n"
