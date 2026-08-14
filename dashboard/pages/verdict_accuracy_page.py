@@ -158,7 +158,7 @@ def show():
                 "買-賣價差": (f"{(bb['excess'].mean()-ss['excess'].mean())*100:+.2f} pp"
                            if len(bb) and len(ss) else "-"),
             })
-        st.dataframe(pd.DataFrame(recs), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(recs), hide_index=True, width='stretch')
         gap = None
         b_, s_ = wp[wp["verdict"] == "買進"], wp[wp["verdict"] == "賣出"]
         if len(b_) and len(s_):
@@ -181,7 +181,7 @@ def show():
         daily.columns = ["分析日", "買進檔數", "超額命中%", "均超額%"]
         st.line_chart(daily.set_index("分析日")[["超額命中%", "均超額%"]])
         with st.expander("逐日數字"):
-            st.dataframe(daily.round(2), hide_index=True, use_container_width=True)
+            st.dataframe(daily.round(2), hide_index=True, width='stretch')
 
     # ── 逐筆明細 ────────────────────────────────────────────────────
     st.markdown("### 逐筆明細")
@@ -206,7 +206,7 @@ def show():
             .rename(columns={"symbol": "代號", "verdict": "評級", "報酬": "報酬%",
                              "超額": "超額%", "事前20日": "事前20日%",
                              "mom_excluded": "反動能過濾排除"}),
-            hide_index=True, use_container_width=True, height=420)
+            hide_index=True, width='stretch', height=420)
         st.download_button("下載 CSV", out.to_csv(index=False).encode("utf-8-sig"),
                            f"verdict_detail_w{window}.csv", "text/csv")
 
@@ -224,7 +224,7 @@ def show():
                          "持有%": b.get("hold%"), "賣出%": b.get("sell%"),
                          "棄權%": b.get("null%"),
                          "狀態": "🔴 退化" if top > 75 else "✅"})
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
         mp = cm.get("max_corr_pair")
         if mp:
             st.caption(f"最高相關委員對：**{mp['a']} × {mp['b']}**　"
