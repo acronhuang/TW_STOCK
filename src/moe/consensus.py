@@ -15,10 +15,21 @@ import re
 import requests
 
 CONSENSUS_URL = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議節點 .27
-# 委員會（.27 上的通用模型；擴到 3 位讓討論更豐富、避免 2 人平手過多）。
-# 資安模型(foundation-sec/whiterabbitneo)對股票判斷弱，不納入。可用 env CONSENSUS_MODELS 覆寫（如加第 4 位 qwen2.5-7b-panel）。
+# 委員會（.27 上的通用模型；3 位讓討論更豐富、避免 2 人平手過多）。
+# 資安模型(foundation-sec/whiterabbitneo)對股票判斷弱，不納入。可用 env CONSENSUS_MODELS 覆寫。
+#
+# 2026-08-14 換委員：qwen2.5-3b:latest → llama3.1:8b
+#   原因：SLI 實測 qwen2.5-3b × qwen2.5:7b 同票率 87.1%、corr +0.81 —— 同代同家族的
+#   3B/7B 手足幾乎在說同一件事，三人委員會實際上只有兩個獨立意見。
+#   production 投票分布也顯示兩者都極度偏「持有」(72.7% / 62.3%)，貢獻的資訊重疊。
+#   換入 llama3.1:8b 取得真正的家族多樣性（.27 上除 gemma2 外唯一的非 qwen 通用模型）。
+#
+# ⚠️ 已知風險與退場條件：合成探針顯示 llama3.1:8b 偏多（3 題看空有 2 題答買進）。
+#   本專案歷史上曾有 hermes3:8b 長期擔任委員、84.7% 都投買進的前例。
+#   故 scripts/verdict_orthogonality_backtest.py 會監控每位委員的票種偏態，
+#   若 llama3.1 單一票種占比 > COMMITTEE_BIAS_MAX(75%)，即告警並應退回 qwen2.5-3b。
 COMMITTEE = [m.strip() for m in
-             os.getenv('CONSENSUS_MODELS', 'gemma2:9b,qwen2.5:7b,qwen2.5-3b:latest').split(',')
+             os.getenv('CONSENSUS_MODELS', 'gemma2:9b,qwen2.5:7b,llama3.1:8b').split(',')
              if m.strip()]
 VOTES = ('買進', '持有', '賣出')
 # 主持人（③）：讀完討論逐字稿做綜合定案，取代純多數決。走 .28 主力節點的 14B 通才。
