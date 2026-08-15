@@ -234,6 +234,45 @@ def _news_for(symbol: str) -> str:
         return ""
 
 
+# 角色失敗全局統計（main() 收尾時判定是否告警）。
+# 門檻 3%：實測改造前的自然失敗率是 0.1%，8/14 那輪 0.9%，並行後最高 3.2%。
+# 超過 3% 代表不是零星網路抖動，而是系統性打爆 GPU，該調併發度。
+_ROLE_FAIL = {'stocks': 0, 'roles': 0, 'total_stocks': 0}
+ROLE_FAIL_MAX = float(os.getenv('ROLE_FAIL_MAX', '0.03'))
+
+
+def report_role_failures(alert: bool = True):
+    """收尾：印角色失敗率，超過門檻寫 schedule_alerts（網頁看，不發 LINE）。"""
+    ts_ = _ROLE_FAIL['total_stocks']
+    if not ts_:
+        return
+    n_role = ts_ * len(ANALYST_ROLES)
+    rate = _ROLE_FAIL['roles'] / n_role if n_role else 0
+    print(f"\n角色失敗統計：{_ROLE_FAIL['roles']}/{n_role} 份報告失敗 "
+          f"({rate*100:.1f}%)，影響 {_ROLE_FAIL['stocks']}/{ts_} 檔")
+    if rate <= ROLE_FAIL_MAX:
+        print(f"  ✅ 未超過門檻 {ROLE_FAIL_MAX*100:.0f}%")
+        return
+    print(f"  🔴 超過門檻 {ROLE_FAIL_MAX*100:.0f}% —— 這些報告的內容是錯誤訊息，"
+          f"卻仍被顧問整合與合議採用，分析品質已靜默降級")
+    if not alert:
+        return
+    try:
+        from pymongo import MongoClient as _MC
+        _db = _MC('mongodb://localhost:27017/')['tw_stock_analysis']
+        _db.schedule_alerts.create_index([('ts', -1)])
+        _db.schedule_alerts.insert_one({
+            'ts': datetime.now(), 'level': 'warning', 'source': 'team_role_failure',
+            'message': (f"🔴 團隊分析角色失敗率 {rate*100:.1f}% "
+                        f"({_ROLE_FAIL['roles']}/{n_role} 份)，影響 "
+                        f"{_ROLE_FAIL['stocks']}/{ts_} 檔。失敗的報告內容是錯誤訊息，"
+                        f"仍被顧問整合採用 —— 分析品質已降級，建議調降 TEAM_ROLE_PARALLEL"),
+            'detail': dict(_ROLE_FAIL), 'resolved': False})
+        print("  [alert] 已寫 schedule_alerts")
+    except Exception as e:
+        print(f"  ⚠️ 寫告警失敗: {e}")
+
+
 def analyze_symbol(symbol: str, quick: bool) -> dict:
     data = fetch_all_data(symbol)
     evidence = verify_metrics(symbol)
@@ -274,7 +313,10 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     def _run(role):
         return role, ask_role(role, prompts[role], include_role_prompt=True, timeout=300)
 
-    npar = max(1, int(os.getenv('TEAM_ROLE_PARALLEL', str(len(ANALYST_ROLES)))))
+    # 併發度預設 3 而非 6：實測 6 併發時角色失敗率飆到 18.8%（改造前 0.1%），
+    # 300s 逾時被撐破。三個 14B 角色是瓶頸，設 3 讓它們併行、小模型順帶塞進空檔，
+    # 保留大部分加速又不把 GPU 打爆。TEAM_ROLE_PARALLEL=1 可還原循序。
+    npar = max(1, int(os.getenv('TEAM_ROLE_PARALLEL', '3')))
     if npar > 1:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=npar) as ex:
@@ -285,13 +327,26 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     # 一律依 ANALYST_ROLES 順序收斂與輸出 —— 完成順序不影響結果與日誌，
     # 否則同一檔重跑兩次的 log 會長得不一樣，難以比對
     reports = {}
+    failed = []
     for role in ANALYST_ROLES:
         r = got.get(role) or {}
+        if r.get('error') or 'response' not in r:
+            failed.append(role)
         txt = r.get('response', f"分析失敗: {r.get('error')}")
         if '</think>' in txt:
             txt = txt.split('</think>', 1)[-1]
         reports[role] = txt.strip()
-        print(f"     {ROLE_ICON.get(role, role)} ({r.get('model','?')}) {r.get('elapsed_sec','?')}s")
+        rt = f" retry×{r['retries']}" if r.get('retries') else ""
+        print(f"     {ROLE_ICON.get(role, role)} ({r.get('model','?')}) "
+              f"{r.get('elapsed_sec','?')}s{rt}")
+    # 失敗要響：角色失敗時 reports[role] 會是「分析失敗: …」字串，而顧問整合與合議
+    # 照樣拿它去整合、投票 —— 不講出來就是靜默降級。這裡逐檔講，全局統計在 main() 收尾。
+    if failed:
+        _ROLE_FAIL['stocks'] += 1
+        _ROLE_FAIL['roles'] += len(failed)
+        print(f"     🔴 {len(failed)}/{len(ANALYST_ROLES)} 角色失敗(重試後仍失敗): "
+              f"{', '.join(failed)} —— 這幾份報告的內容是錯誤訊息，不是分析")
+    _ROLE_FAIL['total_stocks'] += 1
 
     advisor = None
     if not quick:
@@ -929,6 +984,7 @@ def main():
         save_results(analyses, meta)            # 逐檔存檔(中斷可續/供phase2)
         db_upsert_one(res, meta)                # 雙寫 DB
 
+    report_role_failures()                      # 角色失敗率超標則告警(不靜默降級)
     msg = build_line(analyses, meta)
     print("\n" + "=" * 60 + "\n" + msg)
     if not args.no_line:

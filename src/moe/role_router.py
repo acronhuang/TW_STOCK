@@ -123,29 +123,44 @@ def ask_role(role: str,
         prompt = f"{ROLE_PROMPTS[role]}\n\n用戶問題：\n{question}"
 
     url = MODEL_TO_URL.get(model, OLLAMA_URL)
-    t0 = time.time()
-    try:
-        r = requests.post(
-            f'{url}/api/generate',
-            json={
+    # 重試：失敗的角色會讓 reports[role] 變成「分析失敗: …」字串，而顧問整合與合議
+    # 照樣拿它去整合、投票 —— 流程全綠、log 正常，只是那份意見其實是錯誤訊息。
+    # 這是靜默降級，不重試等於把它當常態。實測（2026-08-15）：
+    #   角色並行前失敗率 0.1%（50,965 次）→ 並行後最高 18.8%（負載重時）
+    # 重試之間退避，讓瞬時壅塞有時間消化。
+    attempts = max(1, int(os.getenv('ROLE_RETRY', '3')))
+    last_err = None
+    for i in range(attempts):
+        t0 = time.time()
+        try:
+            r = requests.post(
+                f'{url}/api/generate',
+                json={
+                    'model': model,
+                    'prompt': prompt,
+                    'stream': False,
+                    'keep_alive': '5m',
+                    'options': {'num_gpu': 99, 'temperature': LLM_TEMPERATURE, 'seed': LLM_SEED},   # 全層GPU + 確定性(低temp+固定seed,可重現)
+                },
+                timeout=timeout,
+            )
+            r.raise_for_status()
+            elapsed = time.time() - t0
+            out = {
+                'role': role,
                 'model': model,
-                'prompt': prompt,
-                'stream': False,
-                'keep_alive': '5m',
-                'options': {'num_gpu': 99, 'temperature': LLM_TEMPERATURE, 'seed': LLM_SEED},   # 全層GPU + 確定性(低temp+固定seed,可重現)
-            },
-            timeout=timeout,
-        )
-        r.raise_for_status()
-        elapsed = time.time() - t0
-        return {
-            'role': role,
-            'model': model,
-            'response': r.json().get('response', ''),
-            'elapsed_sec': round(elapsed, 1),
-        }
-    except Exception as e:
-        return {'role': role, 'model': model, 'error': str(e)}
+                'response': r.json().get('response', ''),
+                'elapsed_sec': round(elapsed, 1),
+            }
+            if i:
+                out['retries'] = i          # 留痕：這份報告是重試後才拿到的
+            return out
+        except Exception as e:
+            last_err = e
+            if i < attempts - 1:
+                time.sleep(5 * (i + 1))
+    return {'role': role, 'model': model, 'error': str(last_err),
+            'attempts': attempts}
 
 
 def list_roles() -> dict[str, str]:
