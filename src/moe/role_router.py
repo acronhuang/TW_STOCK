@@ -47,7 +47,20 @@ ROLE_TO_MODEL = {
     'stock-team-orchestrator':  MAIN_14B,
 
     # 需推理（主力 14b @ .28）
-    'technical-analyst':        MAIN_14B,
+    # 技術角色 2026-08-15 由 MAIN_14B(@.28) 改走 llama3.1:8b(@.27) —— 負載分流，非模型偏好。
+    # 實測(nvidia-smi 連續取樣 12 次 / 60 秒):
+    #   .28 使用率 99%(逐次 99 99 99 99 100 …) 溫度 82°C ← 已飽和且逼近 V100 降頻點
+    #   .27 使用率  0%(逐次 0 0 0 0 0 …)      溫度 55°C ← 完全閒置
+    # 技術角色佔 LLM 時間 38.9%(六角色中最重),全塞在飽和的 .28 上。
+    # A/B(6 檔、同一份 production 提示詞、temp0 固定 seed、只換模型+節點):
+    #   .28 qwen3-14b  成功 2/6(四檔破 300s 逾時) 平均 237.9s 引用幻覺 0
+    #   .27 llama3.1   成功 6/6                  平均   4.4s 引用幻覺 0  長度 273 vs 300
+    # 逾時的報告內容會變成「分析失敗: …」字串,卻仍被顧問整合與合議採用 ——
+    # 也就是正式週跑裡技術角色有 2/3 機率在靜默降級。分流後 .28 負載降約 39%。
+    # ⚠️ 這組數字混淆了「模型能力」與「節點負載」:.28 的 237.9s 多數是排隊。
+    #    引用正確性只是最低門檻,真正的品質答案要看 verdict_detail 的事後超額報酬,
+    #    換前/換後各累積一段再比。TECH_MODEL=qwen3-14b:latest 可立即還原。
+    'technical-analyst':        os.getenv('TECH_MODEL', 'llama3.1:8b'),
     'fundamental-analyst':      MAIN_14B,
 
     # 換視角（gemma2:9b @ .27 合議節點）
@@ -106,6 +119,7 @@ MODEL_TO_URL = {
     'qwen2.5-14b:latest': OLLAMA_URL,
     'qwen2.5-3b:latest':  OLLAMA_URL,
     'gemma2:9b':          OLLAMA_URL_27,   # gemma2 在 .27,value/chip 路由到 .27
+    'llama3.1:8b':        OLLAMA_URL_27,   # llama3.1 只在 .27(已常駐,零額外 VRAM)
 }
 
 
