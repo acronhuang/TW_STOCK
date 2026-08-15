@@ -71,9 +71,24 @@ def to_doc(analysis: dict, date: datetime, name: str = "", source_file: str = ""
     }
 
 
+# 這些欄位「有值」比「沒值」珍貴，來源缺這些欄位時不得覆蓋既有值。
+# 2026-08-15 實測踩過：流水線改造後 phase2 只寫 DB 不寫 JSON，
+# 而 phase3 的 migrate_team_to_db 仍把 JSON(只有 phase1 資料)同步回 DB，
+# 於是用 advisor=None 蓋掉了 phase2 剛寫入的顧問整合與合議定案 ——
+# 8 檔全滅，log 卻一路顯示成功（合議定案都印出來了），只有查 DB 才看得見。
+# 對照組：不在該 JSON 內的另外 49 檔完全不受影響，證實是覆蓋而非寫入失敗。
+_PRECIOUS = ("advisor", "consensus", "final_verdict", "reports",
+             "evidence", "senvision", "extra", "price_at_analysis")
+
+
 def upsert_analyses(db, analyses: list, date: datetime, meta: dict = None,
                     source_file: str = "") -> tuple[int, int]:
-    """批量 upsert；保留既有 verify 欄位與 created_at（$setOnInsert）。"""
+    """批量 upsert；保留既有 verify 欄位與 created_at（$setOnInsert）。
+
+    空值不覆蓋：來源沒有的欄位（None／空 dict／空 list）不會寫進 $set，
+    因此「只有 phase1 資料的來源」不會抹掉「phase2 已寫入的成果」。
+    要清空某欄位請直接操作 DB，不要靠這支。
+    """
     meta = meta or {}
     ops = []
     now = datetime.now()
@@ -83,6 +98,8 @@ def upsert_analyses(db, analyses: list, date: datetime, meta: dict = None,
             continue
         name = (meta.get(sym) or {}).get("name", "") if meta else ""
         doc = to_doc(a, date, name, source_file)
+        doc = {k: v for k, v in doc.items()
+               if k not in _PRECIOUS or v not in (None, {}, [], "")}
         ops.append(UpdateOne(
             {"symbol": sym, "date": date},
             {"$set": doc, "$setOnInsert": {"created_at": now}},
