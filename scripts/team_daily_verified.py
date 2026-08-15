@@ -479,9 +479,18 @@ def select_universe_all() -> list[dict]:
         print(f"  [universe] 流動性過濾已關閉(TEAM_MIN_LOTS=0)，{len(cand)} 檔全收")
         return cand
 
-    # 用 trading_dates 這個權威日曆取最近 N 個交易日，不自己推算日期
-    tds = sorted(d for d in DB.trading_dates.distinct('date') if d)[-LIQ_DAYS:]
+    # 用 trading_dates 這個權威日曆取最近 N 個交易日，不自己推算日期。
+    # 🔴 必須加上界：trading_dates 涵蓋到 2026-12-31（含未來日期），
+    #    不設上界會取到還沒發生的日子 → 全部查無價格 → 整個 universe 被清空。
+    #    2026-08-15 實測踩過：候選 2079 檔全被判「無價格資料」，phase1 直接結束。
+    cutoff = _current_date().strftime('%Y-%m-%d')
+    tds = sorted(d for d in DB.trading_dates.distinct('date')
+                 if d and d <= cutoff)[-LIQ_DAYS:]
+    if not tds:
+        print(f"  [universe] 🔴 {cutoff} 之前查無交易日，流動性過濾略過，{len(cand)} 檔全收")
+        return cand
     dts = [_dt.datetime.strptime(d, '%Y-%m-%d') for d in tds]
+    print(f"  [universe] 流動性基準區間 {tds[0]} ~ {tds[-1]}（{len(tds)} 個交易日）")
     out, n_thin, n_nodata = [], 0, 0
     for c in cand:
         med = _median_lots(c['symbol'], dts)
