@@ -535,6 +535,46 @@ def db_upsert_one(analysis: dict, meta: dict):
         print(f"     ⚠️ DB 雙寫失敗({analysis.get('symbol')}): {e}")
 
 
+def load_pending_from_db(limit: int = 0):
+    """從 team_analysis 取「已有 6 份角色報告、但還沒做顧問整合」的標的。
+
+    為什麼 phase2 要改讀 DB 而不是 JSON
+    ----------------------------------
+    save_results() 是**整檔重寫**,而 phase1 與 phase2 各自寫自己記憶體裡的
+    analyses 清單。兩者若同時執行,後寫的會把先寫的成果整段抹掉
+    (phase1 寫到第 500 檔 → phase2 寫回它啟動時載入的 300 檔 → 301~500 全失),
+    而且非原子寫入,讀到寫一半的檔案會直接 JSON 解析失敗。
+    改用 DB 就沒有這個問題:MongoDB 是逐文件 upsert,不存在整份覆蓋,
+    phase1 與 phase2 因此可以安全地同時跑(流水線)。
+
+    回 (meta, todo_list)。todo_list 的元素形狀與 JSON 版相容,
+    讓 phase2 主流程不必為兩種來源分岔。
+    """
+    global _TEAM_DB
+    from src.moe.team_store import get_db
+    if _TEAM_DB is None:
+        _TEAM_DB = get_db()
+    q = {'date': _current_date(),
+         'reports': {'$exists': True, '$ne': {}},
+         '$or': [{'advisor': None}, {'advisor': {'$exists': False}},
+                 {'advisor': ''}]}
+    cur = _TEAM_DB.team_analysis.find(
+        q, {'symbol': 1, 'name': 1, 'reports': 1, 'evidence': 1, 'extra': 1,
+            'senvision': 1, 'price_at_analysis': 1}).sort('symbol', 1)
+    if limit:
+        cur = cur.limit(limit)
+    todo, meta = [], {}
+    for d in cur:
+        # 角色報告不齊的不做 —— 顧問整合需要 6 份,少了會產出低品質草案而無人察覺
+        if len(d.get('reports') or {}) < len(ANALYST_ROLES):
+            continue
+        sym = str(d['symbol'])
+        d.pop('_id', None)
+        todo.append(d)
+        meta[sym] = {'symbol': sym, 'name': d.get('name') or '', 'action': '(DB)'}
+    return meta, todo
+
+
 def load_results():
     import json
     p = _result_path()
@@ -801,7 +841,11 @@ def main():
                     help='選股範圍：tier=謝富旭Tier1/2(預設)；industry50=各行業龍頭50；all=全市場~2000檔；dailypicks=當日量化選股')
     ap.add_argument('--picks-n', type=int, default=8, help='dailypicks 取前幾檔(預設8)')
     ap.add_argument('--quick', action='store_true', help='精簡：略過投資顧問整合(較快)')
-    ap.add_argument('--phase2', action='store_true', help='第二階段：讀今日精簡存檔，只補跑顧問整合')
+    ap.add_argument('--phase2', action='store_true',
+                    help='第二階段：只補跑顧問整合（預設從 DB 取待辦，可與 phase1 併行）')
+    ap.add_argument('--phase2-from-json', action='store_true',
+                    help='第二階段改讀 JSON 存檔（舊行為）。⚠️ 不可與 phase1 同時跑：'
+                         'save_results 整檔重寫會互相覆蓋')
     ap.add_argument('--date', help='存讀檔日期 YYYYMMDD（預設今天）；phase1 跨午夜或 phase2 補跑舊存檔時指定')
     ap.add_argument('--no-line', action='store_true', help='不發 LINE')
     args = ap.parse_args()
@@ -820,26 +864,41 @@ def main():
         global _DATE_OVERRIDE
         _DATE_OVERRIDE = args.date
 
-    # ── 第二階段：讀 phase1 存檔，只補顧問整合 ──────────────────────────
+    # ── 第二階段：只補顧問整合 ──────────────────────────────────────────
+    # 預設從 DB 取待辦（可與 phase1 同時跑，見 load_pending_from_db 的說明）。
+    # --phase2-from-json 保留舊行為，供 DB 不可用時退路。
     if args.phase2:
-        saved = load_results()
-        if not saved:
-            print("⚠️ 無今日精簡存檔，請先跑 --quick"); return
-        meta, analyses = saved['meta'], saved['analyses']
-        todo = [a for a in analyses if not a.get('advisor')]
-        print(f"第二階段：對 {len(todo)} 檔補跑顧問整合(重用已存6角色報告)")
+        if args.phase2_from_json:
+            saved = load_results()
+            if not saved:
+                print("⚠️ 無今日精簡存檔，請先跑 --quick"); return
+            meta, analyses = saved['meta'], saved['analyses']
+            todo = [a for a in analyses if not a.get('advisor')]
+            src = 'JSON'
+        else:
+            meta, todo = load_pending_from_db()
+            analyses = todo
+            src = 'DB'
+        print(f"第二階段（來源 {src}）：對 {len(todo)} 檔補跑顧問整合(重用已存6角色報告)")
+        done = 0
         for i, a in enumerate(todo, 1):
             print(f"  [{i}/{len(todo)}] 🎩 {a['symbol']} 顧問整合...")
             a['advisor'] = run_advisor(a['symbol'], a.get('reports', {}))
             a['consensus'] = _consensus_for(a, meta)   # .27 合議投票定案
             if a.get('consensus'):
                 print(f"       🗳️合議 → 定案:{a['consensus']['final']}")
-            save_results(analyses, meta)        # 逐檔存檔(中斷可續)
-            db_upsert_one(a, meta)              # 雙寫 DB(含顧問+合議)
-        msg = build_line(analyses, meta)
-        print("\n" + "=" * 60 + "\n" + msg)
-        if not args.no_line:
-            _send_line(msg)
+            # 🔴 DB 模式一律不寫 JSON：save_results 是整檔重寫，phase1 同時在跑時
+            #    會把它已完成的部分整段抹掉。DB 是逐文件 upsert，沒有這個問題。
+            if args.phase2_from_json:
+                save_results(analyses, meta)    # 逐檔存檔(中斷可續)
+            db_upsert_one(a, meta)              # 寫 DB(含顧問+合議)
+            done += 1
+        print(f"第二階段完成 {done} 檔")
+        if args.phase2_from_json:
+            msg = build_line(analyses, meta)
+            print("\n" + "=" * 60 + "\n" + msg)
+            if not args.no_line:
+                _send_line(msg)
         return
 
     # ── 選股 ────────────────────────────────────────────────────────────
