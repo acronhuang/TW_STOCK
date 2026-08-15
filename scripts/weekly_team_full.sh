@@ -57,7 +57,9 @@ fi
 
 # ── [1/4] phase1 背景啟動 ───────────────────────────────────────────
 echo "──── [1/4] phase1：6 角色分析（quick，universe=${UNIVERSE}）背景啟動 ────"
-$PY -u scripts/team_daily_verified.py --universe "$UNIVERSE" --quick --no-line --date "$DATE" &
+# --skip-done：中斷重跑時不重做已有完整無失敗報告的標的（有失敗的仍會重跑）
+$PY -u scripts/team_daily_verified.py --universe "$UNIVERSE" --quick --no-line \
+    --skip-done --date "$DATE" &
 P1=$!
 echo "phase1 PID=${P1} 啟動 $(date '+%F %T')"
 

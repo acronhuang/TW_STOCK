@@ -898,6 +898,8 @@ def main():
     ap.add_argument('--quick', action='store_true', help='精簡：略過投資顧問整合(較快)')
     ap.add_argument('--phase2', action='store_true',
                     help='第二階段：只補跑顧問整合（預設從 DB 取待辦，可與 phase1 併行）')
+    ap.add_argument('--skip-done', action='store_true',
+                    help='phase1 跳過本分析日已有完整且無失敗角色報告的標的（中斷後重跑用）')
     ap.add_argument('--phase2-from-json', action='store_true',
                     help='第二階段改讀 JSON 存檔（舊行為）。⚠️ 不可與 phase1 同時跑：'
                          'save_results 整檔重寫會互相覆蓋')
@@ -973,6 +975,31 @@ def main():
         targets = get_tier_symbols(args.top)
     if not targets:
         print("無標的，結束"); return
+
+    # --skip-done：跳過本分析日已有「完整且無失敗」角色報告的標的（中斷後重跑用）。
+    # 只跳過乾淨的：報告齊 6 份、且沒有任何一份是「分析失敗: …」字串。
+    # 有失敗的一律重跑 —— 否則等於把舊程式(無重試)留下的降級報告永久保留。
+    if args.skip_done:
+        global _TEAM_DB
+        from src.moe.team_store import get_db
+        if _TEAM_DB is None:
+            _TEAM_DB = get_db()
+        done = set()
+        for d in _TEAM_DB.team_analysis.find(
+                {'date': _current_date()}, {'symbol': 1, 'reports': 1}):
+            rep = d.get('reports') or {}
+            if len(rep) < len(ANALYST_ROLES):
+                continue
+            if any(isinstance(v, str) and v.startswith('分析失敗') for v in rep.values()):
+                continue
+            done.add(str(d['symbol']))
+        before = len(targets)
+        targets = [t for t in targets if str(t['symbol']) not in done]
+        print(f"  [skip-done] 已有完整無失敗報告 {len(done)} 檔 → "
+              f"{before} 檔中跳過 {before - len(targets)} 檔，實跑 {len(targets)} 檔")
+        if not targets:
+            print("  全部已完成，phase1 無事可做"); return
+
     meta = {t['symbol']: t for t in targets}
     print(f"分析 {len(targets)} 檔: {', '.join(t['symbol'] for t in targets[:10])}{'...' if len(targets)>10 else ''}")
 
