@@ -273,6 +273,44 @@ def report_role_failures(alert: bool = True):
         print(f"  ⚠️ 寫告警失敗: {e}")
 
 
+# ── 總經角色快取（同一輪內，同產業共用）─────────────────────────────────
+# 依據（2026-08-15 實測）：總經角色的提示詞**完全不含個股資料** ——
+# 只有第一行「用台股總經背景判斷對個股 2330 台積電 的影響：」帶股號股名，
+# 其餘 100% 是市場層級（利率/匯率/CPI/貨幣供給）。它本來就做不出個股分析。
+# 產出也證實如此：同日不同標的的總經報告實質相同，個股化只是換股名與產業詞：
+#   2308「…均支撐大盤與電子股」 vs 1303「…有利電子材料股」
+# 而它佔 LLM 時間 19.8%，對 1090 檔重算 1090 次同一件事。
+# 故以產業為鍵快取（保留產業層級的判讀差異），重用時把生成當時的股名換掉。
+# TEAM_MACRO_CACHE=0 可關閉還原每檔重算。
+_MACRO_CACHE = {}
+_IND_CACHE = {}
+MACRO_CACHE_ON = os.getenv('TEAM_MACRO_CACHE', '1') != '0'
+
+
+def _info_of(sym: str) -> tuple:
+    """(產業, 股名)。fetch_all_data 的回傳**沒有 name 鍵**，必須另查 ——
+    2026-08-15 實測踩過：誤以為 data['name'] 存在，取到空字串，
+    導致快取重用時只換股號沒換股名，2303 的總經寫成「對2303台積電有利」。"""
+    if sym not in _IND_CACHE:
+        d = DB.taiwan_stock_info.find_one(
+            {'stock_id': sym}, {'industry_category': 1, 'stock_name': 1}) or {}
+        _IND_CACHE[sym] = (d.get('industry_category') or '(未分類)',
+                           d.get('stock_name') or '')
+    return _IND_CACHE[sym]
+
+
+def _macro_reuse(hit: dict, sym: str, name: str) -> str:
+    """把快取文字裡「生成當時的標的」換成目前標的。
+    只做這一種明確替換，找不到就原樣返回 —— 不對 LLM 輸出做其他改寫。"""
+    txt = hit['text']
+    for old, new in ((f"{hit['sym']} {hit['name']}", f"{sym} {name}"),
+                     (f"{hit['sym']}{hit['name']}", f"{sym}{name}"),
+                     (hit['sym'], sym)):
+        if old and old in txt:
+            txt = txt.replace(old, new)
+    return txt
+
+
 def analyze_symbol(symbol: str, quick: bool) -> dict:
     data = fetch_all_data(symbol)
     evidence = verify_metrics(symbol)
@@ -316,13 +354,33 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     # 併發度預設 3 而非 6：實測 6 併發時角色失敗率飆到 18.8%（改造前 0.1%），
     # 300s 逾時被撐破。三個 14B 角色是瓶頸，設 3 讓它們併行、小模型順帶塞進空檔，
     # 保留大部分加速又不把 GPU 打爆。TEAM_ROLE_PARALLEL=1 可還原循序。
+    # 總經快取命中就不打 LLM（見 _MACRO_CACHE 註解）
+    todo_roles, got = list(ANALYST_ROLES), {}
+    ind = my_name = None
+    if MACRO_CACHE_ON and 'macro-analyst' in todo_roles:
+        ind, my_name = _info_of(symbol)
+        hit = _MACRO_CACHE.get(ind)
+        if hit:
+            got['macro-analyst'] = {'role': 'macro-analyst',
+                                    'model': f"{hit['model']}(快取:{ind})",
+                                    'response': _macro_reuse(hit, symbol, my_name),
+                                    'elapsed_sec': 0.0}
+            todo_roles.remove('macro-analyst')
+
     npar = max(1, int(os.getenv('TEAM_ROLE_PARALLEL', '3')))
-    if npar > 1:
+    if npar > 1 and len(todo_roles) > 1:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=npar) as ex:
-            got = dict(ex.map(_run, ANALYST_ROLES))
+            got.update(dict(ex.map(_run, todo_roles)))
     else:
-        got = dict(_run(r) for r in ANALYST_ROLES)
+        got.update(dict(_run(r) for r in todo_roles))
+
+    # 新算出來的總經存進快取，供同產業後續標的重用
+    if MACRO_CACHE_ON and ind and 'macro-analyst' in todo_roles:
+        mr = got.get('macro-analyst') or {}
+        if mr.get('response'):
+            _MACRO_CACHE[ind] = {'text': mr['response'], 'sym': symbol,
+                                 'name': my_name or '', 'model': mr.get('model', '?')}
 
     # 一律依 ANALYST_ROLES 順序收斂與輸出 —— 完成順序不影響結果與日誌，
     # 否則同一檔重跑兩次的 log 會長得不一樣，難以比對
