@@ -241,7 +241,13 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     extra = _ma_inst_extra(symbol)                # MA乖離 + 法人連續
     news_txt = _news_for(symbol)                  # 新聞事件佐證（量價/籌碼看不到的基本面事件）
 
-    reports = {}
+    # ── 角色提示詞先循序建好（純本地計算，不含 LLM 呼叫），再一次並行送出 ──
+    # 2026-08-15 實測：單檔 200 秒中 184 秒(92%)是 LLM，且六個角色原本一個接一個跑。
+    # 角色之間彼此獨立，沒有先後依賴，循序純粹是浪費。
+    # 3 併發實測加速 1.73x（非線性，GPU 已有負載）；六角色分屬 .28(三個 14B)
+    # 與 .27(三個小模型)，並行後小模型的時間可完全被 14B 蓋掉。
+    # 設 TEAM_ROLE_PARALLEL=1 可還原為循序。
+    prompts = {}
     for role in ANALYST_ROLES:
         prompt = build_expert_prompt(role, symbol, data)
         if role == 'value-analyst':
@@ -261,9 +267,26 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
             prompt += "\n\n" + news_txt + \
                       "\n（新聞可能含同名公司雜訊，請自行判斷相關性後納入研判。）"
         prompt += EVIDENCE_SUFFIX
-        # timeout 放寬：deepseek-r1:14b 等模型在角色迴圈中『第一次呼叫』需冷載(9GB)+thinking，
-        # 易破 180s（後續同模型 warm 則快）。給 300s 吸收冷啟動。
-        r = ask_role(role, prompt, include_role_prompt=True, timeout=300)
+        prompts[role] = prompt
+
+    # timeout 放寬：deepseek-r1:14b 等模型在角色迴圈中『第一次呼叫』需冷載(9GB)+thinking，
+    # 易破 180s（後續同模型 warm 則快）。給 300s 吸收冷啟動。
+    def _run(role):
+        return role, ask_role(role, prompts[role], include_role_prompt=True, timeout=300)
+
+    npar = max(1, int(os.getenv('TEAM_ROLE_PARALLEL', str(len(ANALYST_ROLES)))))
+    if npar > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=npar) as ex:
+            got = dict(ex.map(_run, ANALYST_ROLES))
+    else:
+        got = dict(_run(r) for r in ANALYST_ROLES)
+
+    # 一律依 ANALYST_ROLES 順序收斂與輸出 —— 完成順序不影響結果與日誌，
+    # 否則同一檔重跑兩次的 log 會長得不一樣，難以比對
+    reports = {}
+    for role in ANALYST_ROLES:
+        r = got.get(role) or {}
         txt = r.get('response', f"分析失敗: {r.get('error')}")
         if '</think>' in txt:
             txt = txt.split('</think>', 1)[-1]
@@ -355,20 +378,69 @@ def select_universe_50(n: int = 50) -> list[dict]:
             for r in sel.values()]
 
 
+# 全市場 universe 的流動性下限（近 20 交易日成交量中位數，單位：張）。
+# 2026-08-15 實測 2077 檔的分布：
+#   無價格資料 105 檔 ｜ <100 張 664 檔(32%) ｜ 100~500 張 562 ｜ >=500 張 746
+# 中位量 <100 張的標的，即使分析出「買進」也買不進去 —— 任何有意義的部位
+# 都會把價格打上去。花在它們的 200 秒/檔是純浪費，而且它們的高雜訊報酬
+# 還會稀釋 verdict_detail 的準確度統計。
+# 排除 <100 張 + 無價格資料共 769 檔後 universe 降到 1308 檔(-37%)。
+# 設 TEAM_MIN_LOTS=0 可完全關閉還原舊行為。
+MIN_LOTS = float(os.getenv('TEAM_MIN_LOTS', '100'))
+LIQ_DAYS = 20
+
+
+def _median_lots(sym, dts):
+    """近 LIQ_DAYS 交易日成交量中位數（張）。取不到回 None（與 0 區別開）。"""
+    vols = []
+    for r in DB.stock_price.find({'symbol': sym, 'date': {'$in': dts}}, {'volume': 1}):
+        v = r.get('volume')
+        try:
+            vols.append(float(v.to_decimal()) if hasattr(v, 'to_decimal') else float(v or 0))
+        except (TypeError, ValueError):
+            continue
+    if not vols:
+        return None
+    vols.sort()
+    return vols[len(vols) // 2] / 1000.0      # 股 → 張
+
+
 def select_universe_all() -> list[dict]:
-    """全市場：所有有價、有基本資訊的 4 碼個股(去 ETF/受益/存託)。"""
-    import re
+    """全市場：所有有價、有基本資訊的 4 碼個股(去 ETF/受益/存託)，並濾掉流動性過低者。"""
+    import re, datetime as _dt
     syms = set(s for s in DB.stock_price.distinct('symbol') if re.fullmatch(r'\d{4}', str(s)))
     info = {d['stock_id']: d for d in DB.taiwan_stock_info.find(
         {}, {'stock_id': 1, 'industry_category': 1, 'stock_name': 1})}
     EXCL = ('ETF', '指數股票型', '受益', '存託')
-    out = []
+    cand = []
     for sym in sorted(syms):
         ti = info.get(sym)
         ind = (ti or {}).get('industry_category')
         if not ti or not ind or any(w in ind for w in EXCL):
             continue
-        out.append({'symbol': sym, 'name': ti.get('stock_name'), 'action': '(全市場)'})
+        cand.append({'symbol': sym, 'name': ti.get('stock_name'), 'action': '(全市場)'})
+
+    if MIN_LOTS <= 0:
+        print(f"  [universe] 流動性過濾已關閉(TEAM_MIN_LOTS=0)，{len(cand)} 檔全收")
+        return cand
+
+    # 用 trading_dates 這個權威日曆取最近 N 個交易日，不自己推算日期
+    tds = sorted(d for d in DB.trading_dates.distinct('date') if d)[-LIQ_DAYS:]
+    dts = [_dt.datetime.strptime(d, '%Y-%m-%d') for d in tds]
+    out, n_thin, n_nodata = [], 0, 0
+    for c in cand:
+        med = _median_lots(c['symbol'], dts)
+        if med is None:
+            n_nodata += 1
+            continue
+        if med < MIN_LOTS:
+            n_thin += 1
+            continue
+        c['median_lots'] = round(med, 1)
+        out.append(c)
+    # 不靜默截斷：排除了幾檔、為什麼，都要講出來
+    print(f"  [universe] 候選 {len(cand)} 檔 → 排除 近{LIQ_DAYS}日中位量<{MIN_LOTS:.0f}張 "
+          f"{n_thin} 檔、無價格資料 {n_nodata} 檔 → 實跑 {len(out)} 檔")
     return out
 
 
