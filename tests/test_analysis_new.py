@@ -6,7 +6,7 @@
   - 資料不足時的守門(回 None 不炸)
 不連 DB,純函式。
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -56,9 +56,32 @@ class _TAColl:
         return _Cursor(out)
 
 
+class _PriceColl:
+    """給反動能過濾用的最小 stock_price 假物件。
+
+    只支援 latest_buys → _prior_20d 用到的查詢形狀：
+    find({'symbol','date':{'$lte'},'adj_close':{'$ne':None}}, proj).sort('date',-1).limit(n)
+    """
+
+    def __init__(self, series):
+        self._s = series          # {symbol: [(date, adj_close), ...]}
+
+    def find(self, flt=None, proj=None):
+        flt = flt or {}
+        sym = flt.get("symbol")
+        lte = (flt.get("date") or {}).get("$lte")
+        rows = [{"date": d, "adj_close": p} for d, p in self._s.get(sym, [])
+                if lte is None or d <= lte]
+        return _Cursor(rows)
+
+
 class _FakeDB2:
-    def __init__(self, ta_docs):
+    def __init__(self, ta_docs, price_series=None):
         self.team_analysis = _TAColl(ta_docs)
+        # 反動能過濾（2026-08-15 加入 latest_buys）會查 stock_price。
+        # 預設給空的而非不給 —— 不給會 AttributeError，那會把「沒有價格資料」
+        # 這個正常情境變成程式崩潰。
+        self.stock_price = _PriceColl(price_series or {})
 
 
 # ── 輕量 stub db（mimic pymongo find(filter, projection)）──
@@ -225,14 +248,45 @@ class TestCorePool:
         for i in range(12):
             docs.append({"date": d_daily, "symbol": str(9000 + i), "final_verdict": "買進"})
 
-        d0, buys = latest_buys(_FakeDB2(docs), min_universe=500)
+        # mom_filter_pct=0：本測試只測「挑哪一批」，反動能過濾另有專屬測試。
+        # 一支測試只斷言它名稱宣稱的那件事，否則新功能會讓它以無關的理由失敗
+        # （2026-08-15 即因加入反動能過濾而讓這支紅了兩天）。
+        d0, buys = latest_buys(_FakeDB2(docs), min_universe=500, mom_filter_pct=0)
         assert d0.date() == d_full.date()          # 挑全市場批、非最新每日
         assert buys == {"1000", "1001", "1002"}    # 全市場批的買進,非 9000 系列
 
     def test_latest_buys_no_full_market_returns_empty(self):
         docs = [{"date": datetime(2026, 8, 4), "symbol": "2330", "final_verdict": "買進"}]
-        d0, buys = latest_buys(_FakeDB2(docs), min_universe=500)
+        d0, buys = latest_buys(_FakeDB2(docs), min_universe=500, mom_filter_pct=0)
         assert d0 is None and buys == set()
+
+    def test_momentum_filter_drops_the_hottest(self):
+        """反動能過濾應排除事前漲最多的那一批，且只排除、不新增。"""
+        d_full = datetime(2026, 8, 1)
+        docs = [{"date": d_full, "symbol": str(1000 + i),
+                 "final_verdict": "買進" if i < 4 else "觀望"} for i in range(600)]
+        # 四檔買進：1000 漲最多、1003 跌最多（各給 21 天價格供 _prior_20d 取用）
+        days = [d_full - timedelta(days=k) for k in range(21)][::-1]
+        gain = {"1000": 2.0, "1001": 1.5, "1002": 1.1, "1003": 0.8}   # 期末/期初
+        series = {s: [(d, 100.0 * (1 + (g - 1) * i / 20)) for i, d in enumerate(days)]
+                  for s, g in gain.items()}
+
+        d0, buys = latest_buys(_FakeDB2(docs, series), min_universe=500,
+                               mom_filter_pct=0.30)
+        assert d0.date() == d_full.date()
+        assert buys <= {"1000", "1001", "1002", "1003"}   # 只排除，不新增
+        assert "1000" not in buys, "漲最多的應被排除"
+        assert "1003" in buys, "跌最多的應保留"
+        assert len(buys) == 3, f"四檔排除 30%（int(4*0.3)=1）應剩 3 檔，實得 {len(buys)}"
+
+    def test_momentum_filter_keeps_stocks_without_price(self):
+        """取不到事前動能的標的應保留 —— 不因缺資料而誤殺。"""
+        d_full = datetime(2026, 8, 1)
+        docs = [{"date": d_full, "symbol": str(1000 + i),
+                 "final_verdict": "買進" if i < 3 else "觀望"} for i in range(600)]
+        d0, buys = latest_buys(_FakeDB2(docs), min_universe=500,  # 無任何價格資料
+                               mom_filter_pct=0.30)
+        assert buys == {"1000", "1001", "1002"}
 
 
 @pytest.mark.unit
