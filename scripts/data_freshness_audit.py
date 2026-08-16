@@ -138,7 +138,10 @@ EXEMPT = {
     #   1108 幸福/2892 第一金(已賣出)的唯一紀錄、commission/cost/total 三欄、
     #   2026-04-12~15 的價格快照(與現在的均價都不同)。
     "portfolio_trades": "歷史快照,已凍結不再更新(見 ADR-0020)",
-    "portfolio_dividends": "使用者股利紀錄,同上(目前 0 筆)",
+    # 2026-08-17 已 drop:0 筆、唯一寫入者 tracker.py 已刪除、全 repo 無引用。
+    # 六查全過(無獨有資訊可失去)。保留此行是為了說明它為何消失,
+    # 否則下一個人只會看到「有張表不見了」而查不到原因。
+    # "portfolio_dividends": 已刪除
     "core_watchlist": "核心池設定,人工維護",
     "verdict_performance": "決策績效回顧,週期性產出",
     # 衍生/中繼資料:由主表推導,主表有監控即可
