@@ -21,6 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.portfolio import lots as L  # noqa: E402
 
 CATS = L.CATS
+# kind 的顯示名稱 ←→ 存入 DB 的值（ADR-0020）。
+# 三態的意義是「這筆部位反映了誰的判斷」:我的決策 / 系統存在前的我 / 沒有人。
+KIND_LABEL = {"trade": "我的決策", "opening_balance": "期初持倉", "allocation": "公司配發"}
+KIND_VALUE = {v: k for k, v in KIND_LABEL.items()}
 
 
 def _db():
@@ -53,13 +57,13 @@ def _lots_df(db):
             "買進日": pd.to_datetime(bd) if bd else None,
             "股數": lt["shares"], "價格": lt["price"],
             "分類": lt["category"],
-            # 這一筆是決策還是期初持倉;期初持倉不代表任何判斷,不該混進決策支援價值的統計
-            "期初持倉": (lt.get("kind") or "trade") == "opening_balance",
+            # 這一筆反映誰的判斷 —— 只有「我的決策」才計入決策支援價值的統計
+            "取得方式": KIND_LABEL.get(lt.get("kind") or "trade", "我的決策"),
             "來自系統建議": bool(lt.get("from_system")),
             "備註": lt["note"],
         })
     return pd.DataFrame(rows, columns=["代號", "名稱", "買進日", "股數", "價格",
-                                       "分類", "期初持倉", "來自系統建議", "備註"])
+                                       "分類", "取得方式", "來自系統建議", "備註"])
 
 
 def _agg_df(db):
@@ -88,12 +92,12 @@ def _save_lots(db, edited):
             bd = datetime(bd.year, bd.month, bd.day)
         else:
             bd = None
-        opening = bool(r.get("期初持倉"))
+        kind = KIND_VALUE.get(str(r.get("取得方式") or "我的決策"), "trade")
         payload.append({
             "symbol": sym, "buy_date": bd,
             "shares": r.get("股數"), "price": r.get("價格"),
             "category": r.get("分類") or "波段",
-            "kind": "opening_balance" if opening else "trade",
+            "kind": kind,
             "from_system": bool(r.get("來自系統建議")),
             "note": r.get("備註") or "",
         })
@@ -107,7 +111,7 @@ def show():
     # ---------- ① 分批持倉明細 ----------
     st.markdown("### 📁 分批持倉明細")
     st.caption("**每一筆買進一列**(同股多次買進就多列,填**買進日**)。要新增就在表格最底下加列;"
-               "刪除打勾按垃圾桶;改完按「💾 儲存」。**期初持倉**=系統開始記錄前就持有的;**來自系統建議**=看了合議定案才買的。代號/買進日/股數/價格/分類都可改。"
+               "刪除打勾按垃圾桶;改完按「💾 儲存」。**取得方式**:我的決策／期初持倉(系統記錄前就持有)／公司配發(無人判斷);**來自系統建議**=看了合議定案才買的。代號/買進日/股數/價格/分類都可改。"
                "系統會自動加總成下方「彙總部位」給每晚風控用。")
     df = _lots_df(db)
     edited = st.data_editor(
@@ -120,9 +124,10 @@ def show():
             "股數": st.column_config.NumberColumn("股數", min_value=0, step=1000, required=True),
             "價格": st.column_config.NumberColumn("價格", min_value=0.0, format="%.2f", required=True),
             "分類": st.column_config.SelectboxColumn("分類", options=CATS, required=True),
-            "期初持倉": st.column_config.CheckboxColumn(
-                "期初持倉", default=False,
-                help="系統開始記錄之前就持有的部位。勾選後不計入「決策支援價值」的統計"),
+            "取得方式": st.column_config.SelectboxColumn(
+                "取得方式", options=list(KIND_LABEL.values()), required=True,
+                help="這筆部位反映誰的判斷。只有「我的決策」計入決策支援價值的統計;"
+                     "「期初持倉」是系統記錄前就持有的,「公司配發」沒有任何人的判斷"),
             "來自系統建議": st.column_config.CheckboxColumn(
                 "來自系統建議", default=False,
                 help="這一筆是不是看了系統的合議定案才買的。用來比較「系統推薦的」"
