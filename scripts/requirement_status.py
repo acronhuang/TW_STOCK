@@ -64,6 +64,8 @@ REQUIREMENTS = [
     dict(id="NFR-QUAL-002", name="判斷品質（中期 20 日）",
          cmd=[PY, "scripts/verdict_orthogonality_backtest.py",
               "--window", "20", "--dry-run"], nodata_codes=(2,)),
+    dict(id="FR-OUT-001", name="對外產出如期產生",
+         cmd=[PY, "scripts/output_freshness.py"], nodata_codes=(2,)),
 ]
 
 ICON = {"pass": "✅", "fail": "🔴", "nodata": "⚪"}
