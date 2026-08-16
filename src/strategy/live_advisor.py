@@ -46,7 +46,12 @@ class LiveAdvisor:
                  stop_loss_pct: float = 0.08,
                  mongo_uri: str = "mongodb://localhost:27017/",
                  db_name: str = "tw_stock_analysis",
-                 portfolio_name: str = "live"):
+                 # 預設必須是資料實際所在的投組。原本是 "live",但所有
+                 # portfolio_positions 的 portfolio 都是 "main" —— 查詢
+                 # 結構上永遠對不到,賣出建議與再平衡因此恆為空,而端點回 200、
+                 # summary 顯示 0,外觀完全正常(2026-08-17 實測:live 給
+                 # 「買 10、賣 0」,main 給「買 0、賣 7」,建議完全相反)。
+                 portfolio_name: str = "main"):
         self.capital = capital
         self.max_positions = max_positions
         self.max_position_pct = max_position_pct
@@ -57,9 +62,22 @@ class LiveAdvisor:
 
     def generate_suggestions(self) -> dict:
         """產生交易建議（買入 + 賣出）"""
+        held = self._get_held_symbols()
         buy_candidates = self._screen_buy_candidates()
         sell_candidates = self._screen_sell_candidates()
         rebalance = self._check_rebalance()
+
+        # 空投組不得偽裝成「沒事可做」。sell_count=0 有兩種完全不同的意思:
+        #   (1) 有持倉,逐檔看過,沒有該賣的
+        #   (2) 根本沒讀到持倉,所以沒東西可看
+        # 兩者外觀一樣。ADR-0002:無資料必須與已判定區分開。
+        warnings = []
+        if not held:
+            avail = sorted(x for x in self.db['portfolio_positions']
+                           .distinct('portfolio') if x)
+            warnings.append(
+                f"投組 '{self.portfolio_name}' 沒有任何持倉 —— 賣出建議與再平衡"
+                f"必然是空的,這不代表沒事可做。現有投組:{avail or '(無)'}")
 
         return {
             'date': datetime.now().strftime('%Y-%m-%d'),
@@ -71,7 +89,9 @@ class LiveAdvisor:
                 'buy_count': len(buy_candidates),
                 'sell_count': len(sell_candidates),
                 'rebalance_count': len(rebalance),
+                'positions_seen': len(held),   # 0 → 上面的 warnings 會說明
             },
+            'warnings': warnings,
         }
 
     def execute(self, suggestions: dict, confirm: bool = False):
