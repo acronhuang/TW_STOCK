@@ -3,6 +3,9 @@ import pytest
 import subprocess
 import sys
 
+# ADR-0011 分類（2026-08-16）：純 CLI 參數解析
+pytestmark = pytest.mark.unit
+
 
 class TestCLIQuery:
     def test_health_command(self):

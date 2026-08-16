@@ -1,6 +1,10 @@
 """財報健康分析測試"""
 import pytest
 
+# ADR-0011 分類（2026-08-16）：斷言真實公司的財務數字（台積電評等/ROE/EPS、三商餐飲警示），
+# 公司狀況一變就紅而程式無誤 —— 依 ADR-0011 屬「世界的事實」不進迴歸閘
+pytestmark = pytest.mark.integration
+
 
 class TestFinancialHealth:
     def test_tsmc_grade_A(self, health):

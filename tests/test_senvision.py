@@ -2,6 +2,9 @@
 import pytest
 import numpy as np
 
+# ADR-0011 分類（2026-08-16）：純演算法
+pytestmark = pytest.mark.unit
+
 
 class TestZigZag:
     def test_import(self):

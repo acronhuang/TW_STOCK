@@ -2,6 +2,9 @@
 import pytest
 import requests
 
+# ADR-0011 分類（2026-08-16）：已有 skipif 條件，不連 DB
+pytestmark = pytest.mark.unit
+
 API = 'http://localhost:8888'
 
 

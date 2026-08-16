@@ -3,6 +3,9 @@ import pytest
 import pandas as pd
 import numpy as np
 
+# ADR-0011 分類（2026-08-16）：從 db.stock_price 讀 2330 真實價格算指標，需要 DB
+pytestmark = pytest.mark.integration
+
 
 class TestRSI:
     def test_rsi_range(self, db):

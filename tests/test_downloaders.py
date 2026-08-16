@@ -2,6 +2,9 @@
 import pytest
 import os
 
+# ADR-0011 分類（2026-08-16）：純解析邏輯
+pytestmark = pytest.mark.unit
+
 
 class TestFinMindClient:
     def test_client_init(self):

@@ -2,6 +2,9 @@
 import pytest
 from src.strategy.trading_rules import TradingRules
 
+# ADR-0011 分類（2026-08-16）：純函式（TradingRules），不連 DB
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture(scope="module")
 def rules():

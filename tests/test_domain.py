@@ -2,6 +2,9 @@
 import pytest
 from datetime import datetime
 
+# ADR-0011 分類（2026-08-16）：純函式，股號只當夾具不斷言其數值
+pytestmark = pytest.mark.unit
+
 
 class TestStockModel:
     def test_stock_creation(self):

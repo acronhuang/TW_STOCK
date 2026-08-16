@@ -3,6 +3,9 @@ import pytest
 import numpy as np
 import pandas as pd
 
+# ADR-0011 分類（2026-08-16）：純型態演算法
+pytestmark = pytest.mark.unit
+
 
 class TestPatternDetector:
     def test_import(self):
