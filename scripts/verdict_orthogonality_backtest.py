@@ -12,7 +12,8 @@ verdict 命中率 × 委員正交性回測 —— NFR-QUAL-001 常態 SLI（月�
 純讀 team_analysis / stock_price；寫入 verdict_performance（快照）、verdict_detail（逐筆）
 與可選 schedule_alerts。
 
-NFR-QUAL-001 門檻：買進 命中 ≥ 55% 且 均超額 ≥ +1.5%。
+NFR-QUAL-001（5 日，服務每日推薦）與 NFR-QUAL-002（20 日，服務核心池）：
+買進 超額命中 ≥ 55%，均超額門檻由目標年化超額反推（見 ADR-0008）。
 
 ⚠️ 命中率基準（2026-08-14 修正，見下）
 --------------------------------------
@@ -30,13 +31,31 @@ NFR-QUAL-001 門檻：買進 命中 ≥ 55% 且 均超額 ≥ +1.5%。
 兩側同時被重新校準才是基準修正、不是移動球門。
 故 gate 改用 `hit`（超額基準），`hit_abs`（絕對）保留為次要指標一併輸出。
 """
-import sys, bisect, math, argparse, datetime
+import os, sys, bisect, math, argparse, datetime
 from collections import defaultdict, Counter
 from pymongo import MongoClient
 
 DB = MongoClient("mongodb://localhost:27017/")["tw_stock_analysis"]
-QUAL_HIT = 0.55      # NFR-QUAL-001 命中率門檻（超額基準）
-QUAL_EXCESS = 0.015  # NFR-QUAL-001 超額門檻
+# ── 品質門檻（ADR-0007 / ADR-0008）────────────────────────────────────
+# 兩條獨立需求，各自視窗、各自告警：
+#   NFR-QUAL-001  前瞻 5 交易日   服務每日推薦（短線）
+#   NFR-QUAL-002  前瞻 20 交易日  服務核心池（中期）
+#
+# 均超額門檻**由目標年化超額反推**，不同視窗不共用同一數字。
+# 原本兩者共用 +1.5%，換算後才發現它其實是為 20 日校準的：
+#   5 日 → 年化 +111%（任何真實系統都達不到）｜10 日 → +45%｜20 日 → +20%
+# 實測 5 日 +0.71%（年化 +42%）曾因此被判「未達標」——那是假警報，壞的是門檻。
+TARGET_ANNUAL_EXCESS = float(os.getenv('QUAL_TARGET_ANNUAL', '0.20'))
+TRADING_DAYS_YEAR = 250.0
+QUAL_HIT = 0.55      # 命中率門檻，兩條需求共用：它是「方向對不對」，不隨視窗換算
+
+
+def excess_threshold(window: int) -> float:
+    """由目標年化超額反推該視窗的均超額門檻。20% → 5 日 0.37%、20 日 1.47%。"""
+    return (1.0 + TARGET_ANNUAL_EXCESS) ** (window / TRADING_DAYS_YEAR) - 1.0
+
+
+REQ_ID = {5: 'NFR-QUAL-001', 20: 'NFR-QUAL-002'}   # 有編號者才是需求（ADR-0010）
 MIN_N = 30           # 樣本過小不告警（避免雜訊誤報）
 # 買進反動能過濾：排除事前 20 日漲幅最高的這一比例。
 # 依據（全樣本 2026-08-14）：買進判斷力隨事前動能單調遞減——
@@ -140,6 +159,7 @@ def _config_drift(active):
 
 
 def compute(fwd):
+    _THR = excess_threshold(fwd)      # 該視窗的均超額門檻（由目標年化超額反推）
     docs = load_verdicts()
     ser = price_series(sorted({d['symbol'] for d in docs}))
     for d in docs:
@@ -181,7 +201,7 @@ def compute(fwd):
                 'median_excess': sorted(exs)[n // 2],
                 'bench_mean': (sum(fwds) - sum(exs)) / n,       # 期間池均，解釋兩基準差距
                 'excess_pos': sum(1 for x in exs if x > 0) / n,
-                'excess_ge_1p5': sum(1 for x in exs if x >= QUAL_EXCESS) / n}
+                'excess_ge_thr': sum(1 for x in exs if x >= _THR) / n}
 
     buy = cls('買進')
     sell = cls('賣出')
@@ -332,7 +352,7 @@ def run_one(window, a):
     if b['n']:
         print(f"買進 N={b['n']} 命中(超額基準)={b['hit']*100:.1f}% "
               f"均超額={b['mean_excess']*100:+.2f}% 中位={b['median_excess']*100:+.2f}% "
-              f"超額≥1.5%={b['excess_ge_1p5']*100:.1f}%")
+              f"超額≥門檻={b['excess_ge_thr']*100:.1f}%")
         print(f"     └ 對照 絕對漲跌命中={b['hit_abs']*100:.1f}% "
               f"(期間池均 {b['bench_mean']*100:+.2f}% —— 池均為負時絕對命中必然偏低)")
     if r['sell']['n']:
@@ -397,17 +417,23 @@ def run_one(window, a):
         print(f"✅ 現任委員無冗餘對(同票率皆 ≤{PAIR_AGREE_MAX*100:.0f}%)")
 
     # NFR-QUAL 判定 —— 命中率用超額基準（與均超額同基準，見檔頭）
+    # 門檻依視窗反推（ADR-0008）；只有 5/20 日有需求編號，其餘視窗僅供參考（ADR-0010）
+    thr = excess_threshold(window)
+    req = REQ_ID.get(window)
+    label = req or f"（前瞻 {window} 日，無需求編號，僅參考）"
     qual_pass = None
     if b['n'] >= MIN_N:
-        qual_pass = (b['hit'] >= QUAL_HIT) and (b['mean_excess'] >= QUAL_EXCESS)
-        print(f"NFR-QUAL-001: {'✅ 達標' if qual_pass else '🔴 未達標'} "
-              f"(門檻 超額命中≥{QUAL_HIT*100:.0f}% 且 均超額≥{QUAL_EXCESS*100:.1f}%)")
+        ok = (b['hit'] >= QUAL_HIT) and (b['mean_excess'] >= thr)
+        qual_pass = ok if req else None     # 沒有編號就不是需求，不進 gate
+        print(f"{label}: {'✅ 達標' if ok else '🔴 未達標'} "
+              f"(門檻 超額命中≥{QUAL_HIT*100:.0f}% 且 均超額≥{thr*100:.2f}%"
+              f"，由目標年化超額 {TARGET_ANNUAL_EXCESS*100:.0f}% 反推)")
         if bf.get('n', 0) >= MIN_N:
-            fp = (bf['hit'] >= QUAL_HIT) and (bf['mean_excess'] >= QUAL_EXCESS)
+            fp = (bf['hit'] >= QUAL_HIT) and (bf['mean_excess'] >= thr)
             print(f"              └ 套用反動能過濾後: {'✅ 達標' if fp else '🔴 未達標'}"
                   f" (參考值,不作為 gate)")
     else:
-        print(f"NFR-QUAL-001: 樣本 <{MIN_N}，不判定")
+        print(f"{label}: 樣本 <{MIN_N}，不判定")
 
     rows = r.pop('_rows', [])          # 逐筆明細另存,不塞進快照文件
     snapshot = {'ts': datetime.datetime.now(), 'source': 'verdict_sli', **r, 'nfr_qual_pass': qual_pass}
@@ -451,15 +477,16 @@ def run_one(window, a):
         DB.verdict_performance.insert_one(dict(snapshot))
         print("[ok] 已寫 verdict_performance 快照")
 
-    if a.alert and qual_pass is False:
+    if a.alert and qual_pass is False and req:
         DB.schedule_alerts.create_index([('ts', -1)])
         DB.schedule_alerts.insert_one({
             'ts': datetime.datetime.now(), 'level': 'warning', 'source': 'verdict_sli',
-            'message': f"⚠️ NFR-QUAL-001 未達標(window={window}): 買進超額命中 "
-                       f"{b['hit']*100:.1f}%(需≥55%) 均超額 {b['mean_excess']*100:+.2f}%"
-                       f"(需≥1.5%), N={b['n']}",
+            'requirement': req,
+            'message': f"⚠️ {req} 未達標(前瞻 {window} 日): 買進超額命中 "
+                       f"{b['hit']*100:.1f}%(需≥{QUAL_HIT*100:.0f}%) 均超額 "
+                       f"{b['mean_excess']*100:+.2f}%(需≥{thr*100:.2f}%), N={b['n']}",
             'resolved': False})
-        print("[alert] 已寫 schedule_alerts")
+        print(f"[alert] 已寫 schedule_alerts（{req}）")
 
     # 退化委員獨立告警 —— 與 NFR gate 分開,因為它是「委員會組成」的問題,
     # 不是「判斷準不準」的問題,兩者要能各自被看見(hermes3 就是被整體數字蓋過去的)

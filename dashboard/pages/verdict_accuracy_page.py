@@ -18,7 +18,21 @@ from pymongo import MongoClient
 
 sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis")
 
-QUAL_HIT, QUAL_EXCESS = 0.55, 0.015     # NFR-QUAL-001
+# 門檻與需求編號一律從 production 腳本取，不在此重新定義（ADR-0006）。
+# 舊版在這裡寫死 0.55/0.015，與腳本各有一份 —— 兩份一旦分岔，網頁與告警會說不同的話。
+sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis/scripts")
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location(
+    "_vob", "/home/mdsadmin/Stock/tw-stock-analysis/scripts/verdict_orthogonality_backtest.py")
+_vob = _ilu.module_from_spec(_spec)
+_sv = sys.argv
+sys.argv = ["x"]
+_spec.loader.exec_module(_vob)
+sys.argv = _sv
+QUAL_HIT = _vob.QUAL_HIT
+excess_threshold = _vob.excess_threshold
+REQ_ID = _vob.REQ_ID
+TARGET_ANNUAL = _vob.TARGET_ANNUAL_EXCESS
 BANDS = ["事前弱(跌最多)", "事前中", "事前強(漲最多)"]
 
 
@@ -132,10 +146,16 @@ def show():
         st.markdown(f"**賣出**　{_fmt(sell)}")
 
     if buy and buy["n"] >= 30:
-        ok = buy["hit"] >= QUAL_HIT and buy["mean_ex"] >= QUAL_EXCESS
+        thr = excess_threshold(window)
+        req = REQ_ID.get(window)
+        ok = buy["hit"] >= QUAL_HIT and buy["mean_ex"] >= thr
+        label = req or f"前瞻 {window} 日（無需求編號，僅參考）"
         (st.success if ok else st.error)(
-            f"NFR-QUAL-001（買進 超額命中 ≥{QUAL_HIT*100:.0f}% 且 均超額 ≥{QUAL_EXCESS*100:.1f}%）："
+            f"{label}（買進 超額命中 ≥{QUAL_HIT*100:.0f}% 且 均超額 ≥{thr*100:.2f}%）："
             f"{'✅ 達標' if ok else '🔴 未達標'}")
+        st.caption(f"均超額門檻由目標年化超額 {TARGET_ANNUAL*100:.0f}% 反推："
+                   f"5 日 {excess_threshold(5)*100:.2f}%、20 日 {excess_threshold(20)*100:.2f}%。"
+                   f"同一個數字在不同視窗代表的年化幅度差一個數量級，故不共用（ADR-0008）。")
 
     # ── 事前動能分層:把判斷力與均值回歸分開 ──────────────────────────
     st.markdown("### 事前動能分層")
