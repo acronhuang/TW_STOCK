@@ -133,7 +133,11 @@ EXEMPT = {
     # 使用者持倉:有交易才變動,無更新是正常狀態,不該報警
     "portfolio_positions": "使用者持倉,有交易才變動",
     "portfolio_lots": "使用者持倉批次,同上",
-    "portfolio_trades": "使用者交易紀錄,同上",
+    # 2026-08-17 凍結為歷史快照:tracker.py(唯一寫入者)已刪除,不會再有新資料。
+    # **不刪表** —— 六查第 3 步證明它不是 portfolio_lots 的子集:
+    #   1108 幸福/2892 第一金(已賣出)的唯一紀錄、commission/cost/total 三欄、
+    #   2026-04-12~15 的價格快照(與現在的均價都不同)。
+    "portfolio_trades": "歷史快照,已凍結不再更新(見 ADR-0020)",
     "portfolio_dividends": "使用者股利紀錄,同上(目前 0 筆)",
     "core_watchlist": "核心池設定,人工維護",
     "verdict_performance": "決策績效回顧,週期性產出",

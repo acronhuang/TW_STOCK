@@ -8,7 +8,11 @@ Usage:
     from src.strategy.live_advisor import LiveAdvisor
     la = LiveAdvisor(capital=5_000_000)
     suggestions = la.generate_suggestions()  # 產生交易建議
-    la.execute(suggestions)                  # 執行到投組（需確認）
+
+本模組**只產生建議、不寫入投組**。要把「照系統建議買進」記下來,
+走風控頁的分批表格並勾「來自系統建議」(ADR-0020 的 from_system)。
+原本的 execute() 透過已退役的 PortfolioTracker 寫 portfolio_trades,
+而該表已凍結為歷史快照,故一併移除。
 """
 
 import logging
@@ -23,6 +27,9 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 logger = logging.getLogger(__name__)
+
+# 持倉單一真相的彙總表(原本從已退役的 tracker import 這個常數)
+POSITIONS = 'portfolio_positions'
 
 
 def _to_float(v) -> float | None:
@@ -94,31 +101,6 @@ class LiveAdvisor:
             'warnings': warnings,
         }
 
-    def execute(self, suggestions: dict, confirm: bool = False):
-        """執行交易建議到投組（需 confirm=True）"""
-        if not confirm:
-            logger.warning('未確認執行，請設定 confirm=True')
-            return
-
-        from src.portfolio.tracker import PortfolioTracker
-        pt = PortfolioTracker(portfolio_name=self.portfolio_name)
-
-        for sell in suggestions.get('sell', []):
-            try:
-                pt.sell(sell['symbol'], lots=sell['lots'],
-                        price=sell['price'], note=sell['reason'])
-                logger.info(f"賣出 {sell['symbol']} {sell['lots']}張")
-            except Exception as e:
-                logger.error(f"賣出 {sell['symbol']} 失敗: {e}")
-
-        for buy in suggestions.get('buy', []):
-            try:
-                pt.buy(buy['symbol'], lots=buy['lots'],
-                       price=buy['price'], note=buy['reason'])
-                logger.info(f"買入 {buy['symbol']} {buy['lots']}張")
-            except Exception as e:
-                logger.error(f"買入 {buy['symbol']} 失敗: {e}")
-
     # ──────────────────────────────────────────────
     #  買入篩選
     # ──────────────────────────────────────────────
@@ -189,8 +171,7 @@ class LiveAdvisor:
     # ──────────────────────────────────────────────
     def _screen_sell_candidates(self) -> list[dict]:
         """檢查持倉是否需要停損或獲利了結"""
-        from src.portfolio.tracker import COLLECTION
-        positions = list(self.db[COLLECTION].find(
+        positions = list(self.db[POSITIONS].find(
             {'portfolio': self.portfolio_name}))
 
         sells = []
@@ -250,8 +231,7 @@ class LiveAdvisor:
     # ──────────────────────────────────────────────
     def _check_rebalance(self) -> list[dict]:
         """檢查持倉是否偏離目標權重過多"""
-        from src.portfolio.tracker import COLLECTION
-        positions = list(self.db[COLLECTION].find(
+        positions = list(self.db[POSITIONS].find(
             {'portfolio': self.portfolio_name}))
 
         if not positions:
@@ -300,14 +280,12 @@ class LiveAdvisor:
     #  輔助
     # ──────────────────────────────────────────────
     def _get_held_symbols(self) -> set:
-        from src.portfolio.tracker import COLLECTION
-        return set(p['symbol'] for p in self.db[COLLECTION].find(
+        return set(p['symbol'] for p in self.db[POSITIONS].find(
             {'portfolio': self.portfolio_name}, {'symbol': 1}))
 
     def _get_total_held_value(self) -> float:
-        from src.portfolio.tracker import COLLECTION
         total = 0
-        for pos in self.db[COLLECTION].find({'portfolio': self.portfolio_name}):
+        for pos in self.db[POSITIONS].find({'portfolio': self.portfolio_name}):
             price = self._get_latest_price(pos['symbol'])
             if price:
                 total += pos['shares'] * price

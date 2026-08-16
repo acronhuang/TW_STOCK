@@ -254,7 +254,8 @@ verify_metrics: FinMind 複核收盤/PE          🗳️ consensus.deliberate()
 |------|------|------|
 | `team_analysis` ★ | 7 角色報告 + 合議定案 + 復驗（本次新增） | 2,999 |
 | `alert_history` / `alert_rules` | 告警記錄/規則 | 227 / 25 |
-| `portfolio_positions` / `portfolio_trades` | 投組部位/交易 | 18 / 17 |
+| `portfolio_lots` / `portfolio_positions` | 持倉分批(單一真相) / 自動彙總 | 17 / 17 |
+| `portfolio_trades` | 2026-04 的歷史快照,**已凍結**不再更新(見 ADR-0020) | 17 |
 
 ### 名單
 `stock_list`(3,065) · `stocks`(2,361) · `stocks_full`(1,688) · `tickers`(1,345) · `tickers_legacy`(view→tickers)
