@@ -113,6 +113,16 @@ def replace_lots(db, lots):
             "price": _f(l.get("price")) or 0.0,
             "category": l.get("category") or "波段",
             "portfolio": "main",
+            # kind:這一筆是「決策」還是「期初持倉」（ADR-0015 修訂,2026-08-16）。
+            #   trade            —— 一次真實的買進決策,from_system 才有意義
+            #   opening_balance  —— 系統開始記錄之前就持有的部位,不代表任何決策
+            # 為什麼不用 from_system 的三態:那會讓「不適用」與「還沒填」都是 None,
+            # 而 ADR-0002 的精神正是「無資料」必須與「已判定」區分開。
+            "kind": l.get("kind") or "trade",
+            # from_system:這筆是不是因系統建議而買（ADR-0014 的輔助判準）。
+            # 只對 kind=trade 有意義;opening_balance 一律 None。
+            "from_system": (bool(l.get("from_system"))
+                            if (l.get("kind") or "trade") == "trade" else None),
             "note": str(l.get("note") or ""),
             "created_at": datetime.now(),
         })

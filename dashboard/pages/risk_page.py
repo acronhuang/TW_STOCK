@@ -52,9 +52,14 @@ def _lots_df(db):
             "代號": lt["symbol"], "名稱": _name(lt["symbol"]),
             "買進日": pd.to_datetime(bd) if bd else None,
             "股數": lt["shares"], "價格": lt["price"],
-            "分類": lt["category"], "備註": lt["note"],
+            "分類": lt["category"],
+            # 這一筆是決策還是期初持倉;期初持倉不代表任何判斷,不該混進決策支援價值的統計
+            "期初持倉": (lt.get("kind") or "trade") == "opening_balance",
+            "來自系統建議": bool(lt.get("from_system")),
+            "備註": lt["note"],
         })
-    return pd.DataFrame(rows, columns=["代號", "名稱", "買進日", "股數", "價格", "分類", "備註"])
+    return pd.DataFrame(rows, columns=["代號", "名稱", "買進日", "股數", "價格",
+                                       "分類", "期初持倉", "來自系統建議", "備註"])
 
 
 def _agg_df(db):
@@ -83,10 +88,14 @@ def _save_lots(db, edited):
             bd = datetime(bd.year, bd.month, bd.day)
         else:
             bd = None
+        opening = bool(r.get("期初持倉"))
         payload.append({
             "symbol": sym, "buy_date": bd,
             "shares": r.get("股數"), "price": r.get("價格"),
-            "category": r.get("分類") or "波段", "note": r.get("備註") or "",
+            "category": r.get("分類") or "波段",
+            "kind": "opening_balance" if opening else "trade",
+            "from_system": bool(r.get("來自系統建議")),
+            "note": r.get("備註") or "",
         })
     return L.replace_lots(db, payload)
 
@@ -98,7 +107,7 @@ def show():
     # ---------- ① 分批持倉明細 ----------
     st.markdown("### 📁 分批持倉明細")
     st.caption("**每一筆買進一列**(同股多次買進就多列,填**買進日**)。要新增就在表格最底下加列;"
-               "刪除打勾按垃圾桶;改完按「💾 儲存」。代號/買進日/股數/價格/分類都可改。"
+               "刪除打勾按垃圾桶;改完按「💾 儲存」。**期初持倉**=系統開始記錄前就持有的;**來自系統建議**=看了合議定案才買的。代號/買進日/股數/價格/分類都可改。"
                "系統會自動加總成下方「彙總部位」給每晚風控用。")
     df = _lots_df(db)
     edited = st.data_editor(
@@ -111,6 +120,13 @@ def show():
             "股數": st.column_config.NumberColumn("股數", min_value=0, step=1000, required=True),
             "價格": st.column_config.NumberColumn("價格", min_value=0.0, format="%.2f", required=True),
             "分類": st.column_config.SelectboxColumn("分類", options=CATS, required=True),
+            "期初持倉": st.column_config.CheckboxColumn(
+                "期初持倉", default=False,
+                help="系統開始記錄之前就持有的部位。勾選後不計入「決策支援價值」的統計"),
+            "來自系統建議": st.column_config.CheckboxColumn(
+                "來自系統建議", default=False,
+                help="這一筆是不是看了系統的合議定案才買的。用來比較「系統推薦的」"
+                     "與「自己找的」事後表現(期初持倉不適用)"),
             "備註": st.column_config.TextColumn("備註"),
         })
     if st.button("💾 儲存", type="primary"):
