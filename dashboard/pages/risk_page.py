@@ -48,6 +48,14 @@ def _price(db, sym):
     return _f((p or {}).get("close"))
 
 
+def _to_dt(v):
+    """表格的日期欄 → datetime(只留日期);空值/NaT → None。"""
+    if v is None or not pd.notna(v):
+        return None
+    v = pd.to_datetime(v)
+    return datetime(v.year, v.month, v.day)
+
+
 def _lots_df(db):
     rows = []
     for lt in L.list_lots(db):
@@ -60,10 +68,13 @@ def _lots_df(db):
             # 這一筆反映誰的判斷 —— 只有「我的決策」才計入決策支援價值的統計
             "取得方式": KIND_LABEL.get(lt.get("kind") or "trade", "我的決策"),
             "來自系統建議": bool(lt.get("from_system")),
+            "賣出日": pd.to_datetime(lt["sell_date"]) if lt.get("sell_date") else None,
+            "賣出價": lt.get("sell_price"),
             "備註": lt["note"],
         })
     return pd.DataFrame(rows, columns=["代號", "名稱", "買進日", "股數", "價格",
-                                       "分類", "取得方式", "來自系統建議", "備註"])
+                                       "分類", "取得方式", "來自系統建議",
+                                       "賣出日", "賣出價", "備註"])
 
 
 def _agg_df(db):
@@ -86,12 +97,8 @@ def _save_lots(db, edited):
         sym = str(r.get("代號") or "").strip()
         if not sym:
             continue
-        bd = r.get("買進日")
-        if pd.notna(bd) and bd is not None:
-            bd = pd.to_datetime(bd)
-            bd = datetime(bd.year, bd.month, bd.day)
-        else:
-            bd = None
+        bd = _to_dt(r.get("買進日"))
+        sd = _to_dt(r.get("賣出日"))
         kind = KIND_VALUE.get(str(r.get("取得方式") or "我的決策"), "trade")
         payload.append({
             "symbol": sym, "buy_date": bd,
@@ -99,6 +106,8 @@ def _save_lots(db, edited):
             "category": r.get("分類") or "波段",
             "kind": kind,
             "from_system": bool(r.get("來自系統建議")),
+            "sell_date": sd,
+            "sell_price": (r.get("賣出價") if sd else None),
             "note": r.get("備註") or "",
         })
     return L.replace_lots(db, payload)
@@ -132,6 +141,14 @@ def show():
                 "來自系統建議", default=False,
                 help="這一筆是不是看了系統的合議定案才買的。用來比較「系統推薦的」"
                      "與「自己找的」事後表現(期初持倉不適用)"),
+            # 賣出**不刪列** —— 填賣出日就從持倉扣掉,但紀錄永久留著。
+            # 刪列會讓事後表現只看得到還留著的部位(存活者偏誤)。
+            "賣出日": st.column_config.DateColumn(
+                "賣出日", format="YYYY-MM-DD",
+                help="賣掉了就填這裡,**不要刪列**。填了就不再計入持倉,"
+                     "但紀錄留著供事後對照。部分賣出:拆成兩列。"),
+            "賣出價": st.column_config.NumberColumn(
+                "賣出價", min_value=0.0, format="%.2f", help="有填賣出日才有意義"),
             "備註": st.column_config.TextColumn("備註"),
         })
     if st.button("💾 儲存", type="primary"):

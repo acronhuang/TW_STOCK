@@ -7,7 +7,14 @@ portfolio_positions(Phase2 風控在用的單一真相)由 lots **自動彙總**
 
 集合 portfolio_lots 欄位:
   symbol, buy_date(datetime|None), shares(int), price(float),
-  category, portfolio, note, created_at
+  category, portfolio, note, created_at,
+  kind, from_system,
+  sell_date(datetime|None), sell_price(float|None)
+
+賣出**不刪列**,只填 sell_date/sell_price(ADR-0014)。已賣出的 lot 不計入
+portfolio_positions,但永久留在 portfolio_lots 供事後表現對照 —— 刪列會造成
+存活者偏誤,而且是看不出來的那種:剩下的每一筆數字都還是對的。
+部分賣出的記法:拆成兩列(賣掉的那列填賣出,留著的那列不填)。
 """
 from datetime import datetime
 
@@ -31,7 +38,10 @@ def _f(v):
 # ---------- 彙總:lots → portfolio_positions ----------
 def recompute_position(db, sym):
     """把某代號所有 lot 彙總,寫回 portfolio_positions(無 lot 則刪該部位)。"""
-    lots = list(db.portfolio_lots.find({"symbol": sym}))
+    # 已賣出的 lot 留在表裡(事後表現對照要用),但**不算持倉**。
+    # 漏了這個過濾,賣掉的股數會繼續出現在風控頁與每日警示裡。
+    lots = [l for l in db.portfolio_lots.find({"symbol": sym})
+            if not l.get("sell_date")]
     if not lots:
         db.portfolio_positions.delete_one({"symbol": sym})
         return None
@@ -98,6 +108,8 @@ def list_lots(db):
             # 網頁上的「期初持倉」卻全部沒勾。
             "kind": l.get("kind") or "trade",
             "from_system": l.get("from_system"),
+            "sell_date": l.get("sell_date"),
+            "sell_price": _f(l.get("sell_price")),
             "note": l.get("note") or "",
         })
     return out
@@ -133,6 +145,11 @@ def replace_lots(db, lots):
             # from_system 只對 trade 有意義;opening_balance 與 allocation 一律 None
             "from_system": (bool(l.get("from_system"))
                             if (l.get("kind") or "trade") == "trade" else None),
+            # 賣出:填了 sell_date 這筆就算了結,不再計入持倉。
+            # sell_price 沒有 sell_date 是無意義的,一律丟棄,避免半填狀態
+            # 被下游當成「已賣出」或「還持有」各解讀一次。
+            "sell_date": l.get("sell_date"),
+            "sell_price": (_f(l.get("sell_price")) if l.get("sell_date") else None),
             "note": str(l.get("note") or ""),
             "created_at": datetime.now(),
         })
@@ -185,6 +202,14 @@ def _adj_series(db, sym, start):
     return _fix_splits(pd.Series(data).sort_index())
 
 
+def _freeze_after(ratio, cut):
+    """把 cut 之後的值全部凍結為 cut 當日的值(部位已了結 → 轉現金)。"""
+    upto = ratio[ratio.index <= cut]
+    if upto.empty:
+        return ratio
+    return ratio.where(ratio.index <= cut, upto.iloc[-1])
+
+
 def equity_replay(db, benchmark="0050"):
     """從各批實際進場日,用還原價畫『持倉市值 vs 同資金買0050 vs 投入成本』。
     回傳 DataFrame(index=日期),或 None(無可用 lot)。"""
@@ -218,8 +243,18 @@ def equity_replay(db, benchmark="0050"):
             continue
         base, bbase = after.iloc[0], b_after.iloc[0]
         mask = idx >= bd
-        port.loc[mask] = port.loc[mask] + invested * (s[mask] / base).fillna(1.0)
-        bnch.loc[mask] = bnch.loc[mask] + invested * (bench[mask] / bbase).fillna(1.0)
+        p_ratio = (s / base).fillna(1.0)
+        b_ratio = (bench / bbase).fillna(1.0)
+        sd = l.get("sell_date")
+        if sd is not None:
+            # 已賣出 → 出場後兩條線都凍結(賣了股票,對照組的 0050 也該同時賣掉,
+            # 否則等於拿「已了結的部位」跟「還在跑的大盤」比,對照組會被灌水)。
+            # 凍結值取**還原價**在賣出日的水準,不用使用者填的 sell_price ——
+            # 後者是原始價,與 adj_close 基準不同,混用會失真。
+            p_ratio = _freeze_after(p_ratio, sd)
+            b_ratio = _freeze_after(b_ratio, sd)
+        port.loc[mask] = port.loc[mask] + invested * p_ratio[mask]
+        bnch.loc[mask] = bnch.loc[mask] + invested * b_ratio[mask]
         cost.loc[mask] = cost.loc[mask] + invested
         used += 1
     if used == 0:
@@ -274,9 +309,17 @@ def strategy_replay(db, stop_loss=None, take_profit=None, trailing=None,
             continue
         entry = after.iloc[0]
         bbase = b_after.iloc[0]
+        # 真實賣出是既成事實,規則只能在它**之前**觸發,不能蓋過它。
+        # 不截斷的話,已賣出的部位會被假設性規則一路模擬到今天。
+        sd = l.get("sell_date")
+        if sd is not None:
+            after = after[after.index <= sd]
+            if after.empty:
+                continue
         # 逐日套用出場規則
         peak = entry
-        ex_dt, ex_px, reason = after.index[-1], after.iloc[-1], "續持"
+        ex_dt, ex_px, reason = (after.index[-1], after.iloc[-1],
+                                "實際賣出" if sd is not None else "續持")
         for dt, px in after.items():
             peak = max(peak, px)
             if stop_loss and px <= entry * (1 - stop_loss):
