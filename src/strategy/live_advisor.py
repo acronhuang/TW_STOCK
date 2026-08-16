@@ -205,8 +205,13 @@ class LiveAdvisor:
 
             pnl_pct = (price - avg_cost) / avg_cost
 
-            # 停損
-            if pnl_pct <= -self.stop_loss_pct:
+            # 免停損分類(債券ETF/長期存股/零成本/零股)不套波段硬止損。
+            # 語意由風控頁的分類決定,scripts/daily_alert_check.py 也是這樣處理
+            # (「零成本/零股/長期存股 → 不套波段硬止損」)。這裡原本沒有這個判斷,
+            # 等於使用者在風控頁的設定被默默推翻 —— 同一個欄位、兩個消費者、
+            # 相反的行為,而且兩邊的輸出各自看起來都正常。
+            if pnl_pct <= -self.stop_loss_pct and not (
+                    pos.get('no_stop_loss') or pos.get('long_hold')):
                 sells.append({
                     'symbol': sym,
                     'name': self._get_stock_name(sym),
