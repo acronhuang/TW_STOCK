@@ -55,17 +55,17 @@ def main():
     print(f"設定的委員會 = {cfg}")
 
     if a.since_hours:
-        # 用 _id 的內嵌時間戳判「最近寫入」,不能用 date 欄位 ——
-        # team_analysis.date 是**分析日**(午夜時間戳),不是寫入時間,
-        # 拿它跟 now-N 小時比會把當天整批排除掉,靜默回 0 筆。
-        # 必須用 **tz-aware UTC**:ObjectId.from_datetime 把 naive datetime 當成 UTC,
-        # 傳本地時間(UTC+8)會讓切點變成未來 8 小時,查詢永遠靜默回 0 筆。
-        # 2026-08-14 實測踩過:週跑正在寫入,檢查卻回報「沒有分析文件」。
-        from bson import ObjectId
-        cut = (datetime.datetime.now(datetime.timezone.utc)
-               - datetime.timedelta(hours=a.since_hours))
-        q = {'_id': {'$gte': ObjectId.from_datetime(cut)},
-             'consensus.votes': {'$exists': True}}
+        # 判「最近寫入」一律用 updated_at —— 那才是真正的最後寫入時間。
+        # 這裡踩過兩層坑,都會讓查詢**靜默回 0 筆**:
+        #   1. 用 date：那是**分析日**(午夜時間戳),不是寫入時間,
+        #      拿它跟 now-N 小時比會把當天整批排除掉。(2026-08-14)
+        #   2. 用 _id 的內嵌時間戳：那是文件**首次建立**的時間。phase1 先建文件,
+        #      phase2 只是 upsert 補上 advisor/consensus,_id 不變 ——
+        #      於是所有 phase2 的更新(合議正是其一)全被漏掉,
+        #      檢查回報「沒有分析文件」而合議其實正常運作。(2026-08-16)
+        # updated_at 由 to_doc() 每次寫入時更新,是唯一正確的欄位。
+        cut = datetime.datetime.now() - datetime.timedelta(hours=a.since_hours)
+        q = {'updated_at': {'$gte': cut}, 'consensus.votes': {'$exists': True}}
         scope = f"最近 {a.since_hours} 小時內寫入"
     else:
         days = sorted({d['date'] for d in DB.team_analysis.find(
