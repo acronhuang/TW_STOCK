@@ -11,6 +11,12 @@ env 覆寫、模型沒 pull 成功、回覆格式抽不到票，任一種都會�
 而整體流程照跑、日誌照綠。本專案已有前例:hermes3:8b 出席 8913 次、84.7% 都投
 買進而長期無人察覺。故這裡直接拿**實際投票紀錄**對照設定，不信設定檔。
 
+可失敗性證據（ADR-0002 條件 1，可重跑）:
+  正向  committee_live_check.py --since-hours 24                          -> 結束碼 0
+  反向  CONSENSUS_MODELS=gemma2:9b,qwen2.5:7b,__does_not_exist__:1b \
+          committee_live_check.py --since-hours 24                        -> 結束碼 1
+        （報「設定的委員未出現在投票紀錄」）
+
 判準（任一不過就是 🔴）:
   1. 設定裡的每位委員都必須在最近這批分析中出現
   2. 每位委員的抽不到票（棄權）比例 ≤ NULL_MAX

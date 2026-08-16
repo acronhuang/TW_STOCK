@@ -15,6 +15,13 @@ verdict 命中率 × 委員正交性回測 —— NFR-QUAL-001 常態 SLI（月�
 NFR-QUAL-001（5 日，服務每日推薦）與 NFR-QUAL-002（20 日，服務核心池）：
 買進 超額命中 ≥ 55%，均超額門檻由目標年化超額反推（見 ADR-0008）。
 
+可失敗性證據（ADR-0002 條件 1，可重跑）:
+  正向  --window 20 --dry-run                        -> 結束碼 0
+  反向  QUAL_TARGET_ANNUAL=5.0 --window 20 --dry-run -> 結束碼 1
+        （目標年化 500% -> 門檻高到必失敗）
+  2026-08-16 即以此測出 main() 無條件 return 0 的缺陷：會印「未達標」、
+  會寫告警，但結束碼永遠 0，呼叫端一律看到「通過」。
+
 ⚠️ 命中率基準（2026-08-14 修正，見下）
 --------------------------------------
 基準 = 同一 P0 日、**分析池的橫斷面平均報酬**（非 0050）。這種基準把市場 beta
@@ -513,10 +520,24 @@ def main():
 
     wins = ([int(x) for x in a.windows.split(',') if x.strip()]
             if a.windows else [a.window])
+    # 結束碼必須反映判定結果（ADR-0002 條件 1）。
+    # 🔴 2026-08-16 修:原本無條件 return 0 —— 會印「🔴 未達標」、會寫告警,
+    #    但結束碼永遠是 0,任何用結束碼判斷的呼叫端都會看到「通過」。
+    #    這是加入 --windows 多視窗時把 run_one 的回傳值接住卻沒用所致。
+    # 三態:0=全部有編號的需求皆達標 / 1=有需求未達標 / 2=樣本不足無從判定
+    results = []
     for i, w in enumerate(wins):
         if i:
             print()
-        run_one(w, a)
+        results.append(run_one(w, a))
+    judged = [x for x in results if x is not None]
+    if not judged:
+        print("\n⚪ 無資料：所有視窗的樣本皆不足，無從判定")
+        return 2
+    if not all(judged):
+        print(f"\n🔴 未通過：{len(judged) - sum(judged)}/{len(judged)} 條需求未達標")
+        return 1
+    print(f"\n✅ 通過：{len(judged)} 條需求全部達標")
     return 0
 
 
