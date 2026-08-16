@@ -23,6 +23,12 @@ date: 2026-08-16
 2. 無法 import 者（shell 腳本）一律走 git 部署後在目標機測試，**不 `scp` 暫存版**
    （`scp` 版與部署版的差異同屬上述缺陷類別；且 Windows 工作區的 CRLF 會經 `scp`
    帶入而破壞 shell 腳本）。
+3. **驗證時必須使用 production 的執行參數，不只是 import production 的函式。**
+   2026-08-16 補：同一晚第二次因「我跑的和它跑的不一樣」而誤判——
+   `regression_gate` 跑的是 `pytest -m unit`，我卻跑 `pytest tests/ -x`，
+   於是找到的失敗測試（`test_ttm_eps_direct_sum`，標記為 `integration`）
+   根本不在閘門範圍內，閘門從未因它而紅。真正的失敗是另一支。
+   同類的參數差異包括：marker 選擇、`--window`/`--date` 等旗標、環境變數。
 
 ## Consequences
 
