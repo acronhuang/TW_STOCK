@@ -92,6 +92,12 @@ def list_lots(db):
             "shares": int(_f(l.get("shares")) or 0),
             "price": _f(l.get("price")) or 0.0,
             "category": l.get("category") or "波段",
+            # kind / from_system 必須一併帶出 —— 本函式是白名單投影,
+            # 漏帶等於欄位在 UI 上永遠是預設值,而寫入端與 DB 都正確,極難察覺。
+            # 2026-08-16 實測踩過:DB 裡 17 筆都是 opening_balance,
+            # 網頁上的「期初持倉」卻全部沒勾。
+            "kind": l.get("kind") or "trade",
+            "from_system": l.get("from_system"),
             "note": l.get("note") or "",
         })
     return out
