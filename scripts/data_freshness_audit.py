@@ -63,7 +63,7 @@ SPEC = {
     },
     "分析產出": {
         # 2026-08-13 納管:pipeline 產物,停更代表 pipeline 出事
-        "team_analysis": ("date", "daily"),          # 24 天,每晚產出
+        # 2026-08-16 team_analysis 移出 → FR-OUT-001（見下方 EXEMPT 的說明）
         "risk_analysis": ("date", "weekly"),         # 15 天,有持倉才產出
     },
 }
@@ -83,6 +83,23 @@ TH_OVERRIDE = {"shareholding": 12}
 # 一律列為未納管並進入告警。要豁免就得在下方寫一行理由 —— 讓「不監控」
 # 變成一個需要明說的決定,而不是預設值。
 EXEMPT = {
+    # ── 對外產出:改由 FR-OUT-001 檢查（ADR-0012 / 2026-08-16）─────────────
+    # 「輸入端資料新鮮度」與「產出如期產生」是兩件不同的事:前者遲到多半是上游
+    # API 的問題、等一下就好;後者是自己的排程壞了,且會靜默污染所有下游判斷。
+    # 兩邊都管會讓同一個產出遲到時產生兩則告警,與 ADR-0009「只在狀態轉變時
+    # 一則」相衝;職責也會模糊。故產出一律歸 FR-OUT-001(scripts/output_freshness.py),
+    # 它另外帶著各產出的「內建落後幾個交易日」與「容許遲到幾天」等節奏參數,
+    # 那是 data_freshness_audit 的頻率模型表達不了的。
+    "team_analysis": "對外產出,改由 FR-OUT-001 檢查",
+    "verdict_detail": "對外產出,改由 FR-OUT-001 檢查(含前瞻視窗的內建落差)",
+    "verdict_performance": "對外產出,改由 FR-OUT-001 檢查",
+    "core_watchlist": "對外產出,改由 FR-OUT-001 檢查",
+    "requirement_status": "對外產出,改由 FR-OUT-001 檢查",
+    # ── 死表 ──────────────────────────────────────────────────────────
+    # stock_list:taiwan_stock_info 的真子集(3,065 ⊂ 3,134,後者多 69 檔),
+    # date 值域 2020-06-13~,且含 None。唯一的分析用途已於 2026-08-13 移除
+    # (valuation_models.py:423「此分支實測不可達」)。監控一個永遠不會被讀到的表沒有意義。
+    "stock_list": "死表:taiwan_stock_info 的真子集,唯一用途已於 2026-08-13 移除",
     # 執行狀態 / 續跑進度,非資料源
     "adj_close_backfill_state": "續跑進度表",
     "balance_equity_backfill_state": "續跑進度表",
