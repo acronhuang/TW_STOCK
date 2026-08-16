@@ -59,6 +59,10 @@ def to_doc(analysis: dict, date: datetime, name: str = "", source_file: str = ""
         "name": name or "",
         "date": date,
         "reports": analysis.get("reports") or {},
+        # ADR-0005：每份角色報告的產生模型與節點。沒有它，關於模型的主張無法被檢查。
+        "models": analysis.get("models") or {},
+        # ADR-0004：可執行性是屬性不是過濾條件，供執行層自行決定門檻。
+        "median_turnover": analysis.get("median_turnover"),
         "evidence": analysis.get("evidence") or [],
         "advisor": analysis.get("advisor"),
         "consensus": analysis.get("consensus"),
@@ -77,8 +81,8 @@ def to_doc(analysis: dict, date: datetime, name: str = "", source_file: str = ""
 # 於是用 advisor=None 蓋掉了 phase2 剛寫入的顧問整合與合議定案 ——
 # 8 檔全滅，log 卻一路顯示成功（合議定案都印出來了），只有查 DB 才看得見。
 # 對照組：不在該 JSON 內的另外 49 檔完全不受影響，證實是覆蓋而非寫入失敗。
-_PRECIOUS = ("advisor", "consensus", "final_verdict", "reports",
-             "evidence", "senvision", "extra", "price_at_analysis")
+_PRECIOUS = ("advisor", "consensus", "final_verdict", "reports", "models",
+             "median_turnover", "evidence", "senvision", "extra", "price_at_analysis")
 
 
 def upsert_analyses(db, analyses: list, date: datetime, meta: dict = None,

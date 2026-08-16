@@ -385,6 +385,7 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     # 一律依 ANALYST_ROLES 順序收斂與輸出 —— 完成順序不影響結果與日誌，
     # 否則同一檔重跑兩次的 log 會長得不一樣，難以比對
     reports = {}
+    models = {}          # ADR-0005:每份角色報告記錄產生它的模型與節點
     failed = []
     for role in ANALYST_ROLES:
         r = got.get(role) or {}
@@ -394,6 +395,15 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
         if '</think>' in txt:
             txt = txt.split('</think>', 1)[-1]
         reports[role] = txt.strip()
+        # 沒有 provenance,關於模型的主張就無法被檢查,依 ADR-0002 不夠格成為需求。
+        # 節點由 MODEL_TO_URL 解析,與 ask_role 實際使用的是同一份對應表。
+        mdl = r.get('model') or '?'
+        try:
+            from src.moe.role_router import MODEL_TO_URL, OLLAMA_URL
+            host = MODEL_TO_URL.get(mdl.split('(')[0], OLLAMA_URL).split('//')[-1].split(':')[0]
+        except Exception:
+            host = '?'
+        models[role] = f"{mdl}@{host}"
         rt = f" retry×{r['retries']}" if r.get('retries') else ""
         print(f"     {ROLE_ICON.get(role, role)} ({r.get('model','?')}) "
               f"{r.get('elapsed_sec','?')}s{rt}")
@@ -427,6 +437,7 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
         print(f"     🗳️合議 ({consensus['n']}模型) → 定案:{consensus['final']}")
 
     return {'symbol': symbol, 'evidence': evidence, 'reports': reports,
+            'models': models,                      # ADR-0005:角色→模型@節點
             'advisor': advisor, 'senvision': sv_pats, 'extra': extra,
             'news': news_txt, 'consensus': consensus}
 
@@ -491,35 +502,50 @@ def select_universe_50(n: int = 50) -> list[dict]:
             for r in sel.values()]
 
 
-# 全市場 universe 的流動性下限（近 20 交易日成交量中位數，單位：張）。
-# 2026-08-15 實測 2077 檔的分布：
-#   無價格資料 105 檔 ｜ <100 張 664 檔(32%) ｜ 100~500 張 562 ｜ >=500 張 746
-# 中位量 <100 張的標的，即使分析出「買進」也買不進去 —— 任何有意義的部位
-# 都會把價格打上去。花在它們的 200 秒/檔是純浪費，而且它們的高雜訊報酬
-# 還會稀釋 verdict_detail 的準確度統計。
-# 排除 <100 張 + 無價格資料共 769 檔後 universe 降到 1308 檔(-37%)。
-# 設 TEAM_MIN_LOTS=0 可完全關閉還原舊行為。
-MIN_LOTS = float(os.getenv('TEAM_MIN_LOTS', '100'))
+# ADR-0004：分析池的唯一排除條件是「輸入資料不足以計算因子」。
+# 可執行性（買不買得到）不是分析資格 —— 那是執行層的判斷，改為輸出屬性 median_turnover。
+#
+# 2026-08-15 曾以「近 20 日中位量 ≥100 張」過濾，把 2079 檔降為 1310 檔。
+# 實測推翻該過濾的正當性：被排除的 668 檔中 96% 有法人買賣紀錄、99% 有財報
+# （比保留組的 98% 還高），僅 7% 有零成交日、且 20 日內零成交 ≥5 天者只有 1 檔。
+# 它們的因子輸入是完整的，排除它們是任意切割而非資料品質判斷。
 LIQ_DAYS = 20
+MAX_ZERO_DAYS = int(os.getenv('TEAM_MAX_ZERO_DAYS', '5'))   # 零成交日過多 = 因子無意義
 
 
-def _median_lots(sym, dts):
-    """近 LIQ_DAYS 交易日成交量中位數（張）。取不到回 None（與 0 區別開）。"""
-    vols = []
-    for r in DB.stock_price.find({'symbol': sym, 'date': {'$in': dts}}, {'volume': 1}):
-        v = r.get('volume')
+def _liquidity(sym, dts):
+    """回 (中位成交金額, 零成交日數, 有價格的天數)。完全無價格資料回 (None, None, 0)。"""
+    amts, zero, n = [], 0, 0
+
+    def _f(v):
         try:
-            vols.append(float(v.to_decimal()) if hasattr(v, 'to_decimal') else float(v or 0))
+            return float(v.to_decimal()) if hasattr(v, 'to_decimal') else float(v or 0)
         except (TypeError, ValueError):
-            continue
-    if not vols:
-        return None
-    vols.sort()
-    return vols[len(vols) // 2] / 1000.0      # 股 → 張
+            return 0.0
+
+    for r in DB.stock_price.find({'symbol': sym, 'date': {'$in': dts}},
+                                 {'volume': 1, 'close': 1, 'trading_money': 1}):
+        n += 1
+        vol = _f(r.get('volume'))
+        amt = _f(r.get('trading_money')) or vol * _f(r.get('close'))
+        if vol <= 0:
+            zero += 1
+        if amt > 0:
+            amts.append(amt)
+    if not n:
+        return None, None, 0
+    amts.sort()
+    med = amts[len(amts) // 2] if amts else 0.0
+    return med, zero, n
 
 
 def select_universe_all() -> list[dict]:
-    """全市場：所有有價、有基本資訊的 4 碼個股(去 ETF/受益/存託)，並濾掉流動性過低者。"""
+    """全市場：所有有價、有基本資訊的 4 碼個股(去 ETF/受益/存託)。
+
+    只排除「資料不足以計算因子」者（無價格資料、零成交日過多），
+    不依可執行性過濾（ADR-0004）。中位成交金額以 median_turnover 附在標的上，
+    供核心池、每日推薦等執行層自行決定門檻。
+    """
     import re, datetime as _dt
     syms = set(s for s in DB.stock_price.distinct('symbol') if re.fullmatch(r'\d{4}', str(s)))
     info = {d['stock_id']: d for d in DB.taiwan_stock_info.find(
@@ -533,10 +559,6 @@ def select_universe_all() -> list[dict]:
             continue
         cand.append({'symbol': sym, 'name': ti.get('stock_name'), 'action': '(全市場)'})
 
-    if MIN_LOTS <= 0:
-        print(f"  [universe] 流動性過濾已關閉(TEAM_MIN_LOTS=0)，{len(cand)} 檔全收")
-        return cand
-
     # 用 trading_dates 這個權威日曆取最近 N 個交易日，不自己推算日期。
     # 🔴 必須加上界：trading_dates 涵蓋到 2026-12-31（含未來日期），
     #    不設上界會取到還沒發生的日子 → 全部查無價格 → 整個 universe 被清空。
@@ -545,24 +567,26 @@ def select_universe_all() -> list[dict]:
     tds = sorted(d for d in DB.trading_dates.distinct('date')
                  if d and d <= cutoff)[-LIQ_DAYS:]
     if not tds:
-        print(f"  [universe] 🔴 {cutoff} 之前查無交易日，流動性過濾略過，{len(cand)} 檔全收")
+        print(f"  [universe] 🔴 {cutoff} 之前查無交易日，無法判定資料充足性，{len(cand)} 檔全收")
         return cand
     dts = [_dt.datetime.strptime(d, '%Y-%m-%d') for d in tds]
-    print(f"  [universe] 流動性基準區間 {tds[0]} ~ {tds[-1]}（{len(tds)} 個交易日）")
-    out, n_thin, n_nodata = [], 0, 0
+    print(f"  [universe] 資料充足性基準區間 {tds[0]} ~ {tds[-1]}（{len(tds)} 個交易日）")
+    out, n_nodata, n_zero = [], 0, 0
     for c in cand:
-        med = _median_lots(c['symbol'], dts)
+        med, zero, ndays = _liquidity(c['symbol'], dts)
         if med is None:
             n_nodata += 1
             continue
-        if med < MIN_LOTS:
-            n_thin += 1
+        if zero >= MAX_ZERO_DAYS:
+            n_zero += 1
             continue
-        c['median_lots'] = round(med, 1)
+        # 可執行性是屬性不是過濾條件：執行層拿它自行決定門檻
+        c['median_turnover'] = round(med)
         out.append(c)
     # 不靜默截斷：排除了幾檔、為什麼，都要講出來
-    print(f"  [universe] 候選 {len(cand)} 檔 → 排除 近{LIQ_DAYS}日中位量<{MIN_LOTS:.0f}張 "
-          f"{n_thin} 檔、無價格資料 {n_nodata} 檔 → 實跑 {len(out)} 檔")
+    print(f"  [universe] 候選 {len(cand)} 檔 → 排除 無價格資料 {n_nodata} 檔、"
+          f"零成交日≥{MAX_ZERO_DAYS} 天 {n_zero} 檔 → 實跑 {len(out)} 檔"
+          f"（可執行性不過濾，以 median_turnover 屬性交由執行層判斷）")
     return out
 
 
@@ -1074,6 +1098,8 @@ def main():
     for t in targets:
         print(f"\n🏛️ {t['symbol']} {t['name']} 團隊分析...")
         res = analyze_symbol(t['symbol'], args.quick)
+        if t.get('median_turnover') is not None:   # ADR-0004：可執行性屬性帶進文件
+            res['median_turnover'] = t['median_turnover']
         analyses.append(res)
         save_results(analyses, meta)            # 逐檔存檔(中斷可續/供phase2)
         db_upsert_one(res, meta)                # 雙寫 DB
