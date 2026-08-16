@@ -11,6 +11,7 @@
 """
 import os
 import re
+import time
 
 import requests
 
@@ -53,16 +54,32 @@ DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', 'qwen2.5:7b')
 
 
 def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
-    try:
-        r = requests.post(f'{url or CONSENSUS_URL}/api/generate',
-                          json={'model': model, 'prompt': prompt, 'stream': False,
-                                'options': {'temperature': float(os.getenv('LLM_TEMPERATURE', '0')), 'num_gpu': 99, 'seed': int(os.getenv('LLM_SEED', '42'))},  # 全層GPU + 確定性(temp0/固定seed,可重現)
-                                'keep_alive': '10m'},  # ④ 委員跨輪常駐，避免多輪討論每輪重載
-                          timeout=timeout)
-        r.raise_for_status()
-        return r.json().get('response', '')
-    except Exception as e:
-        return f'ERR:{e}'
+    """向委員模型提問。失敗會重試 —— 一次連線抖動不該直接記成棄權。
+
+    2026-08-16 實測:08~15 時 .27 出現連線失敗,llama3.1 與 qwen2.5:7b 的棄權率
+    衝到 100%（gemma2 同節點、同提示詞卻全程 0%，故非節點整台掛掉），
+    投票紀錄裡留下的是 `ERR:HTTPConnectionPool(host='172.16.9.27'...)`。
+    棄權的委員那一輪等於沒投 —— 三人合議實際上只有兩人，而且完全靜默。
+
+    角色層(role_router.ask_role)昨日已加重試,失敗率因此由 18.8% 降到 0.5%,
+    但合議層漏了 —— 同一類問題只修了一半。CONSENSUS_RETRY=1 可停用重試。
+    """
+    attempts = max(1, int(os.getenv('CONSENSUS_RETRY', '3')))
+    last = None
+    for i in range(attempts):
+        try:
+            r = requests.post(f'{url or CONSENSUS_URL}/api/generate',
+                              json={'model': model, 'prompt': prompt, 'stream': False,
+                                    'options': {'temperature': float(os.getenv('LLM_TEMPERATURE', '0')), 'num_gpu': 99, 'seed': int(os.getenv('LLM_SEED', '42'))},  # 全層GPU + 確定性(temp0/固定seed,可重現)
+                                    'keep_alive': '10m'},  # ④ 委員跨輪常駐，避免多輪討論每輪重載
+                              timeout=timeout)
+            r.raise_for_status()
+            return r.json().get('response', '')
+        except Exception as e:
+            last = e
+            if i < attempts - 1:
+                time.sleep(5 * (i + 1))     # 退避,讓瞬時壅塞有時間消化
+    return f'ERR:{last}'
 
 
 _SYNONYM = [
