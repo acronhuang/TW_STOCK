@@ -62,7 +62,7 @@ grep -rn "line_notif\|LineNotif\|send_line\|notifier" <要跑的腳本>
 
 | 表 | 為什麼 |
 |---|---|
-| `financial_statements` | `hsieh_dividend.py` 的主路徑（2 處引用），且 11 檔 KY 股在 `financial_detail` 沒有資料，只有這裡有 |
+| `financial_statements` | `hsieh_dividend.py` 的**主路徑**（非 fallback，無處可退）——謝式存股的負債比／速動比／未分配盈餘三道門檻全靠它，刪了會**靜默不加分**。另有 11 檔 KY 股（含 `1626` 艾美特-KY，2025Q3 總資產 79.7 億）只有這張表有 |
 | `portfolio_trades` | 已凍結但**不是子集**：1108／2892 兩檔已賣出持倉的唯一紀錄、`commission`/`cost`/`total` 三欄、2026-04 價格快照 |
 
 ---
