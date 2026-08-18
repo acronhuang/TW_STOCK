@@ -200,12 +200,23 @@ def main():
         # 只挑「已知是交易日、但列數不足」的日期重抓。
         # 判交易日用 trading_dates（本專案的權威日曆），不靠 TWSE 回傳與否，
         # 否則抓失敗與非交易日會被混為一談，永遠修不完也查不出。
+        #
+        # 🔴 上下界都必須來自日曆,不能用集合自己的 min/max:整條尾巴缺掉時,
+        #    缺口會落在「集合自己的 max」之外而永遠看不到。舊版走 per.items(),
+        #    只看得到「已存在但列數不足」的日期;2026-08-17 的 total_margin
+        #    整天 0 列,不在 per 裡,因此舊版回報「待修復 0 天」並 exit 0。
         from collections import Counter
-        tds = set(DB.trading_dates.distinct("date"))
+        tds = sorted(DB.trading_dates.distinct("date"))
+        today = datetime.date.today().strftime("%Y-%m-%d")
+        hi = max((d for d in tds if d < today), default=None)   # 今日盤後才發布,不列入
         need = set()
         for coll, exp in (("total_margin", 3), ("total_institutional_investors", 6)):
             per = Counter(d["date"] for d in DB[coll].find({}, {"date": 1}))
-            need |= {d for d, n in per.items() if n < exp and d in tds}
+            if not per or hi is None:
+                continue
+            lo = min(per)
+            # 對日曆逐日 get(d, 0),而不是只走集合已有的日期
+            need |= {d for d in tds if lo <= d <= hi and per.get(d, 0) < exp}
         days = sorted(datetime.datetime.strptime(d, "%Y-%m-%d").date() for d in need)
         print(f"待修復日期 {len(days)} 天"
               + (f"（{days[0]} ~ {days[-1]}）" if days else ""))
@@ -251,8 +262,18 @@ def main():
     m, n = sync_day(d, a.dry_run)
     if a.dry_run:
         print("[dry-run] 未寫入")
-    elif not (m or n):
-        print("  (無資料 —— 可能是非交易日或當日尚未公布)")
+        return 0
+
+    # 🔴 交易日寫入不完整必須非零退出,否則 cron 永遠看起來成功。
+    #    舊版無條件 return 0,且 `not (m or n)` 在 margin 0 / inst 6 時不成立,
+    #    連「無資料」那句都不會印 —— 2026-08-17 就是這樣靜默漏掉的。
+    if d.strftime("%Y-%m-%d") not in set(DB.trading_dates.distinct("date")):
+        print("  (非交易日)")
+        return 0
+    if m < 3 or n < 6:
+        print(f"  🔴 {d} 是交易日但寫入不完整: margin {m}/3、inst {n}/6"
+              f"（TWSE 可能尚未發布,--repair 會在隔日補）")
+        return 2
     return 0
 
 
