@@ -67,8 +67,17 @@ ROLE_TO_MODEL = {
     'value-analyst':            VIEW_MODEL,
     'chip-analyst':             VIEW_MODEL,
 
-    # 快速規則/趨勢（輕模型 3b @ .28）
-    'risk-manager':             'qwen2.5-3b:latest',
+    # 風控 2026-08-19 由 qwen2.5-3b(@.28) 改走 qwen2.5:7b(@.27) —— 負載分流,非模型偏好。
+    # 實測 nvidia-smi:.28 使用率 100% / 82°C(逼近 V100 降頻點)、.27 使用率 0% / 68°C。
+    # 且 .28 只常駐 qwen3-14b 一個模型,任何需要換載的請求一律被立即拒絕:
+    #   qwen3-14b(已常駐) HTTP 200 55,062ms / qwen2.5-3b(未常駐) HTTP 503 530ms
+    #   {"error":"server busy, please try again.  maximum pending requests exceeded"}
+    # 於是 risk-manager 最近 200 檔失敗 60 次,而 .27 上的角色 0 次。
+    # 選 qwen2.5:7b 而非把 3b 搬到 .27:qwen2.5:7b 已是合議委員+DEVIL_MODEL,
+    # 在 .27 已常駐,不佔新槽位(.27 KEEP_ALIVE=-1 且 MAX_LOADED 用預設 3,已滿)。
+    # 3b→7b 同家族升級;3b 曾被記錄會捏造指標(見 macro-analyst 2026-08-01 那條)。
+    # RISK_MODEL=qwen2.5-3b:latest 可立即還原。
+    'risk-manager':             os.getenv('RISK_MODEL', 'qwen2.5:7b'),
     'macro-analyst':            MAIN_14B,  # 2026-08-01 3b→14b:3b會捏造指標(把VIX chg%貼成券資報酬率)+讀反大盤
 
     # 工具型（按需）
@@ -120,6 +129,7 @@ MODEL_TO_URL = {
     'qwen2.5-3b:latest':  OLLAMA_URL,
     'gemma2:9b':          OLLAMA_URL_27,   # gemma2 在 .27,value/chip 路由到 .27
     'llama3.1:8b':        OLLAMA_URL_27,   # llama3.1 只在 .27(已常駐,零額外 VRAM)
+    'qwen2.5:7b':         OLLAMA_URL_27,   # 2026-08-19 risk-manager 改用;.27 已常駐,零額外 VRAM
 }
 
 
