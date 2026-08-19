@@ -172,7 +172,13 @@ def ask_role(role: str,
         except Exception as e:
             last_err = e
             if i < attempts - 1:
-                time.sleep(5 * (i + 1))
+                # 佇列滿(503 server busy)不是瞬時抖動,是持續數小時的飽和狀態,
+                # 5s/10s 退避等於沒退,三次很快用完就變成「分析失敗」字串。
+                # 2026-08-19 實測 .28 直接回 503:{"error":"server busy,
+                # please try again.  maximum pending requests exceeded"}
+                busy = (isinstance(e, requests.HTTPError)
+                        and getattr(e.response, 'status_code', None) == 503)
+                time.sleep((30, 120, 300)[min(i, 2)] if busy else 5 * (i + 1))
     return {'role': role, 'model': model, 'error': str(last_err),
             'attempts': attempts}
 

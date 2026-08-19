@@ -417,8 +417,13 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     _ROLE_FAIL['total_stocks'] += 1
 
     advisor = None
-    if not quick:
-        data['reports'] = reports
+    # 🔴 只餵可用報告:錯誤訊息不得參與整合(見 usable_reports)。
+    #    _ok 非空 蘊含 not quick,故下方單一條件即可,不必改寫 quick 參數。
+    _ok = {} if quick else usable_reports(reports)
+    if not quick and not _ok:
+        print("     ⏭ 角色報告全數為錯誤訊息，略過顧問整合（不拿錯誤當依據）")
+    if _ok:
+        data['reports'] = _ok
         prompt = build_expert_prompt('investment-advisor', symbol, data)
         if news_txt:                              # 顧問整合時也看得到原始新聞事件
             prompt += "\n\n" + news_txt
@@ -734,9 +739,30 @@ def load_results():
         return json.load(f)
 
 
+_FAIL_PREFIX = '分析失敗'
+
+
+def usable_reports(reports: dict) -> dict:
+    """濾掉「內容其實是錯誤訊息」的角色報告。
+
+    2026-08-19：.28 佇列飽和回 503(server busy)／逾時，reports[role] 會被寫成
+    「分析失敗: HTTPConnectionPool…」字串(見本檔 ~L394)，而顧問整合與合議
+    照樣拿它去整合、投票 —— 等於讓一段錯誤訊息參與投資決策。實測該日
+    risk-manager 200 檔中 61 檔如此。
+
+    仍保留在 reports 內(供稽核、--skip-done 判斷、schema_contract_audit)，
+    只是不得餵給顧問。全部失敗時回空 dict，由呼叫端決定略過整合。
+    """
+    return {k: v for k, v in (reports or {}).items()
+            if not (isinstance(v, str) and v.startswith(_FAIL_PREFIX))}
+
+
 def run_advisor(symbol: str, reports: dict) -> str:
     """phase2：用 phase1 存的 6 份報告重跑投資顧問整合(不重跑6角色)。"""
-    prompt = build_expert_prompt('investment-advisor', symbol, {'reports': reports})
+    ok = usable_reports(reports)
+    if not ok:
+        return "整合略過：角色報告全數為錯誤訊息，不以此做決策"
+    prompt = build_expert_prompt('investment-advisor', symbol, {'reports': ok})
     r = ask_role('investment-advisor', prompt, include_role_prompt=True, timeout=600)
     txt = r.get('response', f"整合失敗: {r.get('error')}")
     if '</think>' in txt:

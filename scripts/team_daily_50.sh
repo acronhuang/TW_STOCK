@@ -10,6 +10,18 @@ set -uo pipefail
 cd /home/mdsadmin/Stock/tw-stock-analysis || exit 1
 PY=/home/mdsadmin/Stock/.venv/bin/python3
 
+# ── 讓路給週跑（單向）────────────────────────────────────────────────
+# 週跑 --universe all 已涵蓋 industry50，重疊只是重複計算又互搶同一顆 GPU。
+# 2026-08-19 實測：週跑(phase1+phase2) + 本工作並存 → .28 佇列爆滿回
+# 503 server busy，risk-manager 200 檔逾時 61 檔，且錯誤字串被合議採用。
+# 單向：只有每日讓週跑，不可反向 —— 每日管線 20:00 起跑數小時，若週跑也讓路，
+# 週五 21:00 的週跑會被自己的守衛永久擋掉。
+if pgrep -f 'team_daily_verified\.py --universe all' >/dev/null; then
+  echo "⏭ 週跑進行中，跳過每日 industry50 團隊分析（--universe all 已涵蓋）"
+  echo "   這是刻意跳過，不是失敗（exit 75）。"
+  exit 75
+fi
+
 echo "============================================================"
 echo "  Phase 1 精簡（6角色+佐證）  $(date '+%Y-%m-%d %H:%M:%S')"
 echo "============================================================"

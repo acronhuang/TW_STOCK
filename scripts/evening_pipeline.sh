@@ -54,7 +54,11 @@ $PY scripts/chip_score_scan.py || echo "  chip 失敗（續）"
 $PY scripts/dual_signal_scan.py || echo "  dual 失敗（續）"
 
 step "8a 當日量化picks團隊合議（dailypicks×8）"
-$PY scripts/team_daily_verified.py --universe dailypicks --picks-n 8 || echo "  dailypicks 失敗（續）"
+if pgrep -f 'team_daily_verified\.py --universe all' >/dev/null; then
+  echo "  ⏭ 週跑進行中，跳過 dailypicks 團隊合議（避免與週跑搶 GPU）"
+else
+  $PY scripts/team_daily_verified.py --universe dailypicks --picks-n 8 || echo "  dailypicks 失敗（續）"
+fi
 
 step "8/9 團隊分析（Phase1+2）"
 bash scripts/team_daily_50.sh || echo "  team 失敗（續）"
