@@ -4,14 +4,14 @@
 7 分析角色 → 本地模型（實際映射以下方 ROLE_TO_MODEL 為準；env 可覆寫）：
   🎩 investment-advisor      → MAIN_14B  (qwen3-14b @ .28)   最強整合
   🤝 stock-team-orchestrator → MAIN_14B  (qwen3-14b @ .28)   團隊協調
-  📈 technical-analyst       → MAIN_14B  (qwen3-14b @ .28)   指標 + 型態
+  📈 technical-analyst       → llama3.1:8b @ .27              指標 + 型態(負載分流)
   💰 fundamental-analyst     → MAIN_14B  (qwen3-14b @ .28)   財報數字
-  🎯 macro-analyst           → MAIN_14B  (qwen3-14b @ .28)   大局（2026-08 由 3b 升 14b）
+  🎯 macro-analyst           → MAIN_14B  (qwen3-14b @ .28)   大局
   💎 value-analyst           → VIEW_MODEL(gemma2:9b  @ .27)  換視角
   🏦 chip-analyst            → VIEW_MODEL(gemma2:9b  @ .27)  法人趨勢
-  🛡️ risk-manager            → qwen2.5-3b:latest     @ .28   快速規則
+  🛡️ risk-manager            → qwen2.5-14b:latest    @ .28   財經風控(2026-08-20 由 7b@.27 升 14b@.28)
 
-  合議委員(consensus.COMMITTEE) → gemma2:9b / qwen2.5:7b / qwen2.5-3b (@ .27)
+  合議委員(consensus.COMMITTEE) → gemma2:9b / deepseek-coder-v2:16b / llama3.1:8b (@ .27)
   facilitator                   → qwen3-14b (@ .28)
   型態/看圖 → SenVision 蔡森演算法(非 LLM，精準型態/頸線)，結果餵 technical-analyst
   工具型   → coder(qwen2.5-coder:7b) / embed(nomic-embed-text) / tw-polish(llama-3-taiwan)
@@ -67,17 +67,11 @@ ROLE_TO_MODEL = {
     'value-analyst':            VIEW_MODEL,
     'chip-analyst':             VIEW_MODEL,
 
-    # 風控 2026-08-19 由 qwen2.5-3b(@.28) 改走 qwen2.5:7b(@.27) —— 負載分流,非模型偏好。
-    # 實測 nvidia-smi:.28 使用率 100% / 82°C(逼近 V100 降頻點)、.27 使用率 0% / 68°C。
-    # 且 .28 只常駐 qwen3-14b 一個模型,任何需要換載的請求一律被立即拒絕:
-    #   qwen3-14b(已常駐) HTTP 200 55,062ms / qwen2.5-3b(未常駐) HTTP 503 530ms
-    #   {"error":"server busy, please try again.  maximum pending requests exceeded"}
-    # 於是 risk-manager 最近 200 檔失敗 60 次,而 .27 上的角色 0 次。
-    # 選 qwen2.5:7b 而非把 3b 搬到 .27:qwen2.5:7b 已是合議委員+DEVIL_MODEL,
-    # 在 .27 已常駐,不佔新槽位(.27 KEEP_ALIVE=-1 且 MAX_LOADED 用預設 3,已滿)。
-    # 3b→7b 同家族升級;3b 曾被記錄會捏造指標(見 macro-analyst 2026-08-01 那條)。
-    # RISK_MODEL=qwen2.5-3b:latest 可立即還原。
-    'risk-manager':             os.getenv('RISK_MODEL', 'qwen2.5:7b'),
+    # 風控 2026-08-20 由 qwen2.5:7b(@.27) 改走 qwen2.5-14b(@.28)。
+    # .27 重新配置後移除 qwen2.5:7b,換入 deepseek-coder-v2:16b(程式開發用途)。
+    # qwen2.5-14b 同家族再升級(3b→7b→14b),財經推理更強;.28 已調高 MAX_LOADED_MODELS
+    # 可同時常駐 qwen3-14b + qwen2.5-14b + foundation-sec-8b + whiterabbitneo-7b。
+    'risk-manager':             os.getenv('RISK_MODEL', 'qwen2.5-14b:latest'),
     'macro-analyst':            MAIN_14B,  # 2026-08-01 3b→14b:3b會捏造指標(把VIX chg%貼成券資報酬率)+讀反大盤
 
     # 工具型（按需）
@@ -123,13 +117,12 @@ LLM_SEED = int(os.getenv('LLM_SEED', '42'))
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')       # 主力 .28
 OLLAMA_URL_27 = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議 .27
 
-# 模型 → 主機：gemma2 只在 .27（合議），qwen2.5-* 在 .28（主力）。未列者走 OLLAMA_URL。
+# 模型 → 主機：gemma2/llama3.1/deepseek-coder-v2 在 .27（合議）;qwen3/qwen2.5-14b 在 .28（主力）。未列者走 OLLAMA_URL。
 MODEL_TO_URL = {
     'qwen2.5-14b:latest': OLLAMA_URL,
-    'qwen2.5-3b:latest':  OLLAMA_URL,
     'gemma2:9b':          OLLAMA_URL_27,   # gemma2 在 .27,value/chip 路由到 .27
     'llama3.1:8b':        OLLAMA_URL_27,   # llama3.1 只在 .27(已常駐,零額外 VRAM)
-    'qwen2.5:7b':         OLLAMA_URL_27,   # 2026-08-19 risk-manager 改用;.27 已常駐,零額外 VRAM
+    'deepseek-coder-v2:16b': OLLAMA_URL_27,  # 2026-08-20 取代 qwen2.5:7b 作合議委員;.27 已常駐
 }
 
 

@@ -5,8 +5,8 @@
   .28 主力 qwen2.5-14b 出初稿+主持人整合 → 顧問草案(買/持/賣)
   .27 合議小組 多個 8B 模型獨立投票 → 匯總定案(多數決)
 
-委員會預設用 .27 上的「通用」模型(gemma2:9b + qwen2.5:7b + qwen2.5-3b)；
-.27 另有資安模型(foundation-sec/whiterabbitneo)對股票判斷較弱,不預設納入,
+委員會預設用 .27 上的通用模型(gemma2:9b + deepseek-coder-v2:16b + llama3.1:8b)；
+資安模型(foundation-sec/whiterabbitneo)對股票判斷較弱,不納入。
 可用 env CONSENSUS_MODELS 覆寫。完全不改動 Ollama 本身。
 """
 import os
@@ -19,38 +19,28 @@ CONSENSUS_URL = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  #
 # 委員會（.27 上的通用模型；3 位讓討論更豐富、避免 2 人平手過多）。
 # 資安模型(foundation-sec/whiterabbitneo)對股票判斷弱，不納入。可用 env CONSENSUS_MODELS 覆寫。
 #
-# 2026-08-14 換委員：qwen2.5-3b:latest → llama3.1:8b
-#   原因：SLI 實測 qwen2.5-3b × qwen2.5:7b 同票率 87.1%、corr +0.81 —— 同代同家族的
-#   3B/7B 手足幾乎在說同一件事，三人委員會實際上只有兩個獨立意見。
-#   production 投票分布也顯示兩者都極度偏「持有」(72.7% / 62.3%)，貢獻的資訊重疊。
-#   換入 llama3.1:8b。
+# 2026-08-20 換委員：qwen2.5:7b → deepseek-coder-v2:16b
+#   原因：.27 重新配置移除 qwen2.5:7b,換入 deepseek-coder-v2:16b(程式+推理)。
+#   且 gemma2 × qwen2.5:7b 曾實測 86.7%/+0.91 高相關——同家族的 14b 只會更相關,
+#   deepseek-coder-v2 是完全不同架構(MoE),有望帶來真正的獨立意見。
+#   ⚠️ 上線後應像 llama3.1 換血時一樣,跑同票率實測確認。
 #
-# 2026-08-15 實測結果（30 題真實顧問草案、同提示詞、temp0 固定 seed）:
-#   換血【部分成功】—— llama3.1 確實帶來獨立意見:
-#     llama3.1 × gemma2 = 56.7%/+0.41　llama3.1 × qwen2.5:7b = 56.7%/+0.41
-#   但【原本的理由是錯的】—— 冗餘與模型家族無關:
-#     gemma2 × qwen2.5:7b = 86.7%/+0.91  ← 不同家族，重疊卻比換血前那對更高
-#   即委員會不論怎麼換都只有約兩個獨立意見。想靠「選不同家族」拿多樣性行不通，
-#   只能換完後實測同票率。故 verdict SLI 新增 PAIR_AGREE_MAX(85%) 冗餘對告警。
-#
-# ⚠️ 已知風險與退場條件：llama3.1:8b 偏多 —— 同批 30 題中它投 21 買/4 持/5 賣(70%)，
-#   而兩位對照委員都是 9 買/6 持/15 賣(50%)，方向近乎相反。70% 未破 75% 門檻故續用，
-#   但它的獨立性究竟是「資訊」還是「雜訊」，要靠 verdict_detail 累積的事後超額報酬
-#   才能判定 —— 在那之前不要把它的反向票當成洞見。
-#   本專案歷史上曾有 hermes3:8b 長期擔任委員、84.7% 都投買進的前例。
-#   若 llama3.1 單一票種占比 > COMMITTEE_BIAS_MAX(75%)，即告警並應退回 qwen2.5-3b。
+# 歷史：
+#   2026-08-14 qwen2.5-3b → llama3.1:8b(同家族冗餘 87.1%)
+#   2026-08-15 llama3.1 實測確認帶來獨立意見(56.7%/+0.41)
+#   ⚠️ llama3.1:8b 偏多(70% 買進),若 > 75% 應告警。hermes3:8b 前例 84.7%。
 COMMITTEE = [m.strip() for m in
-             os.getenv('CONSENSUS_MODELS', 'gemma2:9b,qwen2.5:7b,llama3.1:8b').split(',')
+             os.getenv('CONSENSUS_MODELS', 'gemma2:9b,deepseek-coder-v2:16b,llama3.1:8b').split(',')
              if m.strip()]
 VOTES = ('買進', '持有', '賣出')
 # 主持人（③）：讀完討論逐字稿做綜合定案，取代純多數決。走 .28 主力節點的 14B 通才。
 FACILITATOR_URL = os.getenv('OLLAMA_FACILITATOR_URL', os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434'))
 FACILITATOR_MODEL = os.getenv('CONSENSUS_FACILITATOR', 'qwen3-14b:latest')
 # 空方委員(devil's advocate):env CONSENSUS_DEVIL=1 啟用(default off,可逆)。用現有模型
-# 產出『買進』風險論點併入逐字稿供主持人權衡(不投票、不扭曲票數)。預設 qwen2.5:7b(已常駐,免 pull)。
+# 產出『買進』風險論點併入逐字稿供主持人權衡(不投票、不扭曲票數)。預設 deepseek-coder-v2:16b(.27 已常駐)。
 DEVIL_ENABLED = os.getenv('CONSENSUS_DEVIL', '0') == '1'
-DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', 'qwen2.5:7b')
-# 合議委員全走 .27 合議節點(gemma2 + qwen2.5:7b + qwen2.5-3b 皆 GPU；.27 qwen2.5-3b 已設 num_gpu 99 上 GPU)。
+DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', 'deepseek-coder-v2:16b')
+# 合議委員全走 .27 合議節點(gemma2 + deepseek-coder-v2 + llama3.1 皆 GPU)。
 
 
 def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
