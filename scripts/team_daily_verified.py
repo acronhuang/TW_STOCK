@@ -367,7 +367,7 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
                                     'elapsed_sec': 0.0}
             todo_roles.remove('macro-analyst')
 
-    npar = max(1, int(os.getenv('TEAM_ROLE_PARALLEL', '3')))
+    npar = max(1, int(os.getenv('TEAM_ROLE_PARALLEL', '2')))
     if npar > 1 and len(todo_roles) > 1:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=npar) as ex:
