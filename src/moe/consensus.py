@@ -60,7 +60,8 @@ def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
         try:
             r = requests.post(f'{url or CONSENSUS_URL}/api/generate',
                               json={'model': model, 'prompt': prompt, 'stream': False,
-                                    'options': {'temperature': float(os.getenv('LLM_TEMPERATURE', '0')), 'num_gpu': 99, 'seed': int(os.getenv('LLM_SEED', '42'))},  # 全層GPU + 確定性(temp0/固定seed,可重現)
+                                    'options': {'temperature': float(os.getenv('LLM_TEMPERATURE', '0')), 'num_gpu': 99, 'seed': int(os.getenv('LLM_SEED', '42')),
+                                               'num_ctx': int(os.getenv('CONSENSUS_NUM_CTX', '8192'))},  # 全層GPU + 確定性 + 限 ctx 防 VRAM 爆(deepseek-coder-v2 預設 ctx 會吃 20GB)
                                     'keep_alive': '10m'},  # ④ 委員跨輪常駐，避免多輪討論每輪重載
                               timeout=timeout)
             r.raise_for_status()

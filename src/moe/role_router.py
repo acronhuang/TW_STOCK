@@ -157,7 +157,8 @@ def ask_role(role: str,
                     'prompt': prompt,
                     'stream': False,
                     'keep_alive': '5m',
-                    'options': {'num_gpu': 99, 'temperature': LLM_TEMPERATURE, 'seed': LLM_SEED},   # 全層GPU + 確定性(低temp+固定seed,可重現)
+                    'options': {'num_gpu': 99, 'temperature': LLM_TEMPERATURE, 'seed': LLM_SEED,
+                               'num_ctx': int(os.getenv('ROLE_NUM_CTX', '8192'))},   # 全層GPU + 確定性 + 限 ctx 防 VRAM 爆(deepseek 預設 ctx 吃 20GB)
                 },
                 timeout=timeout,
             )
