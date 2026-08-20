@@ -63,7 +63,7 @@ def generate(question, hits, model=MODEL, num_predict=700, timeout=600):
         "system": SYSTEM,
         "prompt": build_prompt(question, hits),
         "stream": False,
-        "options": {"num_predict": num_predict, "temperature": 0.2},
+        "options": {"num_predict": num_predict, "temperature": 0.2, "num_ctx": 8192},
     }
     req = urllib.request.Request(
         f"{OLLAMA}/api/generate",

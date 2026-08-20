@@ -203,7 +203,7 @@ def answer_question(question, today_docs):
     r = requests.post(
         f"{OLLAMA}/api/generate",
         json={"model": MODEL, "prompt": prompt, "stream": False,
-              "options": {"num_predict": 800, "temperature": 0.3}},
+              "options": {"num_predict": 800, "temperature": 0.3, "num_ctx": 8192}},
         timeout=600)
     r.raise_for_status()
     return r.json().get("response", "").strip(), context
