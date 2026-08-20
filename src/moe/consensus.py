@@ -1,11 +1,11 @@
 """
-.27 合議投票層 —— 委員會多模型對 .28 顧問草案投票定案
+合議投票層 —— 委員會多模型對顧問草案投票定案
 ======================================================
 架構(依實機分工)：
-  .28 主力 qwen2.5-14b 出初稿+主持人整合 → 顧問草案(買/持/賣)
-  .27 合議小組 多個 8B 模型獨立投票 → 匯總定案(多數決)
+  .28 主力 qwen3-14b 出初稿+主持人整合 → 顧問草案(買/持/賣)
+  委員會 gemma2:9b(.27) + qwen2.5-14b(.28) + llama3.1:8b(.27) 獨立投票
 
-委員會預設用 .27 上的通用模型(gemma2:9b + deepseek-coder-v2:16b + llama3.1:8b)；
+委員跨兩節點：gemma2/llama3.1 在 .27，qwen2.5-14b 在 .28（與主力共存）。
 資安模型(foundation-sec/whiterabbitneo)對股票判斷較弱,不納入。
 可用 env CONSENSUS_MODELS 覆寫。完全不改動 Ollama 本身。
 """
@@ -15,32 +15,35 @@ import time
 
 import requests
 
-CONSENSUS_URL = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議節點 .27
-# 委員會（.27 上的通用模型；3 位讓討論更豐富、避免 2 人平手過多）。
-# 資安模型(foundation-sec/whiterabbitneo)對股票判斷弱，不納入。可用 env CONSENSUS_MODELS 覆寫。
+CONSENSUS_URL = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # .27
+OLLAMA_URL_28 = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')           # .28
+# 委員會(3 位,跨兩節點)。可用 env CONSENSUS_MODELS 覆寫。
+# 資安模型(foundation-sec/whiterabbitneo)對股票判斷弱，不納入。
 #
-# 2026-08-20 換委員：qwen2.5:7b → deepseek-coder-v2:16b
-#   原因：.27 重新配置移除 qwen2.5:7b,換入 deepseek-coder-v2:16b(程式+推理)。
-#   且 gemma2 × qwen2.5:7b 曾實測 86.7%/+0.91 高相關——同家族的 14b 只會更相關,
-#   deepseek-coder-v2 是完全不同架構(MoE),有望帶來真正的獨立意見。
-#   ⚠️ 上線後應像 llama3.1 換血時一樣,跑同票率實測確認。
+# 2026-08-20 換委員：deepseek-coder-v2:16b → qwen2.5-14b:latest
+#   原因：deepseek-coder-v2 是程式開發模型,股票判斷非其長項;
+#   qwen2.5-14b 是 14B 中文通才,財經推理能力更強。
+#   ⚠️ qwen2.5 與主力 qwen3 同家族,同票率可能偏高——上線後跑實測確認。
 #
 # 歷史：
 #   2026-08-14 qwen2.5-3b → llama3.1:8b(同家族冗餘 87.1%)
 #   2026-08-15 llama3.1 實測確認帶來獨立意見(56.7%/+0.41)
+#   2026-08-20 qwen2.5:7b → deepseek-coder-v2:16b → qwen2.5-14b:latest
 #   ⚠️ llama3.1:8b 偏多(70% 買進),若 > 75% 應告警。hermes3:8b 前例 84.7%。
 COMMITTEE = [m.strip() for m in
-             os.getenv('CONSENSUS_MODELS', 'gemma2:9b,deepseek-coder-v2:16b,llama3.1:8b').split(',')
+             os.getenv('CONSENSUS_MODELS', 'gemma2:9b,qwen2.5-14b:latest,llama3.1:8b').split(',')
              if m.strip()]
 VOTES = ('買進', '持有', '賣出')
 # 主持人（③）：讀完討論逐字稿做綜合定案，取代純多數決。走 .28 主力節點的 14B 通才。
-FACILITATOR_URL = os.getenv('OLLAMA_FACILITATOR_URL', os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434'))
+FACILITATOR_URL = os.getenv('OLLAMA_FACILITATOR_URL', OLLAMA_URL_28)
 FACILITATOR_MODEL = os.getenv('CONSENSUS_FACILITATOR', 'qwen3-14b:latest')
-# 空方委員(devil's advocate):env CONSENSUS_DEVIL=1 啟用(default off,可逆)。用現有模型
-# 產出『買進』風險論點併入逐字稿供主持人權衡(不投票、不扭曲票數)。預設 deepseek-coder-v2:16b(.27 已常駐)。
+# 空方委員(devil's advocate):env CONSENSUS_DEVIL=1 啟用(default off)。
 DEVIL_ENABLED = os.getenv('CONSENSUS_DEVIL', '0') == '1'
-DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', 'deepseek-coder-v2:16b')
-# 合議委員全走 .27 合議節點(gemma2 + deepseek-coder-v2 + llama3.1 皆 GPU)。
+DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', 'qwen2.5-14b:latest')
+# 委員 → 節點：gemma2/llama3.1 在 .27，qwen2.5-14b 在 .28。未列者走 CONSENSUS_URL(.27)。
+COMMITTEE_MODEL_URL = {
+    'qwen2.5-14b:latest': OLLAMA_URL_28,
+}
 
 
 def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
@@ -61,7 +64,7 @@ def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
             r = requests.post(f'{url or CONSENSUS_URL}/api/generate',
                               json={'model': model, 'prompt': prompt, 'stream': False,
                                     'options': {'temperature': float(os.getenv('LLM_TEMPERATURE', '0')), 'num_gpu': 99, 'seed': int(os.getenv('LLM_SEED', '42')),
-                                               'num_ctx': int(os.getenv('CONSENSUS_NUM_CTX', '8192'))},  # 全層GPU + 確定性 + 限 ctx 防 VRAM 爆(deepseek-coder-v2 預設 ctx 會吃 20GB)
+                                               'num_ctx': int(os.getenv('CONSENSUS_NUM_CTX', '8192'))},
                                     'keep_alive': '10m'},  # ④ 委員跨輪常駐，避免多輪討論每輪重載
                               timeout=timeout)
             r.raise_for_status()
@@ -120,13 +123,16 @@ def verify_committee(force: bool = False) -> dict:
     if _committee_verified and not force:
         return {}
     _committee_verified = True
-    try:
-        r = requests.get(f'{CONSENSUS_URL}/api/tags', timeout=10)
-        r.raise_for_status()
-        have = {m.get('name') for m in r.json().get('models', [])}
-    except Exception as e:
-        print(f"⚠️ [committee] 無法查詢 {CONSENSUS_URL} 的模型清單：{e}")
-        return {'error': str(e)}
+    urls_to_check = {CONSENSUS_URL}
+    urls_to_check.update(COMMITTEE_MODEL_URL.values())
+    have = set()
+    for u in urls_to_check:
+        try:
+            r = requests.get(f'{u}/api/tags', timeout=10)
+            r.raise_for_status()
+            have.update(m.get('name') for m in r.json().get('models', []))
+        except Exception as e:
+            print(f"⚠️ [committee] 無法查詢 {u} 的模型清單：{e}")
     missing = [m for m in COMMITTEE if m not in have]
     print(f"🗳️ [committee] 本次合議委員 = {COMMITTEE}"
           + (f"  🔴 節點上不存在：{missing}" if missing else "  ✅ 節點上皆存在"))
@@ -156,7 +162,7 @@ def deliberate(symbol: str, name: str, advisor_draft: str, data_summary: str,
               f"規則：第一行只寫「買進」或「持有」或「賣出」三選一，第二行用一句話說明理由。")
     votes = []
     for m in COMMITTEE:
-        resp = _ask(m, prompt, timeout)
+        resp = _ask(m, prompt, timeout, url=COMMITTEE_MODEL_URL.get(m))
         vote = _extract_vote(resp) if not resp.startswith('ERR:') else None
         reason = ''
         if vote and not resp.startswith('ERR:'):
@@ -276,7 +282,7 @@ def _devil_brief(symbol, name, advisor_draft, data_summary, timeout=120):
               f"【主分析師草案】\n{advisor_draft}\n\n【關鍵數據】\n{data_summary}\n\n"
               f"列 2-3 點最強的反方/風險論點(技術破位、籌碼鬆動、基本面惡化、估值過高、事件風險等),"
               f"每點一句具體理由。不要下買/賣/持結論,只提出風險。")
-    resp = _ask(DEVIL_MODEL, prompt, timeout, url=CONSENSUS_URL)
+    resp = _ask(DEVIL_MODEL, prompt, timeout, url=COMMITTEE_MODEL_URL.get(DEVIL_MODEL))
     return '' if resp.startswith('ERR:') else resp.strip()[:500]
 
 
@@ -294,7 +300,7 @@ def discuss(symbol: str, name: str, advisor_draft: str, data_summary: str,
             prompt = (_round1_prompt(symbol, name, advisor_draft, data_summary) if r == 0
                       else _roundN_prompt(symbol, name, advisor_draft, data_summary,
                                           transcript, prev_votes.get(m)))
-            vote, reason = _parse_vote_reason(_ask(m, prompt, timeout))
+            vote, reason = _parse_vote_reason(_ask(m, prompt, timeout, url=COMMITTEE_MODEL_URL.get(m)))
             votes.append({'model': m, 'vote': vote, 'reason': reason})
         round_tallies.append({v: sum(1 for x in votes if x['vote'] == v) for v in VOTES})
         if r == 0:

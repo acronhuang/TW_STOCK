@@ -11,7 +11,7 @@
   🏦 chip-analyst            → VIEW_MODEL(gemma2:9b  @ .27)  法人趨勢
   🛡️ risk-manager            → qwen2.5-14b:latest    @ .28   財經風控(2026-08-20 由 7b@.27 升 14b@.28)
 
-  合議委員(consensus.COMMITTEE) → gemma2:9b / deepseek-coder-v2:16b / llama3.1:8b (@ .27)
+  合議委員(consensus.COMMITTEE) → gemma2:9b(.27) / qwen2.5-14b(.28) / llama3.1:8b(.27)
   facilitator                   → qwen3-14b (@ .28)
   型態/看圖 → SenVision 蔡森演算法(非 LLM，精準型態/頸線)，結果餵 technical-analyst
   工具型   → coder(qwen2.5-coder:7b) / embed(nomic-embed-text) / tw-polish(llama-3-taiwan)
@@ -68,9 +68,7 @@ ROLE_TO_MODEL = {
     'chip-analyst':             VIEW_MODEL,
 
     # 風控 2026-08-20 由 qwen2.5:7b(@.27) 改走 qwen2.5-14b(@.28)。
-    # .27 重新配置後移除 qwen2.5:7b,換入 deepseek-coder-v2:16b(程式開發用途)。
-    # qwen2.5-14b 同家族再升級(3b→7b→14b),財經推理更強;.28 已調高 MAX_LOADED_MODELS
-    # 可同時常駐 qwen3-14b + qwen2.5-14b + foundation-sec-8b + whiterabbitneo-7b。
+    # qwen2.5-14b 同家族升級(3b→7b→14b),財經推理更強。
     'risk-manager':             os.getenv('RISK_MODEL', 'qwen2.5-14b:latest'),
     'macro-analyst':            MAIN_14B,  # 2026-08-01 3b→14b:3b會捏造指標(把VIX chg%貼成券資報酬率)+讀反大盤
 
@@ -117,12 +115,11 @@ LLM_SEED = int(os.getenv('LLM_SEED', '42'))
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')       # 主力 .28
 OLLAMA_URL_27 = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議 .27
 
-# 模型 → 主機：gemma2/llama3.1/deepseek-coder-v2 在 .27（合議）;qwen3/qwen2.5-14b 在 .28（主力）。未列者走 OLLAMA_URL。
+# 模型 → 主機：gemma2/llama3.1 在 .27;qwen3/qwen2.5-14b 在 .28（主力）。未列者走 OLLAMA_URL(.28)。
 MODEL_TO_URL = {
     'qwen2.5-14b:latest': OLLAMA_URL,
     'gemma2:9b':          OLLAMA_URL_27,   # gemma2 在 .27,value/chip 路由到 .27
     'llama3.1:8b':        OLLAMA_URL_27,   # llama3.1 只在 .27(已常駐,零額外 VRAM)
-    'deepseek-coder-v2:16b': OLLAMA_URL_27,  # 2026-08-20 取代 qwen2.5:7b 作合議委員;.27 已常駐
 }
 
 
@@ -158,7 +155,7 @@ def ask_role(role: str,
                     'stream': False,
                     'keep_alive': '5m',
                     'options': {'num_gpu': 99, 'temperature': LLM_TEMPERATURE, 'seed': LLM_SEED,
-                               'num_ctx': int(os.getenv('ROLE_NUM_CTX', '8192'))},   # 全層GPU + 確定性 + 限 ctx 防 VRAM 爆(deepseek 預設 ctx 吃 20GB)
+                               'num_ctx': int(os.getenv('ROLE_NUM_CTX', '8192'))},
                 },
                 timeout=timeout,
             )
