@@ -185,7 +185,6 @@ class MoERouter:
                     'model': model,
                     'prompt': question,
                     'stream': False,
-                    'keep_alive': '5m',
                     'options': {'num_ctx': 8192},
                 },
                 timeout=300,

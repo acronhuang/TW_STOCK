@@ -64,8 +64,7 @@ def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
             r = requests.post(f'{url or CONSENSUS_URL}/api/generate',
                               json={'model': model, 'prompt': prompt, 'stream': False,
                                     'options': {'temperature': float(os.getenv('LLM_TEMPERATURE', '0')), 'num_gpu': 99, 'seed': int(os.getenv('LLM_SEED', '42')),
-                                               'num_ctx': int(os.getenv('CONSENSUS_NUM_CTX', '8192'))},
-                                    'keep_alive': '10m'},  # ④ 委員跨輪常駐，避免多輪討論每輪重載
+                                               'num_ctx': int(os.getenv('CONSENSUS_NUM_CTX', '8192'))}},
                               timeout=timeout)
             r.raise_for_status()
             return r.json().get('response', '')
