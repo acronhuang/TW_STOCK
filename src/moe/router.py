@@ -1,10 +1,9 @@
 """
 MoE Router — 依問題類型路由到專家模型
 
-4 個專家：
+3 個專家：
   qwen3-14b:latest       主推理（Router + 兜底）@ .28
   qwen2.5-14b:latest     數字計算（DCF / VaR / 杜邦）@ .28
-  deepseek-coder-v2:16b  程式生成（SQL / Python）@ .27
   nomic-embed-text       向量化（情緒 / RAG）@ .27
   (看圖/型態 → SenVision 蔡森演算法，非 LLM)
 
@@ -44,12 +43,6 @@ EXPERTS = {
         'description': '數字計算（DCF / 杜邦 / Sharpe）',
         'priority': 4,
     },
-    'code': {
-        'model': 'deepseek-coder-v2:16b',
-        'vram_gb': 12,
-        'description': '程式生成（SQL / Python）',
-        'priority': 3,
-    },
     # 'vision' 已移除：看圖/型態改用 SenVision 蔡森演算法(精準、不幻覺)，餵 technical-analyst
     'embed': {
         'model': 'nomic-embed-text',
@@ -65,8 +58,6 @@ EXPERTS = {
 # ─────────────────────────────────────────────────────────
 ROUTING_RULES = [
     # 註：圖/K線/型態 不再路由到 vision LLM；改由 SenVision 蔡森演算法處理(非本router)
-    # 程式：SQL/Python 生成
-    ('code',      r'SQL|查詢|寫.*程式|寫.*函數|code|腳本|script|pandas|MongoDB query'),
     # 計算：估值/數字推理
     ('math',      r'DCF|DDM|估值|Sharpe|VaR|CVaR|杜邦|計算|多少|現值|折現|計算ROE|預期報酬'),
     # 向量：情緒/相似度

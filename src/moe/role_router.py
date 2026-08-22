@@ -14,7 +14,7 @@
   合議委員(consensus.COMMITTEE) → gemma2:9b(.27) / qwen2.5-14b(.28) / llama3.1:8b(.27)
   facilitator                   → qwen3-14b (@ .28)
   型態/看圖 → SenVision 蔡森演算法(非 LLM，精準型態/頸線)，結果餵 technical-analyst
-  工具型   → coder(deepseek-coder-v2:16b@.27) / embed(nomic-embed-text) / tw-polish(llama3.1:8b@.27)
+  工具型   → embed(nomic-embed-text) / tw-polish(llama3.1:8b@.27)
   env 覆寫 → TWSTOCK_MAIN_LLM / TWSTOCK_VIEW_LLM / CONSENSUS_MODELS / CONSENSUS_FACILITATOR
 """
 
@@ -75,7 +75,6 @@ ROLE_TO_MODEL = {
     # 工具型（按需）
     # 註：原 'vision'(看圖 LLM) 已移除——「看圖/型態」改用 SenVision 蔡森演算法(精準、不幻覺)，
     #     型態結果直接餵 technical-analyst（見 team_daily_verified.senvision_text）。
-    'coder':                    'deepseek-coder-v2:16b',
     'embed':                    'nomic-embed-text',
     'tw-polish':                'llama3.1:8b',
 }
@@ -120,7 +119,6 @@ MODEL_TO_URL = {
     'qwen2.5-14b:latest':    OLLAMA_URL,
     'gemma2:9b':             OLLAMA_URL_27,
     'llama3.1:8b':           OLLAMA_URL_27,
-    'deepseek-coder-v2:16b': OLLAMA_URL_27,
 }
 
 
