@@ -2,10 +2,10 @@
 MoE Router — 依問題類型路由到專家模型
 
 4 個專家：
-  qwen3.6:27b         主推理（Router + 兜底）
-  deepseek-r1:14b     數字計算（DCF / VaR / 杜邦）
-  qwen2.5-coder:7b    程式生成（SQL / Python）
-  nomic-embed-text    向量化（情緒 / RAG）
+  qwen3-14b:latest       主推理（Router + 兜底）@ .28
+  qwen2.5-14b:latest     數字計算（DCF / VaR / 杜邦）@ .28
+  deepseek-coder-v2:16b  程式生成（SQL / Python）@ .27
+  nomic-embed-text       向量化（情緒 / RAG）@ .27
   (看圖/型態 → SenVision 蔡森演算法，非 LLM)
 
 使用：
@@ -33,20 +33,20 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────
 EXPERTS = {
     'reasoning': {
-        'model': 'qwen3.6:27b',
-        'vram_gb': 17,
+        'model': 'qwen3-14b:latest',
+        'vram_gb': 11,
         'description': '主推理引擎（複雜分析、投資決策）',
         'priority': 2,
     },
     'math': {
-        'model': 'deepseek-r1:14b',
-        'vram_gb': 12,
+        'model': 'qwen2.5-14b:latest',
+        'vram_gb': 11,
         'description': '數字計算（DCF / 杜邦 / Sharpe）',
         'priority': 4,
     },
     'code': {
-        'model': 'qwen2.5-coder:7b',
-        'vram_gb': 7,
+        'model': 'deepseek-coder-v2:16b',
+        'vram_gb': 12,
         'description': '程式生成（SQL / Python）',
         'priority': 3,
     },
