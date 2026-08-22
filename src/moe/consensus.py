@@ -3,9 +3,9 @@
 ======================================================
 架構(依實機分工)：
   .28 主力 qwen3-14b 出初稿+主持人整合 → 顧問草案(買/持/賣)
-  委員會 gemma2:9b(.27) + qwen2.5-14b(.28) + llama3.1:8b(.27) 獨立投票
+  委員會 gemma2:9b(.28) + qwen2.5-14b(.27) + llama3.1:8b(.27) 獨立投票
 
-委員跨兩節點：gemma2/llama3.1 在 .27，qwen2.5-14b 在 .28（與主力共存）。
+委員跨兩節點：qwen2.5-14b/llama3.1 在 .27，gemma2 在 .28（與主力共存）。
 資安模型(foundation-sec/whiterabbitneo)對股票判斷較弱,不納入。
 可用 env CONSENSUS_MODELS 覆寫。完全不改動 Ollama 本身。
 """
@@ -40,9 +40,9 @@ FACILITATOR_MODEL = os.getenv('CONSENSUS_FACILITATOR', 'qwen3-14b:latest')
 # 空方委員(devil's advocate):env CONSENSUS_DEVIL=1 啟用(default off)。
 DEVIL_ENABLED = os.getenv('CONSENSUS_DEVIL', '0') == '1'
 DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', 'qwen2.5-14b:latest')
-# 委員 → 節點：gemma2/llama3.1 在 .27，qwen2.5-14b 在 .28。未列者走 CONSENSUS_URL(.27)。
+# 委員 → 節點：qwen2.5-14b/llama3.1 在 .27，gemma2 在 .28。未列者走 CONSENSUS_URL(.27)。
 COMMITTEE_MODEL_URL = {
-    'qwen2.5-14b:latest': OLLAMA_URL_28,
+    'gemma2:9b': OLLAMA_URL_28,
 }
 
 

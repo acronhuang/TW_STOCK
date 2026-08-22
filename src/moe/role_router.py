@@ -7,11 +7,11 @@
   📈 technical-analyst       → llama3.1:8b @ .27              指標 + 型態(負載分流)
   💰 fundamental-analyst     → MAIN_14B  (qwen3-14b @ .28)   財報數字
   🎯 macro-analyst           → MAIN_14B  (qwen3-14b @ .28)   大局
-  💎 value-analyst           → VIEW_MODEL(gemma2:9b  @ .27)  換視角
-  🏦 chip-analyst            → VIEW_MODEL(gemma2:9b  @ .27)  法人趨勢
-  🛡️ risk-manager            → qwen2.5-14b:latest    @ .28   財經風控(2026-08-20 由 7b@.27 升 14b@.28)
+  💎 value-analyst           → VIEW_MODEL(gemma2:9b  @ .28)  換視角
+  🏦 chip-analyst            → VIEW_MODEL(gemma2:9b  @ .28)  法人趨勢
+  🛡️ risk-manager            → qwen2.5-14b:latest    @ .27   財經風控(2026-08-23 由 .28 移 .27)
 
-  合議委員(consensus.COMMITTEE) → gemma2:9b(.27) / qwen2.5-14b(.28) / llama3.1:8b(.27)
+  合議委員(consensus.COMMITTEE) → gemma2:9b(.28) / qwen2.5-14b(.27) / llama3.1:8b(.27)
   facilitator                   → qwen3-14b (@ .28)
   型態/看圖 → SenVision 蔡森演算法(非 LLM，精準型態/頸線)，結果餵 technical-analyst
   工具型   → embed(nomic-embed-text) / tw-polish(llama3.1:8b@.27)
@@ -114,10 +114,10 @@ LLM_SEED = int(os.getenv('LLM_SEED', '42'))
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')       # 主力 .28
 OLLAMA_URL_27 = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議 .27
 
-# 模型 → 主機：gemma2/llama3.1 在 .27;qwen3/qwen2.5-14b 在 .28（主力）。未列者走 OLLAMA_URL(.28)。
+# 模型 → 主機：qwen2.5-14b/llama3.1 在 .27;qwen3/gemma2 在 .28。未列者走 OLLAMA_URL(.28)。
 MODEL_TO_URL = {
-    'qwen2.5-14b:latest':    OLLAMA_URL,
-    'gemma2:9b':             OLLAMA_URL_27,
+    'qwen2.5-14b:latest':    OLLAMA_URL_27,
+    'gemma2:9b':             OLLAMA_URL,
     'llama3.1:8b':           OLLAMA_URL_27,
 }
 
