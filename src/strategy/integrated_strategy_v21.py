@@ -614,11 +614,10 @@ class IntegratedStrategyV21:
 
 if __name__ == "__main__":
     """測試範例"""
-    from pymongo import MongoClient
-    
+    from src.config import get_db
+
     # 連接資料庫
-    client = MongoClient('mongodb://localhost:27017/')
-    db = client['tw_stock_analysis']
+    db = get_db()
     
     # 初始化策略
     strategy = IntegratedStrategyV21(db)

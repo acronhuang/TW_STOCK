@@ -27,7 +27,6 @@ from pathlib import Path
 
 # 設定環境變數和路徑
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
 
 from src.downloaders.download_coordinator import DownloadCoordinator
 from src.downloaders.progress_manager import ProgressManager

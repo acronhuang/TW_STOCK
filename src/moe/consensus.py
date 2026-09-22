@@ -137,9 +137,10 @@ def verify_committee(force: bool = False) -> dict:
           + (f"  🔴 節點上不存在：{missing}" if missing else "  ✅ 節點上皆存在"))
     if missing:
         try:
-            from pymongo import MongoClient
             import datetime as _dt
-            db = MongoClient('mongodb://localhost:27017/')['tw_stock_analysis']
+
+            from src.config import get_db
+            db = get_db()
             db.schedule_alerts.insert_one({
                 'ts': _dt.datetime.now(), 'level': 'warning', 'source': 'consensus_committee',
                 'message': f"🔴 合議委員在 {CONSENSUS_URL} 上不存在：{missing}"

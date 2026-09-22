@@ -19,14 +19,15 @@ portfolio_positions,但永久留在 portfolio_lots 供事後表現對照 —— 
 from datetime import datetime
 
 from bson.decimal128 import Decimal128
-from pymongo import MongoClient
+
+from src.config import get_db
 
 CATS = ["波段", "債券ETF", "長期存股", "零成本", "零股"]
 NO_STOP_CATS = {"債券ETF", "長期存股", "零成本", "零股"}
 
 
 def db_conn():
-    return MongoClient("localhost", 27017)["tw_stock_analysis"]
+    return get_db()
 
 
 def _f(v):

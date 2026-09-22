@@ -14,7 +14,6 @@ import pandas as pd
 from pymongo import MongoClient, UpdateOne
 
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
 
 from src.factors.momentum_factors import MomentumFactors
 from src.factors.quality_factors import QualityFactors

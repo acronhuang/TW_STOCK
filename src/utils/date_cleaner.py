@@ -21,7 +21,6 @@ from pathlib import Path
 from pymongo import MongoClient, UpdateOne
 
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
 
 
 # 需要清洗的集合和日期欄位

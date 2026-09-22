@@ -2,12 +2,12 @@
 """快速精度驗證工具"""
 
 from bson.decimal128 import Decimal128
-from pymongo import MongoClient
+
+from src.config import get_db
 
 
 def check_types():
-    client = MongoClient('mongodb://localhost:27017/')
-    db = client['tw_stock_analysis']
+    db = get_db()
     
     print("="*80)
     print("精度狀態快速驗證")

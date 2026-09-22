@@ -32,7 +32,6 @@ from pathlib import Path
 warnings.filterwarnings('ignore')
 
 ROOT = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
 
