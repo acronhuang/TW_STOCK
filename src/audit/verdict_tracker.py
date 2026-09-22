@@ -31,6 +31,16 @@ def forward_return(entry_price: float, later_price: float) -> float | None:
     return (later_price - entry_price) / entry_price
 
 
+def excess_return(stock_ret: float, market_ret: float) -> float | None:
+    """超額報酬 = 個股報酬 - 大盤/母體報酬。任一為 None 回 None。
+
+    市場相對命中 = is_hit(verdict, excess_return(...))，比絕對 +3% 公平（排除大盤題材）。
+    """
+    if stock_ret is None or market_ret is None:
+        return None
+    return stock_ret - market_ret
+
+
 def is_hit(verdict: str, ret: float, flat_band: float = FLAT_BAND) -> bool:
     """依票別判定 verdict 是否命中。
 

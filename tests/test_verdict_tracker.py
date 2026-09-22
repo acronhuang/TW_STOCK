@@ -76,3 +76,22 @@ def test_evaluate_verdict_maps_team_analysis_fields():
     r = evaluate_verdict({"symbol": "2330", "final_verdict": "強力買進",
                           "price_at_analysis": 100}, later_price=110)
     assert r["verdict"] == "買進" and r["ret"] == pytest.approx(0.10) and r["hit"] is True
+
+
+@pytest.mark.unit
+def test_excess_return():
+    from src.audit.verdict_tracker import excess_return
+    assert excess_return(0.10, 0.04) == pytest.approx(0.06)   # 贏大盤 6%
+    assert excess_return(0.02, 0.05) == pytest.approx(-0.03)  # 輸大盤 3%
+    assert excess_return(None, 0.05) is None
+    assert excess_return(0.05, None) is None
+
+
+@pytest.mark.unit
+def test_market_relative_hit_uses_excess():
+    """市場相對命中 = is_hit(verdict, 超額報酬)。買進贏大盤>band 才算命中。"""
+    from src.audit.verdict_tracker import excess_return, is_hit
+    exc = excess_return(0.05, 0.01)          # +4% 超額
+    assert is_hit("買進", exc) is True
+    exc2 = excess_return(0.05, 0.06)         # 漲但輸大盤 → 買進不算命中
+    assert is_hit("買進", exc2) is False
