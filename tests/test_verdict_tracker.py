@@ -59,3 +59,20 @@ def test_compute_metrics_overall_and_by_verdict():
 def test_compute_metrics_empty():
     m = compute_metrics([])
     assert m["n"] == 0 and m["hit_rate"] is None
+
+
+@pytest.mark.unit
+def test_normalize_verdict():
+    from src.audit.verdict_tracker import normalize_verdict
+    assert normalize_verdict("強力買進") == "買進"
+    assert normalize_verdict("減碼") == "賣出"
+    assert normalize_verdict("觀望") == "持有"
+    assert normalize_verdict("未知") == "持有"
+
+
+@pytest.mark.unit
+def test_evaluate_verdict_maps_team_analysis_fields():
+    """team_analysis 用 final_verdict / price_at_analysis → 應正確對應。"""
+    r = evaluate_verdict({"symbol": "2330", "final_verdict": "強力買進",
+                          "price_at_analysis": 100}, later_price=110)
+    assert r["verdict"] == "買進" and r["ret"] == pytest.approx(0.10) and r["hit"] is True

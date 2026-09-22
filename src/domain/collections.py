@@ -84,6 +84,7 @@ COLL_INSTITUTIONAL_REBUILD_PROGRESS = "institutional_rebuild_progress"
 
 # ── 分析 / 名單 ────────────────────────────────────────────────────────
 COLL_TEAM_ANALYSIS = "team_analysis"
+COLL_VERDICT_METRICS = "verdict_metrics"
 COLL_PEER_COMPARISON = "peer_comparison"
 COLL_NOTICED_STOCKS = "noticed_stocks"
 COLL_PUNISHED_STOCKS = "punished_stocks"

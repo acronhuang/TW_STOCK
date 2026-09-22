@@ -11,6 +11,18 @@ from __future__ import annotations
 # 持有判定的「無大波動」帶寬：|報酬| ≤ FLAT_BAND 視為持有正確。
 FLAT_BAND = 0.03
 
+# final_verdict 可能為 強力買進/買進/觀望/減碼/賣出 等 → 歸一為 買進/賣出/持有。
+_VERDICT_MAP = {
+    "強力買進": "買進", "買進": "買進", "加碼": "買進", "進場": "買進",
+    "賣出": "賣出", "減碼": "賣出", "出場": "賣出",
+    "持有": "持有", "觀望": "持有", "中立": "持有",
+}
+
+
+def normalize_verdict(verdict: str) -> str:
+    """將多元 verdict 歸一為 買進/賣出/持有（未知→持有）。"""
+    return _VERDICT_MAP.get((verdict or "").strip(), "持有")
+
 
 def forward_return(entry_price: float, later_price: float) -> float | None:
     """(later - entry) / entry。進場價無效（None/<=0）回 None。"""
@@ -39,17 +51,18 @@ def is_hit(verdict: str, ret: float, flat_band: float = FLAT_BAND) -> bool:
 def evaluate_verdict(record: dict, later_price: float) -> dict | None:
     """比對單筆 verdict 與後續價格。進場價無效回 None。
 
-    record: {symbol, verdict, entry_price, ...}
+    record: {symbol, verdict|final_verdict, entry_price|price_at_analysis, ...}
     回傳 {symbol, verdict, entry_price, later_price, ret, hit}
     """
-    ret = forward_return(record.get("entry_price"), later_price)
+    entry = record.get("entry_price", record.get("price_at_analysis"))
+    ret = forward_return(entry, later_price)
     if ret is None:
         return None
-    verdict = record.get("verdict", "持有")
+    verdict = normalize_verdict(record.get("verdict", record.get("final_verdict", "持有")))
     return {
         "symbol": record.get("symbol"),
         "verdict": verdict,
-        "entry_price": record.get("entry_price"),
+        "entry_price": entry,
         "later_price": later_price,
         "ret": ret,
         "hit": is_hit(verdict, ret),
