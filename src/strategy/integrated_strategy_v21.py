@@ -17,16 +17,12 @@ v2.1 整合策略
 創建日期: 2026-02-23
 """
 
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from chip_analysis import ChipAnalyzer
-from morphology.pattern_detector import PatternDetector
+from src.chip_analysis import ChipAnalyzer
+from src.morphology.pattern_detector import PatternDetector
 from src.strategy.multi_factor_strategy import MultiFactorStrategy
 
 
