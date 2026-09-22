@@ -21,6 +21,8 @@ import time
 
 import requests
 
+from src.config import OLLAMA_CONSENSUS_URL
+
 logging.basicConfig(level=logging.INFO,
                     format='[%(asctime)s] %(message)s',
                     datefmt='%H:%M:%S')
@@ -71,7 +73,7 @@ ROUTING_RULES = [
 class GPUManager:
     """簡化版 GPU 管理 — 透過 ollama 內建管理機制"""
 
-    OLLAMA_URL = 'http://172.16.9.27:11434'
+    OLLAMA_URL = OLLAMA_CONSENSUS_URL  # 遷自硬編碼 .27；現由 src.config 統一（env 可覆寫）
 
     def __init__(self, max_vram_gb: float = 48):
         self.max_vram_gb = max_vram_gb
@@ -135,7 +137,7 @@ class GPUManager:
 class MoERouter:
     """路由問題 → 專家模型 → 取得回答"""
 
-    OLLAMA_URL = 'http://172.16.9.27:11434'
+    OLLAMA_URL = OLLAMA_CONSENSUS_URL  # 遷自硬編碼 .27；現由 src.config 統一（env 可覆寫）
 
     def __init__(self, max_vram_gb: float = 48):
         self.gpu = GPUManager(max_vram_gb=max_vram_gb)

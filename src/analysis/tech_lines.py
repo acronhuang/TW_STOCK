@@ -9,7 +9,9 @@ from datetime import timedelta
 
 import pandas as pd
 
-_SCAN_DIR = "/home/mdsadmin/Stock/tw-stock-analysis/results"
+from src.config import RESULTS_DIR
+
+_SCAN_DIR = str(RESULTS_DIR)  # 遷自硬編碼絕對路徑；現由 src.config 推導（可攜）
 
 
 def _g(v):
@@ -64,8 +66,6 @@ def fib_rebound(df):
 def sr_levels(df, top=4):
     """支撐壓力線(SenVision find_support_resistance)。回 {'resistance':[...], 'support':[...]}。"""
     try:
-        import sys
-        sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis")
         from src.senvision.support_resistance import find_support_resistance
     except Exception:
         return {"resistance": [], "support": []}
