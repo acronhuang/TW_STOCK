@@ -7,6 +7,9 @@ import requests
 
 GOOGLE_NEWS_RSS = "https://news.google.com/rss/search"
 WEB_SUPPLEMENT_MIN_SIMILARITY = 0.60
+# 防資源耗用/XSS 面：外部 RSS 回應與欄位長度上限。
+MAX_RESPONSE_BYTES = 1_000_000
+MAX_TITLE_LEN = 300
 NEWS_REGIONS = {
     "taiwan_zh": {"hl": "zh-TW", "gl": "TW", "ceid": "TW:zh-Hant", "label": "繁中解讀"},
     "international_en": {"hl": "en-US", "gl": "US", "ceid": "US:en", "label": "國際英文原始新聞"},
@@ -38,16 +41,17 @@ def google_news_search(
             headers={"User-Agent": "Mozilla/5.0 (X11; Linux) Chrome/120"},
         )
         response.raise_for_status()
+        body = response.text[:MAX_RESPONSE_BYTES]  # 上限解析量，降低 ReDoS/資源耗用風險
         results = []
         seen_urls = set()
-        for item in re.findall(r"<item>(.*?)</item>", response.text, re.DOTALL)[:max_items]:
+        for item in re.findall(r"<item>(.*?)</item>", body, re.DOTALL)[:max_items]:
             title = _rss_value(item, "title")
             url = _rss_value(item, "link")
             if title and url and url not in seen_urls:
                 seen_urls.add(url)
                 results.append({
-                    "title": title,
-                    "url": url,
+                    "title": title[:MAX_TITLE_LEN],
+                    "url": url[:MAX_TITLE_LEN],
                     "published_at": _rss_value(item, "pubDate"),
                     "source": f"Google News RSS · {config['label']}",
                 })

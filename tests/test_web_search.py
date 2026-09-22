@@ -90,3 +90,15 @@ def test_all_sources_mode_keeps_every_region_separate():
 
     assert list(grouped) == ['繁中解讀', '國際英文原始新聞', '日本新聞', '中國新聞（簡中）', '香港新聞（繁中）']
     assert [items[0]['title'] for items in grouped.values()] == ['繁中', 'English', '日本', '中國', '香港']
+
+@pytest.mark.unit
+def test_google_news_search_truncates_overlong_title():
+    """資源耗用/XSS 面縮小：過長標題被截斷。"""
+    from src.analysis.web_search import MAX_TITLE_LEN
+    response = Mock()
+    response.raise_for_status.return_value = None
+    response.text = ("<rss><channel><item><title>" + "A" * 5000 +
+                     "</title><link>https://x/y</link></item></channel></rss>")
+    with patch('src.analysis.web_search.requests.get', return_value=response):
+        results = google_news_search('q', max_items=1)
+    assert len(results[0]['title']) <= MAX_TITLE_LEN
