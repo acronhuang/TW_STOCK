@@ -742,19 +742,10 @@ def load_results():
 _FAIL_PREFIX = '分析失敗'
 
 
-def usable_reports(reports: dict) -> dict:
-    """濾掉「內容其實是錯誤訊息」的角色報告。
-
-    2026-08-19：.28 佇列飽和回 503(server busy)／逾時，reports[role] 會被寫成
-    「分析失敗: HTTPConnectionPool…」字串(見本檔 ~L394)，而顧問整合與合議
-    照樣拿它去整合、投票 —— 等於讓一段錯誤訊息參與投資決策。實測該日
-    risk-manager 200 檔中 61 檔如此。
-
-    仍保留在 reports 內(供稽核、--skip-done 判斷、schema_contract_audit)，
-    只是不得餵給顧問。全部失敗時回空 dict，由呼叫端決定略過整合。
-    """
-    return {k: v for k, v in (reports or {}).items()
-            if not (isinstance(v, str) and v.startswith(_FAIL_PREFIX))}
+# usable_reports 已集中化至 src.moe.guard（原為本檔區域函式，team_analyze 無法共用）。
+# 保留同名重導以不動本檔其他呼叫點：濾掉「內容其實是錯誤訊息」的角色報告，
+# 全部失敗時回空 dict，由呼叫端決定略過整合。
+from src.moe.guard import usable_reports  # noqa: E402
 
 
 def run_advisor(symbol: str, reports: dict) -> str:

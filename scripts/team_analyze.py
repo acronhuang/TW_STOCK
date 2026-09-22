@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 load_dotenv(ROOT / '.env')
 
 from src.moe.role_router import ask_role, ROLE_TO_MODEL
+from src.moe.guard import partition_reports
 
 API = 'http://localhost:8888'
 
@@ -506,15 +507,22 @@ def analyze_one(symbol: str, quick: bool = False) -> dict:
     # Step 3: investment-advisor 整合
     if not quick:
         print(f"\n  🎩 investment-advisor ({ROLE_TO_MODEL['investment-advisor']})  整合中...")
-        data['reports'] = reports
-        prompt = build_expert_prompt('investment-advisor', symbol, data)
-        r = ask_role('investment-advisor', prompt, include_role_prompt=True, timeout=300)
-        if 'error' in r:
-            final = f"整合失敗: {r['error']}"
+        # 守門：失敗角色報告是錯誤訊息，不得餵給顧問整合（見 src.moe.guard）。
+        ok_reports, failed_roles = partition_reports(reports)
+        if failed_roles:
+            print(f"     ⚠️ 略過失敗角色，不納入整合：{failed_roles}")
+        if not ok_reports:
+            final = "整合略過：角色報告全數為錯誤訊息，不以此做決策"
         else:
-            final = r['response'].strip()
-            if '<think>' in final:
-                final = final.split('</think>', 1)[-1].strip()
+            data['reports'] = ok_reports
+            prompt = build_expert_prompt('investment-advisor', symbol, data)
+            r = ask_role('investment-advisor', prompt, include_role_prompt=True, timeout=300)
+            if 'error' in r:
+                final = f"整合失敗: {r['error']}"
+            else:
+                final = r['response'].strip()
+                if '<think>' in final:
+                    final = final.split('</think>', 1)[-1].strip()
             print(f"     ⏱  {r['elapsed_sec']}s")
     else:
         final = '(--quick 模式跳過 advisor)'
