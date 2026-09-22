@@ -46,13 +46,23 @@ def test_env_override_is_respected(monkeypatch):
 
 
 @pytest.mark.unit
-def test_project_root_is_portable_not_hardcoded(monkeypatch):
-    """PROJECT_ROOT 由檔案位置推導，不得含硬編碼 /home/mdsadmin。"""
+def test_project_root_is_derived_not_hardcoded(monkeypatch):
+    """PROJECT_ROOT 應由檔案位置推導（可攜），而非硬編碼絕對路徑。
+
+    注：不能用「路徑不含某 username」作斷言 —— 正式環境合法安裝路徑
+    本就可能含使用者名（如 /home/mdsadmin/...）。正確驗證：PROJECT_ROOT
+    等於 config.py 檔案位置推導的值，且原始碼未硬編碼 /home/<user> 路徑。
+    """
+    import re
+    from pathlib import Path
     monkeypatch.delenv("TWSTOCK_PROJECT_ROOT", raising=False)
     cfg = _reload_config(monkeypatch)
-    assert "mdsadmin" not in str(cfg.PROJECT_ROOT)
-    # results 目錄應在專案根下
+    import src.config as configmod
+    expected = Path(configmod.__file__).resolve().parent.parent
+    assert cfg.PROJECT_ROOT == expected            # 由檔案位置推導，非寫死
     assert str(cfg.RESULTS_DIR).startswith(str(cfg.PROJECT_ROOT))
+    # 原始碼不得含硬編碼 /home/<user>/ 絕對路徑
+    assert not re.search(r"/home/[a-z]+/", Path(configmod.__file__).read_text(encoding="utf-8"))
 
 
 @pytest.mark.unit
