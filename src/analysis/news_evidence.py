@@ -23,26 +23,28 @@ from datetime import datetime, timedelta
 
 import requests
 
+from src.config import get_db
+from src.domain.collections import COLL_MAJOR_NEWS, COLL_MEDIA_NEWS, COLL_TAIWAN_STOCK_INFO
+
 _db = None
 
 
 def _get_db():
     global _db
     if _db is None:
-        from pymongo import MongoClient
-        _db = MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017"))["tw_stock_analysis"]
+        _db = get_db()
     return _db
 
 
 def _name_of(code: str) -> str | None:
-    d = _get_db().taiwan_stock_info.find_one({"stock_id": code}, {"stock_name": 1})
+    d = _get_db()[COLL_TAIWAN_STOCK_INFO].find_one({"stock_id": code}, {"stock_name": 1})
     return d.get("stock_name") if d else None
 
 
 def major_news_for(code: str, days: int = 14, limit: int = 5) -> list[str]:
     """該股近 days 天的 TWSE 官方重大訊息（subject + 摘要）。"""
     since = datetime.now() - timedelta(days=days)
-    docs = list(_get_db().major_news.find(
+    docs = list(_get_db()[COLL_MAJOR_NEWS].find(
         {"stock_id": code, "date": {"$gte": since}},
         {"subject": 1, "detail": 1, "date": 1}).sort("date", -1).limit(limit))
     out = []
@@ -86,7 +88,7 @@ def google_news_for(name: str, max_items: int = 4, timeout: int = 6) -> list[str
 
 def media_news_for(code: str, max_items: int = 4, fresh_days: int = 8) -> list[str]:
     """讀 media_news 預抓快取的媒體標題（fresh_days 內才算新鮮，配合週抓節奏）。"""
-    doc = _get_db().media_news.find_one({"stock_id": code})
+    doc = _get_db()[COLL_MEDIA_NEWS].find_one({"stock_id": code})
     if not doc:
         return []
     ts = doc.get("fetched_at")

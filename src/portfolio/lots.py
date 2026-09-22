@@ -21,6 +21,7 @@ from datetime import datetime
 from bson.decimal128 import Decimal128
 
 from src.config import get_db
+from src.domain.collections import COLL_PORTFOLIO_LOTS, COLL_PORTFOLIO_POSITIONS
 
 CATS = ["波段", "債券ETF", "長期存股", "零成本", "零股"]
 NO_STOP_CATS = {"債券ETF", "長期存股", "零成本", "零股"}
@@ -41,10 +42,10 @@ def recompute_position(db, sym):
     """把某代號所有 lot 彙總,寫回 portfolio_positions(無 lot 則刪該部位)。"""
     # 已賣出的 lot 留在表裡(事後表現對照要用),但**不算持倉**。
     # 漏了這個過濾,賣掉的股數會繼續出現在風控頁與每日警示裡。
-    lots = [l for l in db.portfolio_lots.find({"symbol": sym})
+    lots = [l for l in db[COLL_PORTFOLIO_LOTS].find({"symbol": sym})
             if not l.get("sell_date")]
     if not lots:
-        db.portfolio_positions.delete_one({"symbol": sym})
+        db[COLL_PORTFOLIO_POSITIONS].delete_one({"symbol": sym})
         return None
     tot_sh = sum(int(_f(l.get("shares")) or 0) for l in lots)
     tot_cost = sum((_f(l.get("shares")) or 0) * (_f(l.get("price")) or 0) for l in lots)
@@ -57,28 +58,28 @@ def recompute_position(db, sym):
         "no_stop_loss": cat in NO_STOP_CATS, "long_hold": cat == "長期存股",
         "portfolio": "main", "updated_at": datetime.now(),
     }
-    db.portfolio_positions.update_one({"symbol": sym}, {"$set": doc}, upsert=True)
+    db[COLL_PORTFOLIO_POSITIONS].update_one({"symbol": sym}, {"$set": doc}, upsert=True)
     return doc
 
 
 def recompute_all(db):
-    syms = set(db.portfolio_lots.distinct("symbol"))
+    syms = set(db[COLL_PORTFOLIO_LOTS].distinct("symbol"))
     for s in syms:
         recompute_position(db, s)
     # 刪掉已無 lot 的殘留部位
-    for s in set(db.portfolio_positions.distinct("symbol")) - syms:
-        db.portfolio_positions.delete_one({"symbol": s})
+    for s in set(db[COLL_PORTFOLIO_POSITIONS].distinct("symbol")) - syms:
+        db[COLL_PORTFOLIO_POSITIONS].delete_one({"symbol": s})
     return len(syms)
 
 
 # ---------- migration:從既有 positions 種一批 lot ----------
 def seed_lots_from_positions(db, force=False):
     """既有 portfolio_positions 每檔轉一個 lot(買進日未知,待使用者補)。"""
-    if not force and db.portfolio_lots.count_documents({}) > 0:
+    if not force and db[COLL_PORTFOLIO_LOTS].count_documents({}) > 0:
         return 0
     n = 0
-    for d in db.portfolio_positions.find({}):
-        db.portfolio_lots.insert_one({
+    for d in db[COLL_PORTFOLIO_POSITIONS].find({}):
+        db[COLL_PORTFOLIO_LOTS].insert_one({
             "symbol": d["symbol"], "buy_date": None,
             "shares": int(_f(d.get("shares")) or 0),
             "price": _f(d.get("avg_cost")) or 0.0,
@@ -94,7 +95,7 @@ def seed_lots_from_positions(db, force=False):
 # ---------- 讀 lots 供編輯 ----------
 def list_lots(db):
     out = []
-    for l in db.portfolio_lots.find({}).sort([("symbol", 1), ("buy_date", 1)]):
+    for l in db[COLL_PORTFOLIO_LOTS].find({}).sort([("symbol", 1), ("buy_date", 1)]):
         bd = l.get("buy_date")
         out.append({
             "id": str(l["_id"]),
@@ -154,9 +155,9 @@ def replace_lots(db, lots):
             "note": str(l.get("note") or ""),
             "created_at": datetime.now(),
         })
-    db.portfolio_lots.delete_many({})
+    db[COLL_PORTFOLIO_LOTS].delete_many({})
     if clean:
-        db.portfolio_lots.insert_many(clean)
+        db[COLL_PORTFOLIO_LOTS].insert_many(clean)
     recompute_all(db)
     return len(clean)
 
@@ -215,7 +216,7 @@ def equity_replay(db, benchmark="0050"):
     """從各批實際進場日,用還原價畫『持倉市值 vs 同資金買0050 vs 投入成本』。
     回傳 DataFrame(index=日期),或 None(無可用 lot)。"""
     import pandas as pd
-    lots = [l for l in db.portfolio_lots.find({}) if l.get("buy_date")]
+    lots = [l for l in db[COLL_PORTFOLIO_LOTS].find({}) if l.get("buy_date")]
     if not lots:
         return None
     start = min(l["buy_date"] for l in lots)
@@ -279,7 +280,7 @@ def strategy_replay(db, stop_loss=None, take_profit=None, trailing=None,
       trades:    每筆 dict(symbol,name?,buy_date,buy_price,shares,exit_date,exit_price,reason,ret_pct)
     """
     import pandas as pd
-    rows = [l for l in db.portfolio_lots.find({}) if l.get("buy_date")]
+    rows = [l for l in db[COLL_PORTFOLIO_LOTS].find({}) if l.get("buy_date")]
     if not rows:
         return None, []
     start = min(l["buy_date"] for l in rows)

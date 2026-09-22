@@ -14,15 +14,18 @@ from datetime import datetime
 
 from pymongo import ASCENDING, MongoClient, UpdateOne
 
+from src.config import MONGODB_DATABASE, MONGODB_URI
+from src.domain.collections import COLL_TEAM_ANALYSIS
+
 VERDICTS = ("強力買進", "買進", "持有", "觀望", "中立", "減碼", "賣出")
 
 
-def get_db(uri: str = "mongodb://localhost:27017"):
-    return MongoClient(uri)["tw_stock_analysis"]
+def get_db(uri: str | None = None):
+    return MongoClient(uri or MONGODB_URI)[MONGODB_DATABASE]
 
 
 def ensure_indexes(db):
-    col = db["team_analysis"]
+    col = db[COLL_TEAM_ANALYSIS]
     col.create_index([("symbol", ASCENDING), ("date", ASCENDING)], unique=True, name="uq_symbol_date")
     col.create_index([("date", ASCENDING), ("final_verdict", ASCENDING)], name="date_verdict")
     col.create_index([("date", ASCENDING), ("verify.status", ASCENDING)], name="date_verifystatus")
@@ -111,5 +114,5 @@ def upsert_analyses(db, analyses: list, date: datetime, meta: dict = None,
         ))
     if not ops:
         return 0, 0
-    res = db["team_analysis"].bulk_write(ops, ordered=False)
+    res = db[COLL_TEAM_ANALYSIS].bulk_write(ops, ordered=False)
     return res.upserted_count, res.modified_count

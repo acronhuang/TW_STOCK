@@ -67,6 +67,7 @@ COLL_DAY_TRADING_TARGETS = "day_trading_targets"
 COLL_MACRO_INDICATORS = "macro_indicators"
 COLL_BULL_BEAR_INDICATORS = "bull_bear_indicators"
 COLL_MAJOR_NEWS = "major_news"
+COLL_MEDIA_NEWS = "media_news"
 
 # ── 投組 ───────────────────────────────────────────────────────────────
 COLL_PORTFOLIO_LOTS = "portfolio_lots"
