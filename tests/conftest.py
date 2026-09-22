@@ -3,8 +3,9 @@ pytest 共用 fixtures
 """
 import os
 import sys
-import pytest
 from pathlib import Path
+
+import pytest
 from dotenv import load_dotenv
 
 # 專案根目錄
@@ -15,12 +16,35 @@ load_dotenv(ROOT / '.env')
 
 @pytest.fixture(scope="session")
 def db():
-    """MongoDB 連線（整個測試 session 共用）"""
+    """MongoDB 「唯讀」連線（真實資料，session 共用）。
+
+    DB 名由 MONGODB_DATABASE 決定（與 src/config.py 一致），預設 tw_stock_analysis。
+    ⚠️ 此 fixture 僅供「讀取」驗證真實資料；任何需寫入的測試請改用 write_db，
+    以免污染正式庫。
+    """
     from pymongo import MongoClient
-    uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/tw_stock_analysis')
+    uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
+    db_name = os.getenv('MONGODB_DATABASE', 'tw_stock_analysis')
     client = MongoClient(uri)
-    database = client['tw_stock_analysis']
+    database = client[db_name]
     yield database
+    client.close()
+
+
+@pytest.fixture(scope="session")
+def write_db():
+    """需寫入的測試必用此 fixture：專用測試 DB，session 結束自動 drop，
+    絕不碰正式 tw_stock_analysis。DB 名由 MONGODB_TEST_DATABASE 決定。
+    """
+    from pymongo import MongoClient
+    uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
+    db_name = os.getenv('MONGODB_TEST_DATABASE', 'tw_stock_analysis_pytest')
+    assert db_name != os.getenv('MONGODB_DATABASE', 'tw_stock_analysis'), \
+        '測試 DB 不得為正式庫'
+    client = MongoClient(uri)
+    database = client[db_name]
+    yield database
+    client.drop_database(db_name)  # 測試完自動清理
     client.close()
 
 

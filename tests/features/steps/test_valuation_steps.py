@@ -33,12 +33,24 @@ class TestValuationBDD:
         if pe.get('zone'):
             assert pe['zone'] in ('便宜區', '偏低區', '合理區', '偏高區', '昂貴區')
 
-    def test_ttm_eps_direct_sum(self, valuation):
-        """Scenario: TTM EPS 直接加總 4 季"""
-        eps = valuation._get_trailing_eps('2706')
+    def test_ttm_eps_direct_sum(self, valuation, db):
+        """Scenario: TTM EPS = 最近 4 季 EPS 直接加總（驗證加總邏輯，非特定數值）。
+
+        邏輯別單元測試見 tests/test_valuation_eps.py（無需 DB）；
+        此處以真實資料交叉驗證：獨立取最近 4 季，斷言函式回傳值 = 其加總。
+        不再寫死特定個股 EPS 門檻（避免隨財報漂移而脆弱）。
+        """
+        symbol = '2330'
+        records = list(db.quarterly_earnings.find(
+            {'symbol': symbol}, {'income.eps': 1}
+        ).sort([('year', -1), ('season', -1)]).limit(4))
+        if len(records) < 4 or any(r.get('income', {}).get('eps') is None for r in records):
+            pytest.skip(f'{symbol} 季度 EPS 資料不足，跳過加總驗證')
+        expected = sum(r['income']['eps'] for r in records)
+        eps = valuation._get_trailing_eps(symbol)
         assert eps is not None
-        assert eps > 1.0, f"2706 TTM EPS={eps}，應 > 1.0（4 季加總）"
-        assert eps < 5.0, f"2706 TTM EPS={eps}，異常偏高"
+        assert eps == pytest.approx(expected, rel=1e-6), \
+            f'{symbol} TTM EPS={eps} 應等於最近 4 季加總 {expected}'
 
     def test_invalid_symbol_returns_error(self, valuation):
         """Scenario: 無資料時不編造數字"""
