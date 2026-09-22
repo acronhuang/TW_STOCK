@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 
 import requests
+from urllib.parse import urlparse
 
 GOOGLE_NEWS_RSS = "https://news.google.com/rss/search"
 WEB_SUPPLEMENT_MIN_SIMILARITY = 0.60
@@ -83,3 +84,21 @@ def search_news_by_mode(query: str, mode: str, max_items: int = 5) -> dict[str, 
 def needs_web_supplement(rows: list[dict]) -> bool:
     """本機語料沒有命中或最高語意相似度不足時，允許顯示外部補充。"""
     return not rows or float(rows[0].get("vec_sim", 0.0)) < WEB_SUPPLEMENT_MIN_SIMILARITY
+
+
+# ── 展示安全：外部 RSS 標題/連結顯示前必須消毒（XSS / CWE-79）。
+_MD_ESCAPE = str.maketrans({c: "\\" + c for c in "[]()*_`~<>"})
+
+
+def sanitize_markdown_text(text: str) -> str:
+    """轉義 markdown 特殊字元並拉直換行，避免外部標題注入連結/格式/HTML。"""
+    return (text or "").translate(_MD_ESCAPE).replace("\n", " ").replace("\r", " ")
+
+
+def safe_external_url(url: str) -> str:
+    """僅允許 http(s) 連結；javascript:/data: 等危險 scheme 回空字串。"""
+    try:
+        scheme = urlparse(url or "").scheme.lower()
+    except ValueError:
+        return ""
+    return url if scheme in ("http", "https") else ""

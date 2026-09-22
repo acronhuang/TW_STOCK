@@ -102,3 +102,21 @@ def test_google_news_search_truncates_overlong_title():
     with patch('src.analysis.web_search.requests.get', return_value=response):
         results = google_news_search('q', max_items=1)
     assert len(results[0]['title']) <= MAX_TITLE_LEN
+
+
+@pytest.mark.unit
+def test_sanitize_markdown_text_escapes_link_injection():
+    from src.analysis.web_search import sanitize_markdown_text
+    out = sanitize_markdown_text("evil](javascript:alert(1)) [x")
+    assert "](" not in out           # 連結語法被轉義
+    assert "\n" not in sanitize_markdown_text("a\nb")
+
+
+@pytest.mark.unit
+def test_safe_external_url_allows_http_only():
+    from src.analysis.web_search import safe_external_url
+    assert safe_external_url("https://reuters.com/x") == "https://reuters.com/x"
+    assert safe_external_url("http://a.com") == "http://a.com"
+    assert safe_external_url("javascript:alert(1)") == ""
+    assert safe_external_url("data:text/html,<script>") == ""
+    assert safe_external_url("") == ""
