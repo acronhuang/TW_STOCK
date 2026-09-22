@@ -7,14 +7,14 @@ import time
 import urllib.request
 from urllib.parse import urlparse
 
-OLLAMA = os.getenv("RAG_OLLAMA_URL", "http://172.16.9.27:11434").rstrip("/")
+OLLAMA = os.getenv("RAG_OLLAMA_URL", "http://172.16.9.27:11434").rstrip("/")  # allow-hardcode: 預設節點，env 可覆寫；Phase1 收斂 config
 MODEL = "qwen2.5-14b:latest"
 
 # 防提示注入/資源耗用：使用者輸入長度上限。
 MAX_QUESTION_LEN = 500
 MAX_EVENT_TYPE_LEN = 40
 # SSRF (CWE-918) 白名單：只允許連到已知 Ollama 主機；env 可覆寫（逗號分隔）。
-_DEFAULT_ALLOWED = "172.16.9.27,172.16.9.28,localhost,127.0.0.1"
+_DEFAULT_ALLOWED = "172.16.9.27,172.16.9.28,localhost,127.0.0.1"  # allow-hardcode: SSRF 白名單預設，env 可覆寫
 ALLOWED_OLLAMA_HOSTS = {
     h.strip() for h in os.getenv("RAG_OLLAMA_ALLOWED_HOSTS", _DEFAULT_ALLOWED).split(",") if h.strip()
 }

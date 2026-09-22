@@ -60,6 +60,29 @@ jobs:
       - run: pip install ruff
       - run: ruff check src/ --select E9,F63,F7,F82,UP006,UP045,UP007,UP017,I001,F541,RUF010,RUF019,RUF046,RUF100,SIM114,PIE790,FURB157,PLR1730 --no-fix
 
+  deps-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: pip-audit CVE 掃描 (鎖定版本)
+        run: |
+          pip install pip-audit
+          # 稽核鎖定的第三方依賴；--desc 附說明。已知傳遞相依 ipython PYSEC-2023-17
+          # (Windows/無 ctypes 才可達，本專案不受影響) 先忽略，避免永遠紅。
+          pip-audit -r requirements.lock.txt --desc --ignore-vuln PYSEC-2023-17
+
+  hardcode-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # 需完整歷史以 diff base 分支
+      - name: 阻擋新增硬編碼 IP / 絕對路徑
+        run: bash scripts/check_no_hardcode.sh
+
   secrets:
     runs-on: ubuntu-latest
     steps:
