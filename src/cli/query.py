@@ -32,6 +32,7 @@ from pathlib import Path
 warnings.filterwarnings('ignore')
 
 ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(ROOT))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
 from dotenv import load_dotenv
 

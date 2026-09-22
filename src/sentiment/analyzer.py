@@ -34,6 +34,7 @@ from pymongo import MongoClient
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
 logger = logging.getLogger(__name__)
 
