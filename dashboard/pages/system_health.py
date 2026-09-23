@@ -13,7 +13,7 @@ from src.domain.collections import (
     COLL_VERDICT_AB_METRICS,
     COLL_VERDICT_METRICS,
 )
-from src.audit.ab_verdict import build_trend_series
+from src.audit.ab_verdict import build_trend_series, window_delta
 
 
 def _fmt_pct(v):
@@ -60,6 +60,10 @@ def show():
         st.line_chart(
             {"命中率": [v for _, v in hr_series]})
         st.caption(f"{hr_series[0][0]:%Y-%m-%d} ～ {hr_series[-1][0]:%Y-%m-%d}（{len(hr_series)} 點）")
+        d = window_delta(hr_series, k=7)
+        if d:
+            st.metric("命中率（近7期均）", _fmt_pct(d["recent"]),
+                      delta=f"{d['delta']:+.1%} vs 前7期")
     else:
         st.info("命中率歷史不足 2 點；每日排程 `scripts/verdict_attribution.py` 累積後即顯現趨勢。")
 
@@ -71,6 +75,10 @@ def show():
         st.line_chart({"一致率": [v for _, v in ag_series]})
         st.caption(f"{ag_series[0][0]:%Y-%m-%d} ～ {ag_series[-1][0]:%Y-%m-%d}（{len(ag_series)} 點）；"
                    "一致率越低，代表 Ollama 與規則的判斷歧異越大。")
+        d = window_delta(ag_series, k=7)
+        if d:
+            st.metric("一致率（近7期均）", _fmt_pct(d["recent"]),
+                      delta=f"{d['delta']:+.1%} vs 前7期", delta_color="off")
     else:
         st.info("一致率歷史不足 2 點；排程 `scripts/verdict_ab_eval.py --persist` 累積後即顯現趨勢。")
 

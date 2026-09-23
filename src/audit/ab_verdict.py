@@ -92,6 +92,22 @@ def build_trend_series(docs, value_key: str, ts_key: str = "ts"):
     return pts
 
 
+def window_delta(series, k: int = 7):
+    """取時序 [(ts, value)] 的「近 k 期均值 vs 前 k 期均值」變化。
+
+    純函式（免 DB，可測）。點數不足 2k 時回 None（無法比較）。
+    回 {recent, prior, delta}，recent/prior 為均值，delta=recent-prior。
+    """
+    if k <= 0 or not series or len(series) < 2 * k:
+        return None
+    vals = [v for _, v in series]
+    prior = vals[-2 * k:-k]
+    recent = vals[-k:]
+    r = sum(recent) / len(recent)
+    p = sum(prior) / len(prior)
+    return {"recent": r, "prior": p, "delta": r - p}
+
+
 def compare_verdict_sets(base: dict, variant: dict) -> dict:
     """比較兩組 {symbol: verdict}（Ollama vs 規則，或任兩臂）。
 
