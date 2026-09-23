@@ -9,16 +9,18 @@
       /home/mdsadmin/Stock/.venv/bin/python3 scripts/verdict_ab_eval.py --horizon-days 20
 """
 import argparse
+import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.audit.ab_verdict import compare_verdict_sets  # noqa: E402
+from src.audit.ab_verdict import build_agreement_alert, compare_verdict_sets  # noqa: E402
 from src.audit.verdict_tracker import forward_return, is_hit, normalize_verdict  # noqa: E402
 from src.config import get_db  # noqa: E402
 from src.domain.collections import (  # noqa: E402
+    COLL_SCHEDULE_ALERTS,
     COLL_STOCK_PRICE,
     COLL_VERDICT_AB,
     COLL_VERDICT_AB_METRICS,
@@ -133,6 +135,26 @@ def main():
             print(f"✅ 已寫入 {COLL_VERDICT_AB_METRICS}（趨勢追蹤）")
         except Exception as e:  # noqa: BLE001
             print(f"⚠️ 寫入 {COLL_VERDICT_AB_METRICS} 失敗：{e}")
+
+        # 一致率跨門檻→寫排程警報（網頁可見），選配 LINE
+        threshold = float(os.getenv("VERDICT_AGREEMENT_ALERT_THRESHOLD", "0.6"))
+        alert = build_agreement_alert(
+            cmp["agreement_rate"], threshold, n=cmp["n"], changed_count=len(cmp["changed"]))
+        if alert:
+            try:
+                db[COLL_SCHEDULE_ALERTS].insert_one({
+                    "ts": now, "level": alert["level"], "source": "verdict_ab_eval",
+                    "message": alert["message"], "detail": alert["detail"], "resolved": False,
+                })
+                print(f"🔴 {alert['message']}")
+            except Exception as e:  # noqa: BLE001
+                print(f"⚠️ 寫入 {COLL_SCHEDULE_ALERTS} 失敗：{e}")
+            if os.getenv("VERDICT_ALERT_LINE") == "1":
+                try:
+                    from src.alerts.line_notifier import LineNotifier
+                    LineNotifier().send("⚠️ " + alert["message"])
+                except Exception as e:  # noqa: BLE001
+                    print(f"⚠️ LINE 發送失敗：{e}")
 
 
 if __name__ == "__main__":

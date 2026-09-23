@@ -92,6 +92,24 @@ def build_trend_series(docs, value_key: str, ts_key: str = "ts"):
     return pts
 
 
+def build_agreement_alert(agreement_rate, threshold: float,
+                          n: int = 0, changed_count: int = 0):
+    """一致率跨門檻判定（純函式，可測）。
+
+    agreement_rate 為 None（無共同標的）或 >= threshold → 回 None（不告警）。
+    跨門檻→回 {level, message, detail}，供寫 schedule_alerts / 發 LINE。
+    """
+    if agreement_rate is None or agreement_rate >= threshold:
+        return None
+    return {
+        "level": "warning",
+        "message": (f"Ollama↔規則 一致率 {agreement_rate:.1%} 跨門檻（<{threshold:.0%}）："
+                    f"分歧 {changed_count}/{n} 檔，判斷歧異擴大，建議檢視模型/prompt。"),
+        "detail": {"agreement_rate": agreement_rate, "threshold": threshold,
+                   "n": n, "changed_count": changed_count},
+    }
+
+
 def window_delta(series, k: int = 7):
     """取時序 [(ts, value)] 的「近 k 期均值 vs 前 k 期均值」變化。
 
