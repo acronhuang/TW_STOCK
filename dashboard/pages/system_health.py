@@ -10,10 +10,12 @@ import streamlit as st
 from src.config import get_db
 from src.domain.collections import (
     COLL_DATA_HEALTH_HISTORY,
+    COLL_SCHEDULE_ALERTS,
     COLL_VERDICT_AB_METRICS,
     COLL_VERDICT_METRICS,
 )
 from src.audit.ab_verdict import build_trend_series, window_delta
+from src.monitoring.data_quality import summarize_open_alerts
 
 
 def _fmt_pct(v):
@@ -23,6 +25,22 @@ def _fmt_pct(v):
 def show():
     st.header("🩺 系統健康")
     db = get_db()
+
+    # ── 未解決告警 ───────────────────────────────────
+    open_docs = list(db[COLL_SCHEDULE_ALERTS].find({"resolved": {"$ne": True}}))
+    summ = summarize_open_alerts(open_docs)
+    if summ["total"]:
+        src_txt = "、".join(f"{k} ×{v}" for k, v in sorted(summ["by_source"].items()))
+        st.error(f"🔴 未解決告警 {summ['total']} 項（{src_txt}）")
+        for a in summ["latest"]:
+            ts = a.get("ts")
+            when = ts.strftime("%m-%d %H:%M") if isinstance(ts, datetime) else ""
+            st.warning(f"[{when}] {a.get('source', '?')}：{a.get('message', '')}")
+        st.caption("已處理請將對應 schedule_alerts 的 resolved 設為 true。")
+    else:
+        st.success("✅ 目前無未解決告警")
+
+    st.divider()
 
     # ── AI verdict 命中率 ──────────────────────────────────────────
     st.subheader("🎯 AI 判斷命中率（事後歸因）")

@@ -120,3 +120,18 @@ def run_health_check(db, config: dict, now: datetime | None = None) -> dict:
         "low_coverage_count": sum(1 for c in coverage if not c["ok"]),
         "alerts": alerts,
     }
+
+
+def summarize_open_alerts(docs, latest_n: int = 8):
+    """彙整未解決告警（純函式，可測）。
+
+    docs: schedule_alerts 中 resolved!=True 的紀錄。回：
+      {total, by_source: {source: count}, latest: [依 ts 由新到舊，最多 latest_n 筆]}
+    """
+    docs = list(docs or [])
+    by_source: dict = {}
+    for d in docs:
+        src = d.get("source", "unknown")
+        by_source[src] = by_source.get(src, 0) + 1
+    latest = sorted(docs, key=lambda d: d.get("ts") or datetime.min, reverse=True)[:latest_n]
+    return {"total": len(docs), "by_source": by_source, "latest": latest}
