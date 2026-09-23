@@ -106,3 +106,48 @@ def compute_metrics(evaluated: list[dict]) -> dict:
         "avg_return": (sum(rets) / len(rets)) if rets else None,
         "by_verdict": by,
     }
+
+
+def count_trailing_drops(values) -> int:
+    """尾端連續嚴格下滑的步數（純函式，可測）。
+
+    values 依時間遞增排列。持平（相等）視為中斷，不計入。
+    例：[0.5, 0.6, 0.55, 0.5] → 2。
+    """
+    if not values:
+        return 0
+    drops = 0
+    for i in range(len(values) - 1, 0, -1):
+        if values[i] < values[i - 1]:
+            drops += 1
+        else:
+            break
+    return drops
+
+
+def build_hitrate_alert(series, max_consecutive_drops: int = 3, floor=None):
+    """命中率趨勢告警判定（純函式，可測）。
+
+    series: [(ts, value)] 依時間遞增。觸發條件（任一）→ 回警報 dict，否則 None：
+      ① 尾端連續下滑 >= max_consecutive_drops 期
+      ② 最新值 < floor（若有設 floor）
+    """
+    values = [v for _, v in (series or [])]
+    if not values:
+        return None
+    drops = count_trailing_drops(values)
+    latest = values[-1]
+    reasons = []
+    if max_consecutive_drops and drops >= max_consecutive_drops:
+        reasons.append(f"連 {drops} 期下滑")
+    if floor is not None and latest < floor:
+        reasons.append(f"最新 {latest:.1%} 跌破地板 {floor:.0%}")
+    if not reasons:
+        return None
+    return {
+        "level": "warning",
+        "message": ("AI 命中率警示：" + "、".join(reasons)
+                    + f"（最新 {latest:.1%}），建議檢視模型/prompt/資料品質。"),
+        "detail": {"latest": latest, "consecutive_drops": drops,
+                   "floor": floor, "n_points": len(values)},
+    }
