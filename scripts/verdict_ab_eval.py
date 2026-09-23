@@ -18,7 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.audit.ab_verdict import compare_verdict_sets  # noqa: E402
 from src.audit.verdict_tracker import forward_return, is_hit, normalize_verdict  # noqa: E402
 from src.config import get_db  # noqa: E402
-from src.domain.collections import COLL_STOCK_PRICE, COLL_VERDICT_AB  # noqa: E402
+from src.domain.collections import (  # noqa: E402
+    COLL_STOCK_PRICE,
+    COLL_VERDICT_AB,
+    COLL_VERDICT_AB_METRICS,
+)
 
 BAND = 0.03
 
@@ -47,6 +51,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--horizon-days", type=int, default=20)
     ap.add_argument("--tolerance-days", type=int, default=6)
+    ap.add_argument("--persist", action="store_true",
+                    help="將一致率/三臂統計寫入 verdict_ab_metrics，供趨勢追蹤。")
     args = ap.parse_args()
 
     db = get_db()
@@ -106,6 +112,27 @@ def main():
         for (b, v), c in sorted(cmp["matrix"].items()):
             if b != v:
                 print(f"    規則 {b} → Ollama {v}: {c}")
+
+    if args.persist:
+        arm_stats = {arm: _arm_stats(arms[arm], market_avg) for arm in arms}
+        doc = {
+            "ts": now,
+            "horizon_days": args.horizon_days,
+            "n": len(recs),
+            "market_avg": market_avg,
+            "agreement_rate": cmp["agreement_rate"],
+            "agreement_n": cmp["n"],
+            "changed_count": len(cmp["changed"]),
+            "arms": {
+                arm: {"n": s["n"], "exc_avg": s["exc_avg"], "hit": s["hit"]}
+                for arm, s in arm_stats.items()
+            },
+        }
+        try:
+            db[COLL_VERDICT_AB_METRICS].insert_one(doc)
+            print(f"✅ 已寫入 {COLL_VERDICT_AB_METRICS}（趨勢追蹤）")
+        except Exception as e:  # noqa: BLE001
+            print(f"⚠️ 寫入 {COLL_VERDICT_AB_METRICS} 失敗：{e}")
 
 
 if __name__ == "__main__":

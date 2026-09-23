@@ -86,6 +86,7 @@ COLL_INSTITUTIONAL_REBUILD_PROGRESS = "institutional_rebuild_progress"
 COLL_TEAM_ANALYSIS = "team_analysis"
 COLL_VERDICT_METRICS = "verdict_metrics"
 COLL_VERDICT_AB = "verdict_ab"
+COLL_VERDICT_AB_METRICS = "verdict_ab_metrics"  # A/B 評估快照(趨勢追蹤用)
 COLL_PEER_COMPARISON = "peer_comparison"
 COLL_NOTICED_STOCKS = "noticed_stocks"
 COLL_PUNISHED_STOCKS = "punished_stocks"

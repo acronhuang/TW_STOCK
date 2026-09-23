@@ -75,6 +75,23 @@ def ollama_momentum_verdict(symbol: str, base_verdict: str, indicators: dict,
     return _parse_verdict(resp["response"])
 
 
+def build_trend_series(docs, value_key: str, ts_key: str = "ts"):
+    """將歷史快照 docs → 依時間遞增排序的 [(ts, value)]。
+
+    純函式（免 DB，可測），供 Dashboard 畫趨勢線。value 為 None
+    或非數值者跳過；ts 缺失者跳過。同一呼叫不改變輸入。
+    """
+    pts = []
+    for d in docs or []:
+        ts = d.get(ts_key)
+        v = d.get(value_key)
+        if ts is None or not isinstance(v, (int, float)) or isinstance(v, bool):
+            continue
+        pts.append((ts, float(v)))
+    pts.sort(key=lambda p: p[0])
+    return pts
+
+
 def compare_verdict_sets(base: dict, variant: dict) -> dict:
     """比較兩組 {symbol: verdict}（Ollama vs 規則，或任兩臂）。
 

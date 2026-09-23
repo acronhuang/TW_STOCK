@@ -8,7 +8,12 @@ from datetime import datetime
 import streamlit as st
 
 from src.config import get_db
-from src.domain.collections import COLL_DATA_HEALTH_HISTORY, COLL_VERDICT_METRICS
+from src.domain.collections import (
+    COLL_DATA_HEALTH_HISTORY,
+    COLL_VERDICT_AB_METRICS,
+    COLL_VERDICT_METRICS,
+)
+from src.audit.ab_verdict import build_trend_series
 
 
 def _fmt_pct(v):
@@ -40,6 +45,34 @@ def show():
         horizon = vm.get("horizon_days", "?")
         st.caption(f"評估期：{horizon} 日　·　更新："
                    f"{ts.strftime('%Y-%m-%d %H:%M') if isinstance(ts, datetime) else ts}")
+
+    st.divider()
+
+    # ── 趨勢追蹤 ─────────────────────────────────────
+    st.subheader("📈 趨勢追蹤（命中率 / Ollama↔規則 一致率）")
+    st.caption("讀歷史快照：verdict_metrics（命中率）與 verdict_ab_metrics（一致率）隨時間變化。")
+
+    hist = list(db[COLL_VERDICT_METRICS].find(
+        {}, {"ts": 1, "hit_rate": 1}).sort("ts", 1).limit(180))
+    hr_series = build_trend_series(hist, "hit_rate")
+    if len(hr_series) >= 2:
+        st.markdown("**AI 命中率趨勢**")
+        st.line_chart(
+            {"命中率": [v for _, v in hr_series]})
+        st.caption(f"{hr_series[0][0]:%Y-%m-%d} ～ {hr_series[-1][0]:%Y-%m-%d}（{len(hr_series)} 點）")
+    else:
+        st.info("命中率歷史不足 2 點；每日排程 `scripts/verdict_attribution.py` 累積後即顯現趨勢。")
+
+    ab_hist = list(db[COLL_VERDICT_AB_METRICS].find(
+        {}, {"ts": 1, "agreement_rate": 1}).sort("ts", 1).limit(180))
+    ag_series = build_trend_series(ab_hist, "agreement_rate")
+    if len(ag_series) >= 2:
+        st.markdown("**Ollama vs 規則 一致率趨勢**")
+        st.line_chart({"一致率": [v for _, v in ag_series]})
+        st.caption(f"{ag_series[0][0]:%Y-%m-%d} ～ {ag_series[-1][0]:%Y-%m-%d}（{len(ag_series)} 點）；"
+                   "一致率越低，代表 Ollama 與規則的判斷歧異越大。")
+    else:
+        st.info("一致率歷史不足 2 點；排程 `scripts/verdict_ab_eval.py --persist` 累積後即顯現趨勢。")
 
     st.divider()
 
