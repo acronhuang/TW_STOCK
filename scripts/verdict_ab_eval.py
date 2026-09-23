@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.audit.ab_verdict import build_agreement_alert, compare_verdict_sets  # noqa: E402
 from src.audit.verdict_tracker import forward_return, is_hit, normalize_verdict  # noqa: E402
 from src.config import get_db  # noqa: E402
+from src.monitoring.data_quality import auto_resolve_alerts  # noqa: E402
 from src.domain.collections import (  # noqa: E402
     COLL_SCHEDULE_ALERTS,
     COLL_STOCK_PRICE,
@@ -155,6 +156,13 @@ def main():
                     LineNotifier().send("⚠️ " + alert["message"])
                 except Exception as e:  # noqa: BLE001
                     print(f"⚠️ LINE 發送失敗：{e}")
+        elif cmp["agreement_rate"] is not None:
+            try:
+                n_res = auto_resolve_alerts(db, "verdict_ab_eval", now=now)
+                if n_res:
+                    print(f"✅ 一致率回穩，自動消警 {n_res} 筆")
+            except Exception as e:  # noqa: BLE001
+                print(f"⚠️ 自動消警失敗：{e}")
 
 
 if __name__ == "__main__":

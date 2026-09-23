@@ -135,3 +135,17 @@ def summarize_open_alerts(docs, latest_n: int = 8):
         by_source[src] = by_source.get(src, 0) + 1
     latest = sorted(docs, key=lambda d: d.get("ts") or datetime.min, reverse=True)[:latest_n]
     return {"total": len(docs), "by_source": by_source, "latest": latest}
+
+
+def auto_resolve_alerts(db, source: str, now=None, reason: str = "指標回到門檻上方"):
+    """自動消警：把指定 source 的未解決告警標記 resolved（指標回穩時呼叫）。
+
+    回傳被標記的筆數（modified_count）。db 需提供 schedule_alerts.update_many。
+    """
+    now = now or datetime.now()
+    res = db["schedule_alerts"].update_many(
+        {"source": source, "resolved": {"$ne": True}},
+        {"$set": {"resolved": True, "resolved_at": now,
+                  "resolved_reason": f"auto: {reason}"}},
+    )
+    return getattr(res, "modified_count", 0)

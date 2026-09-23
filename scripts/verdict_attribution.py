@@ -32,6 +32,7 @@ from src.domain.collections import (  # noqa: E402
     COLL_TEAM_ANALYSIS,
     COLL_VERDICT_METRICS,
 )
+from src.monitoring.data_quality import auto_resolve_alerts  # noqa: E402
 
 
 def _current_close(db, symbol: str):
@@ -107,6 +108,13 @@ def main() -> int:
                 LineNotifier().send("⚠️ " + alert["message"])
             except Exception as e:  # noqa: BLE001
                 print(f"⚠️ LINE 發送失敗：{e}")
+    elif metrics["hit_rate"] is not None:
+        try:
+            n_res = auto_resolve_alerts(db, "verdict_attribution", now=now)
+            if n_res:
+                print(f"✅ 命中率回穩，自動消警 {n_res} 筆")
+        except Exception as e:  # noqa: BLE001
+            print(f"⚠️ 自動消警失敗：{e}")
 
     hr = f"{metrics['hit_rate']:.1%}" if metrics["hit_rate"] is not None else "N/A"
     print(f"[{now:%Y-%m-%d}] verdict 歸因（{args.horizon_days}日）：n={metrics['n']} 命中率={hr}")

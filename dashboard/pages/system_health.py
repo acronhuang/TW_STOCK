@@ -35,8 +35,16 @@ def show():
         for a in summ["latest"]:
             ts = a.get("ts")
             when = ts.strftime("%m-%d %H:%M") if isinstance(ts, datetime) else ""
-            st.warning(f"[{when}] {a.get('source', '?')}：{a.get('message', '')}")
-        st.caption("已處理請將對應 schedule_alerts 的 resolved 設為 true。")
+            col_msg, col_btn = st.columns([9, 1])
+            col_msg.warning(f"[{when}] {a.get('source', '?')}：{a.get('message', '')}")
+            if a.get("_id") is not None and col_btn.button("✅ 已解決", key=f"res_{a['_id']}"):
+                db[COLL_SCHEDULE_ALERTS].update_one(
+                    {"_id": a["_id"]},
+                    {"$set": {"resolved": True, "resolved_at": datetime.now(),
+                              "resolved_reason": "manual: dashboard"}},
+                )
+                st.rerun()
+        st.caption("點「✅ 已解決」可手動消警；指標回穩時下次評估會自動消警。")
     else:
         st.success("✅ 目前無未解決告警")
 
