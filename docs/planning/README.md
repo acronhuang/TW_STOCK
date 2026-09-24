@@ -51,6 +51,11 @@
 |---|---|
 | [`Phase2_進度追蹤.md`](Phase2_進度追蹤.md) | 集合名常數化（61 個 `COLL_*`）、repository + config.get_db() 採用 |
 
+### E2. Phase 3 — 收尾工程
+| 文件 | 內容 |
+|---|---|
+| [`Phase3_進度追蹤.md`](Phase3_進度追蹤.md) | 每日備份、Phase2 續批裸存取歸零、上帝模組拆分（pattern_detector 範式）+ 剩餘計畫 |
+
 ### F. 正式環境架構 ⭐
 | 文件 | 內容 |
 |---|---|
