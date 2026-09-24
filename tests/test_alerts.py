@@ -20,10 +20,12 @@ class TestLineNotifier:
 
 class TestAlertManager:
     @pytest.mark.integration
-    def test_add_and_list_rules(self, db):
-        am = AlertManager()
+    def test_add_and_list_rules(self, write_db):
+        # 隔離:AlertManager 改指向專用測試庫(session 結束自動 drop),
+        # 不再經唯讀 db fixture 寫入正式庫名。
+        am = AlertManager(db_name=write_db.name)
         # 清除測試規則
-        db.alert_rules.delete_many({'symbol': 'TEST9999'})
+        write_db.alert_rules.delete_many({'symbol': 'TEST9999'})
 
         am.add_price_alert('TEST9999', 'above', 100)
         rules = [r for r in am.list_rules() if r['symbol'] == 'TEST9999']

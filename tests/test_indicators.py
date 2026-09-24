@@ -3,11 +3,13 @@ import pytest
 import pandas as pd
 import numpy as np
 
-# ADR-0011 分類（2026-08-16）：從 db.stock_price 讀 2330 真實價格算指標，需要 DB
-pytestmark = pytest.mark.integration
+# 分層修正(2026-09-25):原模組一律標 integration,但 MA/MACD 是純 pandas/numpy
+# 運算、零 DB → 改標 unit 納入免-DB 秒級閘門(還運算回歸安全網)。
+# 僅 test_rsi_range 真從 db 讀 2330 價格 → 保留 integration。
 
 
 class TestRSI:
+    @pytest.mark.integration
     def test_rsi_range(self, db):
         from src.indicators.rsi import calculate_rsi
         closes = [float(p['close'].to_decimal()) for p in
@@ -20,6 +22,7 @@ class TestRSI:
 
 
 class TestMA:
+    @pytest.mark.unit
     def test_ma_calculation(self):
         from src.indicators.ma import calculate_ma
         data = pd.Series([10, 11, 12, 13, 14, 15])
@@ -28,6 +31,7 @@ class TestMA:
 
 
 class TestMACD:
+    @pytest.mark.unit
     def test_macd_output(self):
         from src.indicators.macd import calculate_macd
         data = pd.Series(np.random.random(50) * 100 + 100)
