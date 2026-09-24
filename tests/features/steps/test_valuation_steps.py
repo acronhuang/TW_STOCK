@@ -1,8 +1,9 @@
 """BDD step implementations for valuation.feature"""
 import pytest
 
-# 世界事實/深財報模型（DCF/DDM 需季報與多年股利），合成種子難以可靠 → live-only。
-pytestmark = [pytest.mark.integration, pytest.mark.prod_data]
+# 守衛式斷言（均 if 守衛或 skip）+ wacc>=8 為 MIN_WACC 不變式 → 種子後可靠執行。
+# 種子（2330 quarterly_earnings + taiwan_stock_info）見 scripts/seed_test_data.py。
+pytestmark = [pytest.mark.integration, pytest.mark.needs_data]
 
 
 class TestValuationBDD:

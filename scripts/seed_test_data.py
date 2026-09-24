@@ -120,9 +120,33 @@ def seed(db) -> None:
         })
     db["stock_factors"].insert_many(fdocs)
 
+    # quarterly_earnings（2330：8 季正淨利/營收/EPS → DCF fair_value>0、_get_trailing_eps 可算）
+    # → 支援 test_valuation_steps（守衛式斷言，wacc>=8 由 MIN_WACC 保證）。
+    now_year = dates[-1].year
+    db["quarterly_earnings"].delete_many({"symbol": "2330"})
+    qdocs = []
+    for yr in (now_year - 2, now_year - 1):  # 2 完整年，每年 4 季（滿足 quarters>=3 與 CAGR min_years=2）
+        for season in (1, 2, 3, 4):
+            qdocs.append({
+                "symbol": "2330",
+                "year": yr,
+                "season": season,
+                "income": {
+                    "eps": 10.0,  # 單季 EPS（Q4 < Q1+Q2+Q3 → 直接加總）
+                    "net_income": 250_000_000_000,
+                    "revenue": 600_000_000_000,
+                },
+            })
+    db["quarterly_earnings"].insert_many(qdocs)
+
+    # taiwan_stock_info（2330 流通在外股數，千股）→ DCF _get_shares_outstanding
+    db["taiwan_stock_info"].delete_many({"stock_id": "2330"})
+    db["taiwan_stock_info"].insert_one({"stock_id": "2330", "outstanding_shares": 25_930_000})
+
     print(
         f"✅ 已灌入種子：stock_price {len(docs)} 筆（{', '.join(SEED_SYMBOLS)}）"
-        f"、stock_factors {len(fdocs)} 筆（{len(dates)} 個交易日 {dates[0]:%Y-%m-%d}→{dates[-1]:%Y-%m-%d}）"
+        f"、stock_factors {len(fdocs)} 筆、quarterly_earnings 2330 x{len(qdocs)}、taiwan_stock_info 2330 x1"
+        f"（{len(dates)} 個交易日 {dates[0]:%Y-%m-%d}→{dates[-1]:%Y-%m-%d}）"
     )
 
 
