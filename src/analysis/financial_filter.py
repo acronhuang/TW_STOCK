@@ -12,6 +12,11 @@ from __future__ import annotations
 
 from bson import Decimal128
 from pymongo import MongoClient
+from src.domain.collections import (
+    COLL_BALANCE_SHEET_DETAIL,
+    COLL_QUARTERLY_EARNINGS,
+    COLL_TAIWAN_STOCK_INFO,
+)
 
 
 def _tof(v) -> float | None:
@@ -48,11 +53,11 @@ class FinancialFilter:
 
     def _debt_ratio_bsd(self, symbol: str):
         """負債比=總負債/總資產*100,取自 balance_sheet_detail(現行全市場;取代舊 financial_statements 只192檔且停2025Q3)。無則 None。"""
-        ta_doc = self.db.balance_sheet_detail.find_one(
+        ta_doc = self.db[COLL_BALANCE_SHEET_DETAIL].find_one(
             {'stock_id': symbol, 'type': 'TotalAssets'}, sort=[('date', -1)])
         if not ta_doc:
             return None
-        tl_doc = self.db.balance_sheet_detail.find_one(
+        tl_doc = self.db[COLL_BALANCE_SHEET_DETAIL].find_one(
             {'stock_id': symbol, 'type': 'Liabilities', 'date': ta_doc['date']})
         ta = _tof(ta_doc.get('value'))
         tl = _tof(tl_doc.get('value')) if tl_doc else None
@@ -66,7 +71,7 @@ class FinancialFilter:
               min_net_margin: float = 0,
               min_positive_quarters: int = 3) -> dict:
         """完整檢查並回傳細節"""
-        qes = list(self.db.quarterly_earnings.find(
+        qes = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(4))
 
@@ -106,7 +111,7 @@ class FinancialFilter:
         debt_ratio = self._debt_ratio_bsd(symbol)
 
         # 4 項檢查
-        info = self.db.taiwan_stock_info.find_one({'stock_id': symbol}, {'industry_category': 1})
+        info = self.db[COLL_TAIWAN_STOCK_INFO].find_one({'stock_id': symbol}, {'industry_category': 1})
         is_financial = bool(info and info.get('industry_category') in ('金融保險', '金融業'))
 
         checks = {

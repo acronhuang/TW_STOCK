@@ -18,6 +18,11 @@ from __future__ import annotations
 
 from bson import Decimal128
 from pymongo import MongoClient
+from src.domain.collections import (
+    COLL_BALANCE_SHEET_DETAIL,
+    COLL_QUARTERLY_EARNINGS,
+    COLL_STOCK_FACTORS,
+)
 
 MONGODB_URI = 'mongodb://localhost:27017/'
 DB_NAME = 'tw_stock_analysis'
@@ -71,7 +76,7 @@ class FinancialHealthAnalyzer:
             return {'symbol': symbol, 'error': '季報資料不足'}
 
         balance = self._latest_balance(symbol)
-        factors = self.db.stock_factors.find_one(
+        factors = self.db[COLL_STOCK_FACTORS].find_one(
             {'symbol': symbol}, sort=[('date', -1)]) or {}
         price = _tof(factors.get('pe_ratio'))  # 為 None 則後續 value 降級
 
@@ -113,7 +118,7 @@ class FinancialHealthAnalyzer:
     #  TTM（Trailing Twelve Months）計算
     # ─────────────────────────────────────────────────
     def _calc_ttm(self, symbol: str) -> dict | None:
-        qes = list(self.db.quarterly_earnings.find(
+        qes = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(8))
 
@@ -188,11 +193,11 @@ class FinancialHealthAnalyzer:
         M = {'total_assets': 'TotalAssets', 'total_liabilities': 'Liabilities', 'equity': 'Equity',
              'current_assets': 'CurrentAssets', 'current_liabilities': 'CurrentLiabilities',
              'cash': 'CashAndCashEquivalents', 'inventory': 'Inventories'}
-        ta = self.db.balance_sheet_detail.find_one(
+        ta = self.db[COLL_BALANCE_SHEET_DETAIL].find_one(
             {'stock_id': symbol, 'type': 'TotalAssets'}, sort=[('date', -1)])
         if not ta:
             return None
-        rows = self.db.balance_sheet_detail.find(
+        rows = self.db[COLL_BALANCE_SHEET_DETAIL].find(
             {'stock_id': symbol, 'date': ta['date'], 'type': {'$in': list(M.values())}})
         vals = {r['type']: _tof(r.get('value')) for r in rows}
         out = {fld: vals.get(acct) for fld, acct in M.items()}
@@ -210,7 +215,7 @@ class FinancialHealthAnalyzer:
         # quarterly_earnings 1、**financial_statements 0** —— 這條分支不可達。
         # 留著的風險不是浪費,而是主路徑哪天失效時會靜默退回停更半年的資料,
         # 把「沒資料」變成「看似有資料但是舊的」,後者更難發現。
-        qe = self.db.quarterly_earnings.find_one(
+        qe = self.db[COLL_QUARTERLY_EARNINGS].find_one(
             {'symbol': symbol}, sort=[('year', -1), ('season', -1)])
         if qe and qe.get('balance'):
             bal = qe['balance']

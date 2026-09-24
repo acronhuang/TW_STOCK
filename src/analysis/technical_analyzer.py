@@ -7,6 +7,10 @@
 
 
 from pymongo import MongoClient
+from src.domain.collections import (
+    COLL_STOCK_PRICE,
+    COLL_TECHNICAL_INDICATORS,
+)
 
 MONGODB_URI = 'mongodb://localhost:27017/'
 DB_NAME = 'tw_stock_analysis'
@@ -41,12 +45,12 @@ class TechnicalAnalyzer:
         """
         # 取得技術指標
         if date:
-            indicator = self.db.technical_indicators.find_one({
+            indicator = self.db[COLL_TECHNICAL_INDICATORS].find_one({
                 'symbol': symbol,
                 'date': date
             })
         else:
-            indicator = self.db.technical_indicators.find_one(
+            indicator = self.db[COLL_TECHNICAL_INDICATORS].find_one(
                 {'symbol': symbol},
                 sort=[('date', -1)]
             )
@@ -66,7 +70,7 @@ class TechnicalAnalyzer:
         else:
             date_obj = indicator_date
             
-        price = self.db.stock_price.find_one({
+        price = self.db[COLL_STOCK_PRICE].find_one({
             'symbol': symbol,
             'date': date_obj
         })
@@ -417,7 +421,7 @@ class TechnicalAnalyzer:
             排序後的股票分析結果列表
         """
         # 取得最新日期
-        latest = self.db.technical_indicators.find_one(
+        latest = self.db[COLL_TECHNICAL_INDICATORS].find_one(
             {},
             sort=[('date', -1)]
         )
@@ -428,7 +432,7 @@ class TechnicalAnalyzer:
         latest_date = latest['date']
         
         # 取得該日期所有有技術指標的股票
-        symbols = self.db.technical_indicators.distinct('symbol', {'date': latest_date})
+        symbols = self.db[COLL_TECHNICAL_INDICATORS].distinct('symbol', {'date': latest_date})
         
         results = []
         for symbol in symbols:

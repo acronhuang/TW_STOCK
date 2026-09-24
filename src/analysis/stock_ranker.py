@@ -19,6 +19,12 @@ from pathlib import Path
 import numpy as np
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
+from src.domain.collections import (
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_MONTHLY_REVENUE,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+)
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
@@ -80,14 +86,14 @@ class StockRanker:
         不在測不準的情況下阻斷 live 路徑。
         """
         try:
-            latest = self.db.stock_factors.find_one(sort=[('date', -1)])
+            latest = self.db[COLL_STOCK_FACTORS].find_one(sort=[('date', -1)])
             if not latest:
                 print('⚠️  StockRanker 欄位驗證跳過:stock_factors 無資料')
                 return
             # 同一日不同標的的欄位並不一致(pe_ratio 僅約 68% 標的有),
             # 故取整日所有文件的欄名聯集,只看一筆會誤判成不存在。
             fields = set()
-            for doc in self.db.stock_factors.find({'date': latest['date']}):
+            for doc in self.db[COLL_STOCK_FACTORS].find({'date': latest['date']}):
                 fields.update(doc.keys())
         except Exception as e:
             print(f'⚠️  StockRanker 欄位驗證跳過:{type(e).__name__}: {e}')
@@ -288,7 +294,7 @@ class StockRanker:
         ]
 
         results = {}
-        for doc in self.db.stock_factors.aggregate(pipeline, allowDiskUse=True):
+        for doc in self.db[COLL_STOCK_FACTORS].aggregate(pipeline, allowDiskUse=True):
             sym = doc['_id']
             if exclude_etf and (sym.startswith('00') or not sym.isdigit()):
                 continue
@@ -319,7 +325,7 @@ class StockRanker:
     def _get_institutional_score(self, symbol: str) -> float | None:
         """近 5 日法人買賣超評分"""
         cutoff = datetime.now() - timedelta(days=10)
-        flows = list(self.db.institutional_flow.find(
+        flows = list(self.db[COLL_INSTITUTIONAL_FLOW].find(
             {'stock_id': symbol, 'date': {'$gte': cutoff}},
             {'foreign_net': 1, 'trust_net': 1}
         ).sort('date', -1).limit(5))
@@ -343,7 +349,7 @@ class StockRanker:
 
     def _get_revenue_growth(self, symbol: str) -> float | None:
         """最新月營收 YoY"""
-        rec = self.db.monthly_revenue.find_one(
+        rec = self.db[COLL_MONTHLY_REVENUE].find_one(
             {'symbol': symbol, 'yoy_growth': {'$exists': True}},
             {'yoy_growth': 1},
             sort=[('year_month', -1)]
@@ -355,7 +361,7 @@ class StockRanker:
         return None
 
     def _get_latest_price(self, symbol: str) -> float | None:
-        rec = self.db.stock_price.find_one(
+        rec = self.db[COLL_STOCK_PRICE].find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)])
         return _to_float(rec['close']) if rec else None
 
@@ -367,7 +373,7 @@ class StockRanker:
                     return rec.get('stock_name', rec.get('name', ''))
             except Exception:
                 pass
-        rec = self.db.stock_price.find_one({'symbol': symbol}, {'name': 1})
+        rec = self.db[COLL_STOCK_PRICE].find_one({'symbol': symbol}, {'name': 1})
         return rec.get('name', '') if rec else ''
 
     def _score_to_grade(self, score: float) -> str:

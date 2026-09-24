@@ -10,6 +10,10 @@ from datetime import timedelta
 import pandas as pd
 
 from src.config import RESULTS_DIR
+from src.domain.collections import (
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_STOCK_PRICE,
+)
 
 _SCAN_DIR = str(RESULTS_DIR)  # 遷自硬編碼絕對路徑；現由 src.config 推導（可攜）
 
@@ -20,12 +24,12 @@ def _g(v):
 
 def price_series(db, symbol, lookback_days=180):
     """回傳原始價 DataFrame(date/open/high/low/close/volume),近 lookback_days 天。"""
-    lat = db.stock_price.find_one({"stock_id": symbol, "date": {"$type": "date"}}, sort=[("date", -1)])
+    lat = db[COLL_STOCK_PRICE].find_one({"stock_id": symbol, "date": {"$type": "date"}}, sort=[("date", -1)])
     if not lat:
         return pd.DataFrame()
     end = lat["date"]; start = end - timedelta(days=lookback_days)
     rows = []
-    for r in db.stock_price.find({"stock_id": symbol, "date": {"$gte": start, "$lte": end, "$type": "date"}},
+    for r in db[COLL_STOCK_PRICE].find({"stock_id": symbol, "date": {"$gte": start, "$lte": end, "$type": "date"}},
                                  {"date": 1, "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}).sort("date", 1):
         c = _g(r.get("close"))
         if c:
@@ -212,7 +216,7 @@ def rebound_potential(db, symbol):
     v = df["volume"].astype(float)
     vol5 = float(v.iloc[-5:].mean()); vol60 = float(v.iloc[-60:].mean())
     low_vol_pickup = cur <= fib["low"] * 1.10 and vol60 and vol5 >= vol60 * 1.2
-    inst = list(db.institutional_flow.find({"stock_id": symbol}, {"foreign_net": 1}).sort("date", -1).limit(10))
+    inst = list(db[COLL_INSTITUTIONAL_FLOW].find({"stock_id": symbol}, {"foreign_net": 1}).sort("date", -1).limit(10))
     fnet = sum((_g(x.get("foreign_net")) or 0) for x in inst) / 1000.0
     tz = trapped_volume_zones(df, cur)
     space = tz[0]["dist%"] if tz else None

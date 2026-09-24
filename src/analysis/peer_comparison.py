@@ -18,6 +18,12 @@ from pathlib import Path
 import numpy as np
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
+from src.domain.collections import (
+    COLL_MONTHLY_REVENUE,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+    COLL_TAIWAN_STOCK_INFO,
+)
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
@@ -217,12 +223,12 @@ class PeerComparison:
     # ──────────────────────────────────────────────
     def list_industries(self) -> list[dict]:
         """列出所有產業及股票數"""
-        industries = self.db.monthly_revenue.distinct('industry')
+        industries = self.db[COLL_MONTHLY_REVENUE].distinct('industry')
         result = []
         for ind in sorted(industries):
             if not ind:
                 continue
-            symbols = self.db.monthly_revenue.distinct('symbol', {'industry': ind})
+            symbols = self.db[COLL_MONTHLY_REVENUE].distinct('symbol', {'industry': ind})
             result.append({'industry': ind, 'count': len(symbols)})
         return result
 
@@ -234,13 +240,13 @@ class PeerComparison:
             return self._industry_cache[symbol]
 
         # 從 monthly_revenue（最準確的產業分類）
-        rec = self.db.monthly_revenue.find_one({'symbol': symbol}, {'industry': 1})
+        rec = self.db[COLL_MONTHLY_REVENUE].find_one({'symbol': symbol}, {'industry': 1})
         if rec and rec.get('industry'):
             self._industry_cache[symbol] = rec['industry']
             return rec['industry']
 
         # 從 taiwan_stock_info
-        info = self.db.taiwan_stock_info.find_one({'stock_id': symbol}, {'industry_category': 1})
+        info = self.db[COLL_TAIWAN_STOCK_INFO].find_one({'stock_id': symbol}, {'industry_category': 1})
         if info and info.get('industry_category'):
             self._industry_cache[symbol] = info['industry_category']
             return info['industry_category']
@@ -250,7 +256,7 @@ class PeerComparison:
     def _get_industry_peers(self, industry: str) -> list[dict]:
         """取得同業所有股票的最新因子"""
         # 取產業內所有股票
-        symbols = self.db.monthly_revenue.distinct('symbol', {'industry': industry})
+        symbols = self.db[COLL_MONTHLY_REVENUE].distinct('symbol', {'industry': industry})
 
         if not symbols:
             return []
@@ -272,7 +278,7 @@ class PeerComparison:
                               'input': f'${f}_arr', 'cond': {'$ne': ['$$this', None]}}}} for f in _F}}},
         ]
 
-        results = list(self.db.stock_factors.aggregate(pipeline))
+        results = list(self.db[COLL_STOCK_FACTORS].aggregate(pipeline))
 
         peers = []
         for r in results:
@@ -329,7 +335,7 @@ class PeerComparison:
         return scored[:n]
 
     def _get_latest_price(self, symbol: str) -> float | None:
-        rec = self.db.stock_price.find_one(
+        rec = self.db[COLL_STOCK_PRICE].find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)]
         )
         return _to_float(rec['close']) if rec else None
@@ -342,7 +348,7 @@ class PeerComparison:
                     return rec.get('stock_name', rec.get('name', ''))
             except Exception:
                 pass
-        rec = self.db.stock_price.find_one({'symbol': symbol}, {'name': 1})
+        rec = self.db[COLL_STOCK_PRICE].find_one({'symbol': symbol}, {'name': 1})
         return rec.get('name', '') if rec else ''
 
     def _percentile_to_grade(self, percentile: float):

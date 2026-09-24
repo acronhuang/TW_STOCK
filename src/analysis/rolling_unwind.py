@@ -12,6 +12,10 @@ import pandas as pd
 
 from src.analysis.tech_lines import sr_levels
 from src.analysis.volprice_pattern import classify_tf
+from src.domain.collections import (
+    COLL_SHAREHOLDING,
+    COLL_STOCK_PRICE,
+)
 
 
 def _g(v):
@@ -19,11 +23,11 @@ def _g(v):
 
 
 def _load(db, symbol, days=420):
-    lat = db.stock_price.find_one({"stock_id": symbol, "date": {"$type": "date"}}, sort=[("date", -1)])
+    lat = db[COLL_STOCK_PRICE].find_one({"stock_id": symbol, "date": {"$type": "date"}}, sort=[("date", -1)])
     if not lat:
         return None
     rows = []
-    for r in db.stock_price.find(
+    for r in db[COLL_STOCK_PRICE].find(
             {"stock_id": symbol, "date": {"$gte": lat["date"] - timedelta(days=days), "$type": "date"}},
             {"date": 1, "high": 1, "low": 1, "close": 1, "volume": 1}).sort("date", 1):
         c = _g(r.get("close"))
@@ -35,7 +39,7 @@ def _load(db, symbol, days=420):
 
 def _big400_change(db, symbol):
     """集保大戶(>400張)最新 vs 約1個月前的百分點變化。"""
-    rows = list(db.shareholding.find({"stock_id": symbol}, {"big400_pct": 1}).sort("date", -1).limit(6))
+    rows = list(db[COLL_SHAREHOLDING].find({"stock_id": symbol}, {"big400_pct": 1}).sort("date", -1).limit(6))
     if len(rows) < 2:
         return None, None
     now = rows[0].get("big400_pct")

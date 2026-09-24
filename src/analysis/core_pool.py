@@ -10,6 +10,13 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 import pandas as pd
+from src.domain.collections import (
+    COLL_BALANCE_SHEET_DETAIL,
+    COLL_FINANCIAL_STATEMENT_DETAIL,
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_STOCK_PRICE,
+    COLL_TEAM_ANALYSIS,
+)
 
 # 買進反動能過濾:排除當批買進中事前 20 日漲幅最高的這一比例。
 # 依據(verdict_detail 全樣本 2026-08-14,前瞻 20 日):買進判斷力隨事前動能單調遞減——
@@ -37,7 +44,7 @@ def _yoy(cu, ba):
 
 def market_financials(db):
     """全市場最新廣覆蓋季的 EPS/獲利/營收/毛利率/自由現金流/應收週轉/獲利YoY。回 (季別, DataFrame)。"""
-    fs = db.financial_statement_detail
+    fs = db[COLL_FINANCIAL_STATEMENT_DETAIL]
     dates = sorted(fs.distinct("date", {"type": "Revenue"}), reverse=True)
     ref = next((d for d in dates if fs.count_documents({"date": d, "type": "Revenue"}) >= 500),
                dates[0] if dates else None)
@@ -55,11 +62,11 @@ def market_financials(db):
     ly = load("financial_statement_detail", INC, prev)
     cf_ref = load("cash_flows_detail", CF, ref)
     cf_prev = load("cash_flows_detail", CF, datetime(ref.year, *_PREVQ[ref.month])) if season != 1 else {}
-    ar = {r["stock_id"]: _num(r["value"]) for r in db.balance_sheet_detail.find(
+    ar = {r["stock_id"]: _num(r["value"]) for r in db[COLL_BALANCE_SHEET_DETAIL].find(
         {"date": ref, "type": "AccountsReceivableNet"}, {"stock_id": 1, "value": 1})}
     ids = [s for s in cur if len(s) == 4 and s.isdigit()]
     names = {}
-    for r in db.stock_price.find({"stock_id": {"$in": ids}, "name": {"$nin": ["", None]}},
+    for r in db[COLL_STOCK_PRICE].find({"stock_id": {"$in": ids}, "name": {"$nin": ["", None]}},
                                  {"_id": 0, "stock_id": 1, "name": 1}).sort("date", -1):
         names.setdefault(r["stock_id"], r["name"])
     rows = []
@@ -92,7 +99,7 @@ def market_financials(db):
 
 def _prior_20d(db, sym, dt):
     """dt(含)往前 20 個交易日的還原報酬。資料不足 21 根或價格無效回 None。"""
-    rows = list(db.stock_price.find(
+    rows = list(db[COLL_STOCK_PRICE].find(
         {"symbol": sym, "date": {"$lte": dt}, "adj_close": {"$ne": None}},
         {"date": 1, "adj_close": 1}).sort("date", -1).limit(21))
     if len(rows) < 21:
@@ -110,7 +117,7 @@ def latest_buys(db, min_universe=500, mom_filter_pct=None):
     """
     from collections import Counter
     cnt = Counter()
-    for d in db.team_analysis.find({}, {"date": 1}).sort("date", -1).limit(9000):
+    for d in db[COLL_TEAM_ANALYSIS].find({}, {"date": 1}).sort("date", -1).limit(9000):
         cnt[d["date"]] += 1
     full = sorted((dt for dt, c in cnt.items() if c >= min_universe), reverse=True)
     if not full:
@@ -118,7 +125,7 @@ def latest_buys(db, min_universe=500, mom_filter_pct=None):
     dt = full[0]
     d0 = dt.replace(hour=0, minute=0, second=0, microsecond=0)
     d1 = d0 + timedelta(days=1)
-    buys = set(x["symbol"] for x in db.team_analysis.find(
+    buys = set(x["symbol"] for x in db[COLL_TEAM_ANALYSIS].find(
         {"date": {"$gte": d0, "$lt": d1}, "final_verdict": "買進"}))
 
     pct = MOM_FILTER_PCT if mom_filter_pct is None else mom_filter_pct
@@ -141,7 +148,7 @@ def latest_buys(db, min_universe=500, mom_filter_pct=None):
 def _foreign_10d(db, sym):
     def g(v):
         return float(v.to_decimal()) if hasattr(v, "to_decimal") else (float(v) if v is not None else 0)
-    return round(sum(g(x.get("foreign_net")) for x in db.institutional_flow.find(
+    return round(sum(g(x.get("foreign_net")) for x in db[COLL_INSTITUTIONAL_FLOW].find(
         {"stock_id": sym}, {"foreign_net": 1}).sort("date", -1).limit(10)) / 1000)
 
 

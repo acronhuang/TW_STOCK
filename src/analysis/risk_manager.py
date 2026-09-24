@@ -20,6 +20,9 @@ import numpy as np
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 from scipy import stats as sp_stats
+from src.domain.collections import (
+    COLL_STOCK_PRICE,
+)
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -306,7 +309,7 @@ class RiskAnalyzer:
     # ──────────────────────────────────────────────
     def _get_returns(self, symbol: str, lookback_days: int) -> list[float] | None:
         cutoff = datetime.now() - timedelta(days=int(lookback_days * 1.5))
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol, 'date': {'$gte': cutoff}},
             {'date': 1, 'close': 1}
         ).sort('date', 1))
@@ -327,7 +330,7 @@ class RiskAnalyzer:
         return returns[-lookback_days:] if len(returns) > lookback_days else returns
 
     def _get_latest_price(self, symbol: str) -> float | None:
-        rec = self.db.stock_price.find_one(
+        rec = self.db[COLL_STOCK_PRICE].find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)]
         )
         return _to_float(rec['close']) if rec else None
@@ -344,7 +347,7 @@ class RiskAnalyzer:
     def _get_returns_dated(self, symbol: str, lookback_days: int) -> dict:
         """回傳 {date: 日報酬}（供 beta 按日期對齊；個股與大盤交易日常不同）。"""
         cutoff = datetime.now() - timedelta(days=int(lookback_days * 1.5))
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol, 'date': {'$gte': cutoff}},
             {'date': 1, 'close': 1}
         ).sort('date', 1))

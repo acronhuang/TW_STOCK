@@ -20,6 +20,11 @@ from pathlib import Path
 
 import requests
 from pymongo import MongoClient
+from src.domain.collections import (
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_MACRO_INDICATORS,
+    COLL_STOCK_PRICE,
+)
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
@@ -45,7 +50,7 @@ class MacroAnalyzer:
     def _ensure_collection(self):
         if 'macro_indicators' not in self.db.list_collection_names():
             self.db.create_collection('macro_indicators')
-            self.db.macro_indicators.create_index([('indicator', 1), ('date', -1)])
+            self.db[COLL_MACRO_INDICATORS].create_index([('indicator', 1), ('date', -1)])
 
     # ──────────────────────────────────────────────
     #  總經儀表板
@@ -157,7 +162,7 @@ class MacroAnalyzer:
     def _get_interest_rate(self) -> dict | None:
         """台灣央行利率"""
         # 先查本地
-        local = self.db.macro_indicators.find_one(
+        local = self.db[COLL_MACRO_INDICATORS].find_one(
             {'indicator': 'interest_rate'},
             sort=[('date', -1)]
         )
@@ -179,7 +184,7 @@ class MacroAnalyzer:
 
     def _get_exchange_rate(self) -> dict | None:
         """美元/台幣匯率"""
-        local = self.db.macro_indicators.find_one(
+        local = self.db[COLL_MACRO_INDICATORS].find_one(
             {'indicator': 'exchange_rate'},
             sort=[('date', -1)]
         )
@@ -212,7 +217,7 @@ class MacroAnalyzer:
 
     def _get_cpi(self) -> dict | None:
         """消費者物價指數"""
-        local = self.db.macro_indicators.find_one(
+        local = self.db[COLL_MACRO_INDICATORS].find_one(
             {'indicator': 'cpi'},
             sort=[('date', -1)]
         )
@@ -226,7 +231,7 @@ class MacroAnalyzer:
 
     def _get_money_supply(self) -> dict | None:
         """M1B/M2 貨幣供給"""
-        local = self.db.macro_indicators.find_one(
+        local = self.db[COLL_MACRO_INDICATORS].find_one(
             {'indicator': 'money_supply'},
             sort=[('date', -1)]
         )
@@ -250,7 +255,7 @@ class MacroAnalyzer:
 
     def _get_leading_indicator(self) -> dict | None:
         """景氣領先指標/燈號"""
-        local = self.db.macro_indicators.find_one(
+        local = self.db[COLL_MACRO_INDICATORS].find_one(
             {'indicator': 'leading'},
             sort=[('date', -1)]
         )
@@ -272,7 +277,7 @@ class MacroAnalyzer:
                 return None
 
         # 大盤近期（用 0050 代替）
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': '0050'},
             {'date': 1, 'close': 1}
         ).sort('date', -1).limit(22))
@@ -289,7 +294,7 @@ class MacroAnalyzer:
 
         # 外資近5日買賣超
         cutoff = datetime.now() - timedelta(days=10)
-        flows = list(self.db.institutional_flow.find(
+        flows = list(self.db[COLL_INSTITUTIONAL_FLOW].find(
             {'date': {'$gte': cutoff}},
             {'foreign_net': 1}
         ).sort('date', -1).limit(5 * 1200))
@@ -324,7 +329,7 @@ class MacroAnalyzer:
         return []
 
     def _save_indicator(self, indicator: str, data: dict):
-        self.db.macro_indicators.update_one(
+        self.db[COLL_MACRO_INDICATORS].update_one(
             {'indicator': indicator, 'date': data.get('date', '')},
             {'$set': {'indicator': indicator, 'data': data,
                       'date': data.get('date', ''),
