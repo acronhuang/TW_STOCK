@@ -5,10 +5,10 @@
 | 層 | marker | 數量 | 需要 MongoDB? | 在哪跑 |
 |---|---|:--:|---|---|
 | 純邏輯 | `unit` | 161 | ❌ 完全免 DB | `unit-gate`(無 mongo service)+ `test` |
-| 整合(可種子) | `needs_data` | 40 | ✅ 需最小種子資料 | `test`(seed 後執行;無種子→自動 skip) |
-| 世界事實/深資料 | `prod_data` | 29 | ✅ 需 live 正式庫 | **不進 CI**,由 .166 排程/手動驗證 |
+| 整合(可種子) | `needs_data` | 43 | ✅ 需最小種子資料 | `test`(seed 後執行;無種子→自動 skip) |
+| 世界事實/深資料 | `prod_data` | 26 | ✅ 需 live 正式庫 | **不進 CI**,由 .166 排程/手動驗證 |
 
-> 分層已收口:230 測試全數歸位(unit 161 + needs_data 40 + prod_data 29),**無 tier marker 殘留 = 0**。
+> 分層已收口:230 測試全數歸位(unit 161 + needs_data 43 + prod_data 26),**無 tier marker 殘留 = 0**。
 
 > `pytest.ini` 已設 `--strict-markers`:用未註冊的 marker 會直接報錯,防止誤標。
 
@@ -30,7 +30,7 @@
 
 ### 3. `prod_data` — 世界事實或深資料,只對 live 庫有意義
 斷言「真實世界的事實」或需大規模/多年真實資料,**合成種子造假既脆弱又違反 ADR-0011**。
-- 例:`test_data_integrity`(斷言 10 萬+ 筆、5 天新鮮)、`test_financial_health`(台積電 grade A / EPS>50 / ROE>10)、`test_peer_comparison`(產業=半導體、同業>10)、`test_cli`、`test_bdd_macro`。
+- 例:`test_data_integrity`(斷言 10 萬+ 筆、5 天新鮮)、`test_financial_health`(台積電 grade A / EPS>50 / ROE>10)、`test_peer_comparison`(產業=半導體、同業>10)、`test_cli::test_macro_command`(macro 需 macro_indicators/institutional_flow)、`test_bdd_macro`。
 - CI 以 `-m "not prod_data"` 排除;應在 .166 真實庫(如 `data_health` 排程)驗證。
 
 ---

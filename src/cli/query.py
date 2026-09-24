@@ -51,7 +51,7 @@ from src.domain.collections import (
 )
 
 client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017'))
-db = client['tw_stock_analysis']
+db = client[os.getenv('MONGODB_DATABASE', 'tw_stock_analysis')]  # 對齊 config/conftest,不再硬編碼庫名
 
 
 def tof(v):
