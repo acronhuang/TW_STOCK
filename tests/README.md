@@ -4,7 +4,7 @@
 
 | 層 | marker | 數量 | 需要 MongoDB? | 在哪跑 |
 |---|---|:--:|---|---|
-| 純邏輯 | `unit` | 149 | ❌ 完全免 DB | `unit-gate`(無 mongo service)+ `test` |
+| 純邏輯 | `unit` | 159 | ❌ 完全免 DB | `unit-gate`(無 mongo service)+ `test` |
 | 整合(可種子) | `needs_data` | 26 | ✅ 需最小種子資料 | `test`(seed 後執行;無種子→自動 skip) |
 | 世界事實/深資料 | `prod_data` | 34 | ✅ 需 live 正式庫 | **不進 CI**,由 .166 排程/手動驗證 |
 
@@ -16,7 +16,7 @@
 
 ### 1. `unit` — 純邏輯,免 DB
 純函式或以 fake/注入 DB 測試,**不連任何外部服務**。這是回歸安全網。
-- 例:`test_web_search`、`test_evidence_guard`、`test_valuation_eps`(fake `_FakeDB`)、`TradingRules.position_334`(純數學)。
+- 例:`test_web_search`、`test_evidence_guard`、`test_valuation_eps`(fake `_FakeDB`)、`test_seed_valuation`(mongomock 灘種→估值離線契約)、`TradingRules.position_334`(純數學)。
 - 判準:不 import live 連線、不查真實資料;跑得快(整層 < 10 秒)。
 
 ### 2. `needs_data` — 整合邏輯,可用最小種子驗證
@@ -47,6 +47,8 @@
 - `dividend_detail`:`2330 / 0056` 各 4 年正現金股利 → DDM `fair_value>0`。
 
 **安全護欄**:若 `stock_price` 已有 `> 50` 個 symbol(疑似正式庫)→ 直接拒絕執行,避免誤刪/污染真實資料。
+
+> **離線契約測試**:`tests/test_seed_valuation.py`(marker `unit`)以 `mongomock` 灌入此種子後跑 `ValuationAnalyzer`,將 `test_valuation.py` 的 6 個 `needs_data` 情境「種子後真能算出結果」定型入 DB-free 閘門 — 種子欄位/schema 或估值邏輯任一端漂移都會在 `unit-gate` 秒級被抓。
 
 ---
 
