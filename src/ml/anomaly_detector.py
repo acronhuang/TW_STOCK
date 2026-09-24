@@ -27,6 +27,10 @@ import pandas as pd
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_STOCK_PRICE,
+)
+
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
@@ -101,7 +105,7 @@ class AnomalyDetector:
         """全市場異常掃描"""
         # 取活躍股票（有近期價格的）
         cutoff = datetime.now() - timedelta(days=5)
-        symbols = self.db.stock_price.distinct(
+        symbols = self.db[COLL_STOCK_PRICE].distinct(
             'symbol', {'date': {'$gte': cutoff}})
 
         # 只取一般股票
@@ -238,7 +242,7 @@ class AnomalyDetector:
     # ──────────────────────────────────────────────
     def _get_price_df(self, symbol: str, lookback: int) -> pd.DataFrame | None:
         cutoff = datetime.now() - timedelta(days=int(lookback * 1.5))
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol, 'date': {'$gte': cutoff}},
             {'date': 1, 'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1}
         ).sort('date', 1))

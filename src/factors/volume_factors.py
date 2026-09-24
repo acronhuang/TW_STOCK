@@ -17,6 +17,11 @@ from datetime import datetime, timedelta
 import numpy as np
 from bson.decimal128 import Decimal128
 
+from src.domain.collections import (
+    COLL_STOCK_PRICE,
+    COLL_TAIWAN_STOCK_INFO,
+)
+
 
 class VolumeFactors:
     """量價因子計算器"""
@@ -57,7 +62,7 @@ class VolumeFactors:
         回傳 (closes, volumes) 兩個 np.array(float)，已對齊、剔除無效值；不足則回傳 (None, None)。
         """
         start = date - timedelta(days=lookback_days)
-        rows = list(self.db.stock_price.find(
+        rows = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol, 'date': {'$gte': start, '$lte': date}},
             {'close': 1, 'adj_close': 1, 'volume': 1, 'date': 1},
         ).sort('date', 1))
@@ -240,7 +245,7 @@ class VolumeFactors:
         """載入近 N 日的 (成交金額, 成交筆數) 序列（升冪，list，缺值為 None）。與 _load_series
         分開，避免動到既有簽名；均額計算不需與收盤對齊，各自過濾即可。"""
         start = date - timedelta(days=lookback_days)
-        rows = list(self.db.stock_price.find(
+        rows = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol, 'date': {'$gte': start, '$lte': date}},
             {'amount': 1, 'transaction': 1, 'date': 1},
         ).sort('date', 1))
@@ -267,7 +272,7 @@ class VolumeFactors:
         """流通股數(千股)，來自 taiwan_stock_info；一次載入全市場快取。"""
         if self._shares_map is None:
             self._shares_map = {d['stock_id']: self._to_float(d.get('outstanding_shares'))
-                                for d in self.db.taiwan_stock_info.find(
+                                for d in self.db[COLL_TAIWAN_STOCK_INFO].find(
                                     {}, {'stock_id': 1, 'outstanding_shares': 1})}
         return self._shares_map.get(symbol)
 

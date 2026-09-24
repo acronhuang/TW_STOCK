@@ -12,6 +12,12 @@ from statistics import mean, pstdev
 
 from bson.decimal128 import Decimal128
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_QUARTERLY_EARNINGS,
+    COLL_STOCK_FACTORS,
+)
+
 
 def _f(v):
     if isinstance(v, Decimal128):
@@ -20,7 +26,7 @@ def _f(v):
 
 
 def _recent_quarters(db, sym, n=8):
-    return list(db.quarterly_earnings.find(
+    return list(db[COLL_QUARTERLY_EARNINGS].find(
         {"symbol": sym},
         {"_id": 0, "year": 1, "season": 1, "income": 1, "balance": 1}
     ).sort([("year", -1), ("season", -1)]).limit(n))
@@ -62,7 +68,7 @@ def _op_margin(qs):
 
 def _payout_years(db, sym):
     """連續配現金股利年數(治理/一致性 proxy)。"""
-    rows = list(db.dividend_detail.find(
+    rows = list(db[COLL_DIVIDEND_DETAIL].find(
         {"stock_id": sym}, {"_id": 0, "date": 1, "cash_earnings_distribution": 1}
     ).sort("date", -1))
     years = {}
@@ -87,7 +93,7 @@ def _payout_years(db, sym):
 
 def value_profile(db, sym):
     qs = _recent_quarters(db, sym, 8)
-    f = db.stock_factors.find_one({"symbol": sym}, sort=[("date", -1)]) or {}
+    f = db[COLL_STOCK_FACTORS].find_one({"symbol": sym}, sort=[("date", -1)]) or {}
     om = _op_margin(qs)
     # 循環股偵測 → DCF/合理價在衰退期易高估(價值陷阱)：
     #   (a) 營益率變異係數 >0.4(擺盪大)  或

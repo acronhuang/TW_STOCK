@@ -24,6 +24,9 @@ sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留�
 from src.backtesting.performance import PerformanceCalculator
 from src.backtesting.portfolio import Portfolio
 from src.backtesting.strategy import Strategy
+from src.domain.collections import (
+    COLL_STOCK_PRICE,
+)
 
 
 class Backtest:
@@ -135,7 +138,7 @@ class Backtest:
         }
         
         # 從 stock_price 集合載入
-        cursor = self.db.stock_price.find(query).sort('date', 1)
+        cursor = self.db[COLL_STOCK_PRICE].find(query).sort('date', 1)
         
         records = []
         for doc in cursor:

@@ -34,6 +34,13 @@ import requests
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_ALERT_HISTORY,
+    COLL_ALERT_RULES,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+)
+
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
@@ -213,8 +220,8 @@ class AlertManager:
             self.db.create_collection('alert_rules')
         if 'alert_history' not in self.db.list_collection_names():
             self.db.create_collection('alert_history')
-            self.db.alert_history.create_index([('timestamp', -1)])
-            self.db.alert_history.create_index([('symbol', 1), ('timestamp', -1)])
+            self.db[COLL_ALERT_HISTORY].create_index([('timestamp', -1)])
+            self.db[COLL_ALERT_HISTORY].create_index([('symbol', 1), ('timestamp', -1)])
 
     # ──────────────────────────────────────────────
     #  監控規則管理
@@ -234,7 +241,7 @@ class AlertManager:
             'created_at': datetime.now(UTC),
             'triggered_at': None,
         }
-        self.db.alert_rules.update_one(
+        self.db[COLL_ALERT_RULES].update_one(
             {'symbol': symbol, 'type': 'price', 'condition': condition},
             {'$set': rule},
             upsert=True
@@ -251,7 +258,7 @@ class AlertManager:
             'created_at': datetime.now(UTC),
             'triggered_at': None,
         }
-        self.db.alert_rules.update_one(
+        self.db[COLL_ALERT_RULES].update_one(
             {'symbol': symbol, 'type': 'volume'},
             {'$set': rule},
             upsert=True
@@ -260,7 +267,7 @@ class AlertManager:
     def add_watchlist(self, symbols: list[str]):
         """批次加入監控清單（啟用所有預設警報）"""
         for sym in symbols:
-            self.db.alert_rules.update_one(
+            self.db[COLL_ALERT_RULES].update_one(
                 {'symbol': sym, 'type': 'watchlist'},
                 {'$set': {
                     'symbol': sym,
@@ -274,14 +281,14 @@ class AlertManager:
 
     def list_rules(self) -> list[dict]:
         """列出所有有效規則"""
-        return list(self.db.alert_rules.find({'active': True}, {'_id': 0}))
+        return list(self.db[COLL_ALERT_RULES].find({'active': True}, {'_id': 0}))
 
     def remove_rule(self, symbol: str, rule_type: str = None):
         """移除規則"""
         query = {'symbol': symbol}
         if rule_type:
             query['type'] = rule_type
-        self.db.alert_rules.update_many(query, {'$set': {'active': False}})
+        self.db[COLL_ALERT_RULES].update_many(query, {'$set': {'active': False}})
 
     # ──────────────────────────────────────────────
     #  檢查並觸發警報
@@ -289,7 +296,7 @@ class AlertManager:
     def check_and_notify(self) -> list[dict]:
         """檢查所有有效規則，觸發符合條件的警報"""
         triggered = []
-        rules = list(self.db.alert_rules.find({'active': True}))
+        rules = list(self.db[COLL_ALERT_RULES].find({'active': True}))
 
         for rule in rules:
             alerts = self._check_rule(rule)
@@ -311,7 +318,7 @@ class AlertManager:
                 # 記錄歷史
                 alert['timestamp'] = datetime.now(UTC)
                 alert['name'] = name
-                self.db.alert_history.insert_one(alert)
+                self.db[COLL_ALERT_HISTORY].insert_one(alert)
                 triggered.append(alert)
 
         return triggered
@@ -358,7 +365,7 @@ class AlertManager:
         symbol = rule['symbol']
         multiplier = rule.get('multiplier', 2.0)
 
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol},
             {'date': 1, 'volume': 1, 'close': 1}
         ).sort('date', -1).limit(21))
@@ -387,7 +394,7 @@ class AlertManager:
         alerts = []
 
         # RSI 超賣/超買
-        factor = self.db.stock_factors.find_one(
+        factor = self.db[COLL_STOCK_FACTORS].find_one(
             {'symbol': symbol, 'rsi_14': {'$ne': None}},
             {'rsi_14': 1, 'date': 1},
             sort=[('date', -1)]
@@ -413,7 +420,7 @@ class AlertManager:
                     })
 
         # 大跌警報（單日 -3% 以上）
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol},
             {'close': 1, 'date': 1}
         ).sort('date', -1).limit(2))
@@ -475,19 +482,19 @@ class AlertManager:
         today = datetime.now().strftime('%Y-%m-%d')
 
         # 取今日警報數
-        alert_count = self.db.alert_history.count_documents({
+        alert_count = self.db[COLL_ALERT_HISTORY].count_documents({
             'timestamp': {'$gte': datetime.now(UTC) - timedelta(hours=24)}
         })
 
         # 取監控股票數
-        watch_count = self.db.alert_rules.count_documents({'active': True})
+        watch_count = self.db[COLL_ALERT_RULES].count_documents({'active': True})
 
         msg = f'\n📋 每日摘要 {today}'
         msg += f'\n監控規則: {watch_count} 條'
         msg += f'\n今日警報: {alert_count} 則'
 
         # 附帶大盤資訊
-        taiex = self.db.stock_price.find_one(
+        taiex = self.db[COLL_STOCK_PRICE].find_one(
             {'symbol': '0050'},
             {'close': 1, 'date': 1},
             sort=[('date', -1)]
@@ -501,7 +508,7 @@ class AlertManager:
     #  輔助方法
     # ──────────────────────────────────────────────
     def _get_latest_price(self, symbol: str) -> float | None:
-        rec = self.db.stock_price.find_one(
+        rec = self.db[COLL_STOCK_PRICE].find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)]
         )
         return _to_float(rec['close']) if rec else None
@@ -515,7 +522,7 @@ class AlertManager:
             except Exception:
                 pass
         # 從 stock_price 取 name
-        rec = self.db.stock_price.find_one({'symbol': symbol}, {'name': 1})
+        rec = self.db[COLL_STOCK_PRICE].find_one({'symbol': symbol}, {'name': 1})
         if rec and rec.get('name'):
             return rec['name']
         return ''
@@ -523,7 +530,7 @@ class AlertManager:
     def _is_duplicate(self, alert: dict) -> bool:
         """24 小時內同一股票同類警報不重複發送"""
         cutoff = datetime.now(UTC) - timedelta(hours=24)
-        exists = self.db.alert_history.find_one({
+        exists = self.db[COLL_ALERT_HISTORY].find_one({
             'symbol': alert['symbol'],
             'rule_type': alert['rule_type'],
             'timestamp': {'$gte': cutoff},

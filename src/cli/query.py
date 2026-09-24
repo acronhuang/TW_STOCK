@@ -42,6 +42,14 @@ load_dotenv(ROOT / '.env')
 from bson import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_MONTHLY_REVENUE,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+)
+
 client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017'))
 db = client['tw_stock_analysis']
 
@@ -58,7 +66,7 @@ def out(data):
 
 # ──────────────────────────────────────────────
 def cmd_health():
-    latest = db.stock_price.find_one({}, {'date':1}, sort=[('date',-1)])
+    latest = db[COLL_STOCK_PRICE].find_one({}, {'date':1}, sort=[('date',-1)])
     out({
         "status": "ok",
         "latest_price_date": str(latest['date'])[:10] if latest else None,
@@ -68,7 +76,7 @@ def cmd_health():
 
 
 def cmd_factors(symbol):
-    f = db.stock_factors.find_one({'symbol': symbol}, {'_id':0}, sort=[('date',-1)])
+    f = db[COLL_STOCK_FACTORS].find_one({'symbol': symbol}, {'_id':0}, sort=[('date',-1)])
     if not f:
         out({"error": "not found"})
         return
@@ -76,7 +84,7 @@ def cmd_factors(symbol):
 
 
 def cmd_price(symbol, days=20):
-    prices = list(db.stock_price.find(
+    prices = list(db[COLL_STOCK_PRICE].find(
         {'symbol': symbol}, {'_id':0,'date':1,'open':1,'high':1,'low':1,'close':1,'volume':1}
     ).sort('date',-1).limit(days))
     out([{'date':str(p['date'])[:10],'open':tof(p.get('open')),'high':tof(p.get('high')),
@@ -132,7 +140,7 @@ def cmd_macro():
 
 
 def cmd_institutional(symbol, days=10):
-    flows = list(db.institutional_flow.find(
+    flows = list(db[COLL_INSTITUTIONAL_FLOW].find(
         {'stock_id': symbol}, {'_id':0,'date':1,'foreign_net':1,'trust_net':1,'total_net':1}
     ).sort('date',-1).limit(days))
     out([{'date':str(f['date'])[:10],'foreign_net':tof(f.get('foreign_net')),
@@ -140,14 +148,14 @@ def cmd_institutional(symbol, days=10):
 
 
 def cmd_revenue(symbol, months=6):
-    revs = list(db.monthly_revenue.find(
+    revs = list(db[COLL_MONTHLY_REVENUE].find(
         {'symbol': symbol}, {'_id':0,'year_month':1,'revenue':1,'yoy_growth':1,'mom_growth':1}
     ).sort('year_month',-1).limit(months))
     out(list(reversed(revs)))
 
 
 def cmd_dividend(symbol):
-    divs = list(db.dividend_detail.find({'stock_id': symbol}, {'_id':0}).sort('date',-1).limit(10))
+    divs = list(db[COLL_DIVIDEND_DETAIL].find({'stock_id': symbol}, {'_id':0}).sort('date',-1).limit(10))
     for d in divs:
         for k, v in d.items():
             if isinstance(v, Decimal128): d[k] = float(v.to_decimal())

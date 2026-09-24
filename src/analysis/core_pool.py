@@ -10,6 +10,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 import pandas as pd
+
 from src.domain.collections import (
     COLL_BALANCE_SHEET_DETAIL,
     COLL_FINANCIAL_STATEMENT_DETAIL,

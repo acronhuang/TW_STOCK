@@ -27,6 +27,11 @@ from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
 from pymongo.errors import BulkWriteError
 
+from src.domain.collections import (
+    COLL_STOCK_PRICE,
+    COLL_TAIWAN_STOCK_INFO,
+)
+
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
@@ -91,7 +96,7 @@ class MarketMetricsCalculator:
             流通股數（單位：股）
         """
         # 從 taiwan_stock_info 獲取
-        info = self.db.taiwan_stock_info.find_one(
+        info = self.db[COLL_TAIWAN_STOCK_INFO].find_one(
             {"stock_id": stock_id},
             {"outstanding_shares": 1}
         )
@@ -142,7 +147,7 @@ class MarketMetricsCalculator:
             self.logger.info(f"流通股數: {outstanding_shares:,.0f} 股 ({outstanding_shares/1000:,.0f}千股)")
             
             # 2. 獲取所有股價記錄
-            prices = list(self.db.stock_price.find(
+            prices = list(self.db[COLL_STOCK_PRICE].find(
                 {"symbol": stock_id},
                 {"_id": 1, "date": 1, "close": 1, "volume": 1}
             ).sort("date", 1))
@@ -187,7 +192,7 @@ class MarketMetricsCalculator:
             # 4. 批次更新
             if not dry_run and updates:
                 try:
-                    result = self.db.stock_price.bulk_write(updates, ordered=False)
+                    result = self.db[COLL_STOCK_PRICE].bulk_write(updates, ordered=False)
                     stats['updated'] = result.modified_count
                     stats['status'] = 'success'
                     self.logger.info(f"✅ 更新成功: {stats['updated']:,} 筆")
@@ -230,7 +235,7 @@ class MarketMetricsCalculator:
         self.logger.info("="*80 + "\n")
         
         # 獲取所有股票
-        stock_ids = self.db.stock_price.distinct('symbol')
+        stock_ids = self.db[COLL_STOCK_PRICE].distinct('symbol')
         
         if limit:
             stock_ids = stock_ids[:limit]

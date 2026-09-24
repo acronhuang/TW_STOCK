@@ -16,6 +16,11 @@
 """
 from datetime import timedelta
 
+from src.domain.collections import (
+    COLL_QUARTERLY_EARNINGS,
+    COLL_STOCK_PRICE,
+)
+
 
 def _f(v):
     try:
@@ -32,16 +37,16 @@ class QualityGrowthScreen:
 
     def __init__(self, db):
         self.db = db
-        self._latest = db.stock_price.find_one(sort=[('date', -1)])['date']
+        self._latest = db[COLL_STOCK_PRICE].find_one(sort=[('date', -1)])['date']
 
     def _active_universe(self) -> list[str]:
         cutoff = self._latest - timedelta(days=10)
-        return [s for s in self.db.stock_price.distinct('symbol', {'date': {'$gte': cutoff}})
+        return [s for s in self.db[COLL_STOCK_PRICE].distinct('symbol', {'date': {'$gte': cutoff}})
                 if isinstance(s, str) and s.isdigit() and len(s) == 4]
 
     def _roe_debt_opm(self, symbol: str):
         """回 (TTM_ROE, 負債比, 最新季營益率)。ROE 用 TTM(近4單季淨利/權益)。"""
-        qs = list(self.db.quarterly_earnings.find(
+        qs = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}, {'income': 1, 'balance': 1}
         ).sort([('year', -1), ('season', -1)]).limit(4))
         if not qs:
@@ -77,7 +82,7 @@ class QualityGrowthScreen:
             qyoy = quarterly_rev_yoy(self.db, sym)
             if myoy is None or myoy < 0 or qyoy is None or qyoy < 0:
                 continue
-            doc = self.db.stock_price.find_one({'symbol': sym}, sort=[('date', -1)])
+            doc = self.db[COLL_STOCK_PRICE].find_one({'symbol': sym}, sort=[('date', -1)])
             results.append({
                 'symbol': sym, 'name': (doc or {}).get('name', ''),
                 'price': _f((doc or {}).get('close')),

@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from src.domain.collections import (
+    COLL_SCHEDULE_ALERTS,
+)
+
 
 def _coerce_dt(value):
     """將值轉為 datetime：支援 datetime 與 ISO 字串（'2026-09-22'、'2026-08'）。無法解析回 None。"""
@@ -143,7 +147,7 @@ def auto_resolve_alerts(db, source: str, now=None, reason: str = "指標回到�
     回傳被標記的筆數（modified_count）。db 需提供 schedule_alerts.update_many。
     """
     now = now or datetime.now()
-    res = db["schedule_alerts"].update_many(
+    res = db[COLL_SCHEDULE_ALERTS].update_many(
         {"source": source, "resolved": {"$ne": True}},
         {"$set": {"resolved": True, "resolved_at": now,
                   "resolved_reason": f"auto: {reason}"}},

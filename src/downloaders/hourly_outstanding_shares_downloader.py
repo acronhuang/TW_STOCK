@@ -27,6 +27,10 @@ import requests
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_TAIWAN_STOCK_INFO,
+)
+
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
@@ -256,7 +260,7 @@ class HourlyDownloader:
             stats['outstanding_shares'] = outstanding_shares_k
             
             # 更新数据库
-            result = self.db.taiwan_stock_info.update_one(
+            result = self.db[COLL_TAIWAN_STOCK_INFO].update_one(
                 {'stock_id': stock_id},
                 {
                     '$set': {
@@ -303,7 +307,7 @@ class HourlyDownloader:
         """获取未下载的股票"""
         missing = []
         for stock_id, stock_name in stock_list:
-            doc = self.db.taiwan_stock_info.find_one(
+            doc = self.db[COLL_TAIWAN_STOCK_INFO].find_one(
                 {'stock_id': stock_id},
                 {'outstanding_shares': 1}
             )
@@ -342,7 +346,7 @@ class HourlyDownloader:
                 all_stocks = self._load_priority_list()
                 missing_stocks = self._get_missing_stocks(all_stocks)
             else:
-                all_stock_ids = self.db.taiwan_stock_info.distinct('stock_id')
+                all_stock_ids = self.db[COLL_TAIWAN_STOCK_INFO].distinct('stock_id')
                 all_stocks = [(sid, "") for sid in all_stock_ids]
                 missing_stocks = self._get_missing_stocks(all_stocks)
             

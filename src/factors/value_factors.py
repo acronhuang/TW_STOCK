@@ -15,6 +15,13 @@ from datetime import datetime
 import pandas as pd
 from bson.decimal128 import Decimal128
 
+from src.domain.collections import (
+    COLL_DIVIDEND_RESULTS,
+    COLL_FINANCIAL_REPORTS,
+    COLL_STOCK_PRICE,
+    COLL_TAIWAN_STOCK_INFO,
+)
+
 
 class ValueFactors:
     """價值因子計算器"""
@@ -49,7 +56,7 @@ class ValueFactors:
             P/E ratio 或 None
         """
         # 1. 取得股價
-        price_doc = self.db.stock_price.find_one({
+        price_doc = self.db[COLL_STOCK_PRICE].find_one({
             'symbol': symbol,
             'date': date
         })
@@ -62,7 +69,7 @@ class ValueFactors:
             return None
         
         # 2. 取得最新財報的淨利
-        financial_doc = self.db.financial_reports.find_one(
+        financial_doc = self.db[COLL_FINANCIAL_REPORTS].find_one(
             {
                 'symbol': symbol,
                 'incomeStatement.netIncome': {'$exists': True, '$ne': None, '$gt': 0}
@@ -80,7 +87,7 @@ class ValueFactors:
             return None
         
         # 3. 取得流通股數
-        stock_info = self.db.taiwan_stock_info.find_one(
+        stock_info = self.db[COLL_TAIWAN_STOCK_INFO].find_one(
             {'stock_id': symbol},
             sort=[('date', -1)]
         )
@@ -123,7 +130,7 @@ class ValueFactors:
             P/B ratio 或 None
         """
         # 1. 取得股價
-        price_doc = self.db.stock_price.find_one({
+        price_doc = self.db[COLL_STOCK_PRICE].find_one({
             'symbol': symbol,
             'date': date
         })
@@ -136,7 +143,7 @@ class ValueFactors:
             return None
         
         # 2. 取得最新財報的股東權益
-        financial_doc = self.db.financial_reports.find_one(
+        financial_doc = self.db[COLL_FINANCIAL_REPORTS].find_one(
             {
                 'symbol': symbol,
                 'balanceSheet.equity': {'$exists': True, '$ne': None, '$gt': 0}
@@ -154,7 +161,7 @@ class ValueFactors:
             return None
         
         # 3. 取得流通股數
-        stock_info = self.db.taiwan_stock_info.find_one(
+        stock_info = self.db[COLL_TAIWAN_STOCK_INFO].find_one(
             {'stock_id': symbol},
             sort=[('date', -1)]
         )
@@ -196,7 +203,7 @@ class ValueFactors:
             Dividend yield (%) 或 None
         """
         # 取得當日股價
-        price_doc = self.db.stock_price.find_one({
+        price_doc = self.db[COLL_STOCK_PRICE].find_one({
             'symbol': symbol,
             'date': date
         })
@@ -212,7 +219,7 @@ class ValueFactors:
         # 取得過去一年的股利資料
         year = date.year - 1  # 以前一年度的股利為準
         
-        dividend_doc = self.db.dividend_results.find_one({
+        dividend_doc = self.db[COLL_DIVIDEND_RESULTS].find_one({
             'stock_id': symbol,
             'year': year
         })
@@ -289,7 +296,7 @@ class ValueFactors:
         results = []
         
         # 取得所有交易日
-        trading_dates = self.db.stock_price.distinct('date', {
+        trading_dates = self.db[COLL_STOCK_PRICE].distinct('date', {
             'date': {'$gte': start_date, '$lte': end_date}
         })
         

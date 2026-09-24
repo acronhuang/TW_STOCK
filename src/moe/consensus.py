@@ -15,6 +15,10 @@ import time
 
 import requests
 
+from src.domain.collections import (
+    COLL_SCHEDULE_ALERTS,
+)
+
 CONSENSUS_URL = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # .27
 OLLAMA_URL_28 = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')           # .28
 # 委員會(3 位,跨兩節點)。可用 env CONSENSUS_MODELS 覆寫。
@@ -141,7 +145,7 @@ def verify_committee(force: bool = False) -> dict:
 
             from src.config import get_db
             db = get_db()
-            db.schedule_alerts.insert_one({
+            db[COLL_SCHEDULE_ALERTS].insert_one({
                 'ts': _dt.datetime.now(), 'level': 'warning', 'source': 'consensus_committee',
                 'message': f"🔴 合議委員在 {CONSENSUS_URL} 上不存在：{missing}"
                            f"（該委員會靜默棄權，三人會實際變 {len(COMMITTEE)-len(missing)} 人）",

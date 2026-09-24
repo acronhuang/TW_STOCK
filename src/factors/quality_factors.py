@@ -17,6 +17,11 @@ from datetime import datetime
 import pandas as pd
 from bson.decimal128 import Decimal128
 
+from src.domain.collections import (
+    COLL_QUARTERLY_EARNINGS,
+    COLL_STOCK_PRICE,
+)
+
 
 class QualityFactors:
     """質量因子計算器"""
@@ -55,7 +60,7 @@ class QualityFactors:
         query = {'symbol': symbol}
 
         # 首選: quarterly_earnings（覆蓋率最高 1,900+ 支）
-        qe = self.db.quarterly_earnings.find_one(
+        qe = self.db[COLL_QUARTERLY_EARNINGS].find_one(
             query, sort=[('year', -1), ('season', -1)]
         )
         if qe:
@@ -365,7 +370,7 @@ class QualityFactors:
         results = []
         
         # 取得所有交易日
-        trading_dates = self.db.stock_price.distinct('date', {
+        trading_dates = self.db[COLL_STOCK_PRICE].distinct('date', {
             'date': {'$gte': start_date, '$lte': end_date}
         })
         

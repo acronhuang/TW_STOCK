@@ -15,6 +15,13 @@
 """
 from datetime import timedelta
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_QUARTERLY_EARNINGS,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+)
+
 
 def _f(v):
     try:
@@ -34,18 +41,18 @@ class HsiehValueScreen:
 
     def __init__(self, db):
         self.db = db
-        self._latest = db.stock_price.find_one(sort=[('date', -1)])['date']
+        self._latest = db[COLL_STOCK_PRICE].find_one(sort=[('date', -1)])['date']
 
     # ── 資料載入 ───────────────────────────────────────────────────────
     def _active_universe(self) -> list[str]:
         cutoff = self._latest - timedelta(days=10)
-        return [s for s in self.db.stock_price.distinct('symbol', {'date': {'$gte': cutoff}})
+        return [s for s in self.db[COLL_STOCK_PRICE].distinct('symbol', {'date': {'$gte': cutoff}})
                 if isinstance(s, str) and s.isdigit() and len(s) == 4]
 
     def _latest_quarters(self) -> dict[str, dict]:
         """每股最新季的 balance/income/year/season。"""
         out = {}
-        for q in self.db.quarterly_earnings.aggregate([
+        for q in self.db[COLL_QUARTERLY_EARNINGS].aggregate([
             {'$sort': {'year': -1, 'season': -1}},
             {'$group': {'_id': '$symbol', 'b': {'$first': '$balance'},
                         'i': {'$first': '$income'}, 'y': {'$first': '$year'},
@@ -55,14 +62,14 @@ class HsiehValueScreen:
         return out
 
     def _dividend_yield(self, symbol: str) -> float | None:
-        rec = self.db.stock_factors.find_one(
+        rec = self.db[COLL_STOCK_FACTORS].find_one(
             {'symbol': symbol, 'dividend_yield': {'$ne': None}},
             {'dividend_yield': 1}, sort=[('date', -1)])
         return _f(rec.get('dividend_yield')) if rec else None
 
     def _payout_years(self, symbol: str) -> int:
         """近年有現金股利的年度數（民國年）。"""
-        yrs = self.db.dividend_detail.distinct(
+        yrs = self.db[COLL_DIVIDEND_DETAIL].distinct(
             'year', {'stock_id': symbol, 'cash_earnings_distribution': {'$gt': 0}})
         return len([y for y in yrs if str(y).isdigit()])
 
@@ -83,7 +90,7 @@ class HsiehValueScreen:
         years = self._payout_years(symbol)
 
         # ④ 核心：營益率衰退幅度 < 營收衰退幅度（用去年同季比）
-        yq = self.db.quarterly_earnings.find_one(
+        yq = self.db[COLL_QUARTERLY_EARNINGS].find_one(
             {'symbol': symbol, 'year': q['y'] - 1, 'season': q['s']}, {'income': 1})
         yi = (yq or {}).get('income') or {}
         opm, opm0 = _f(i.get('operating_margin')), _f(yi.get('operating_margin'))
@@ -127,7 +134,7 @@ class HsiehValueScreen:
                 continue
             r = self.evaluate(sym, q)
             if r and r['passed']:
-                doc = self.db.stock_price.find_one({'symbol': sym}, sort=[('date', -1)])
+                doc = self.db[COLL_STOCK_PRICE].find_one({'symbol': sym}, sort=[('date', -1)])
                 r['name'] = (doc or {}).get('name', '')
                 r['price'] = _f((doc or {}).get('close'))
                 r['avg_lots'] = round(lots, 0)

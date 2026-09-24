@@ -22,6 +22,11 @@ from pathlib import Path
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_STOCK_PRICE,
+)
+
 # 設定路徑
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
@@ -85,7 +90,7 @@ class AdjustedCloseCalculator:
             排序後的除權息事件列表 [{date, cash_dividend, stock_dividend}, ...]
         """
         # 從 dividend_detail 獲取股利資料
-        dividends = list(self.db.dividend_detail.find(
+        dividends = list(self.db[COLL_DIVIDEND_DETAIL].find(
             {"stock_id": stock_id},
             {
                 "date": 1,
@@ -165,7 +170,7 @@ class AdjustedCloseCalculator:
         
         # 獲取股價資料（按日期降序）
         # 注意：stock_price 集合使用 'symbol' 欄位
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {"symbol": stock_id},
             {"date": 1, "close": 1, "closePrice": 1}
         ).sort("date", -1))
@@ -248,7 +253,7 @@ class AdjustedCloseCalculator:
         if not dry_run:
             for update in updates:
                 try:
-                    self.db.stock_price.update_one(
+                    self.db[COLL_STOCK_PRICE].update_one(
                         {"_id": update['_id']},
                         {"$set": {
                             "adj_close": update['adj_close'],
@@ -279,7 +284,7 @@ class AdjustedCloseCalculator:
         
         # 獲取所有股票代碼
         # 注意：stock_price 集合使用 'symbol' 欄位
-        stock_ids = self.db.stock_price.distinct('symbol')
+        stock_ids = self.db[COLL_STOCK_PRICE].distinct('symbol')
         
         if limit:
             stock_ids = stock_ids[:limit]

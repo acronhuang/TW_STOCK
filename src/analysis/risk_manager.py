@@ -20,6 +20,7 @@ import numpy as np
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 from scipy import stats as sp_stats
+
 from src.domain.collections import (
     COLL_STOCK_PRICE,
 )

@@ -39,6 +39,13 @@ from senvision.pattern_detector import (
     TripleTopDetector,
     WBottomDetector,
 )
+from src.domain.collections import (
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_MONTHLY_REVENUE,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+    COLL_TAIWAN_STOCK_INFO,
+)
 
 try:
     from utils.stock_classifier import StockClassifier
@@ -127,7 +134,7 @@ class MarketScanner:
         Returns:
             stock_ids: 股票代碼列表
         """
-        stock_ids = self.db.stock_price.distinct('stock_id')
+        stock_ids = self.db[COLL_STOCK_PRICE].distinct('stock_id')
 
         if self.classifier and exclude_types is not None:
             classified = self.classifier.classify_stock_list(stock_ids)
@@ -141,7 +148,7 @@ class MarketScanner:
         try:
             info_ids = set(
                 doc['stock_id']
-                for doc in self.db.taiwan_stock_info.find(
+                for doc in self.db[COLL_TAIWAN_STOCK_INFO].find(
                     {'type': {'$in': ['twse', 'tpex']},
                      'security_type': 'Stock'},
                     {'stock_id': 1, '_id': 0},
@@ -173,7 +180,7 @@ class MarketScanner:
         """
         start_date = datetime.now() - timedelta(days=days)
 
-        cursor = self.db.stock_price.find(
+        cursor = self.db[COLL_STOCK_PRICE].find(
             {'stock_id': stock_id, 'date': {'$gte': start_date}},
             {'_id': 0, 'date': 1, 'open': 1, 'high': 1,
              'low': 1, 'close': 1, 'volume': 1},
@@ -222,7 +229,7 @@ class MarketScanner:
                 }},
             ]
             self._rev_cache = {}
-            for doc in self.db.monthly_revenue.aggregate(pipeline):
+            for doc in self.db[COLL_MONTHLY_REVENUE].aggregate(pipeline):
                 sid = doc['_id']
                 yoy = doc.get('yoy_growth')
                 if yoy is not None:
@@ -265,7 +272,7 @@ class MarketScanner:
                 }},
             ]
             self._factors_cache: dict[str, dict] = {}
-            for doc in self.db.stock_factors.aggregate(pipeline, allowDiskUse=True):
+            for doc in self.db[COLL_STOCK_FACTORS].aggregate(pipeline, allowDiskUse=True):
                 sid = doc['_id']
                 entry = {}
                 for field in _FACTOR_FIELDS:
@@ -309,7 +316,7 @@ class MarketScanner:
                 }},
             ]
             self._inst_cache: dict[str, dict] = {}
-            for doc in self.db.institutional_flow.aggregate(pipeline):
+            for doc in self.db[COLL_INSTITUTIONAL_FLOW].aggregate(pipeline):
                 sid = doc['_id']
                 entry = {}
                 for field in ('total_net', 'foreign_net', 'trust_net'):

@@ -20,7 +20,6 @@ from pathlib import Path
 
 from pymongo import MongoClient  # 供 get_db();測試可 monkeypatch 本名稱
 
-
 # ── MongoDB ────────────────────────────────────────────────────────────
 # 既有全樹慣例：os.getenv('MONGODB_URI', 'mongodb://localhost:27017')。
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")

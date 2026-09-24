@@ -8,6 +8,9 @@
 股數採 capital_stock/10(面額10元)，與 stock_factors.pe_ratio 對得起來；
 EPS YoY 用「最新4季淨利加總 / 去年同4季淨利加總 - 1」(消除單季季節性)。
 """
+from src.domain.collections import (
+    COLL_QUARTERLY_EARNINGS,
+)
 
 
 def _f(v):
@@ -19,7 +22,7 @@ def _f(v):
 
 def ttm_eps_yoy(db, symbol: str) -> tuple[float | None, float | None]:
     """回 (TTM_EPS, EPS_YoY%)。資料不足回 (None, None)。"""
-    qs = list(db.quarterly_earnings.find(
+    qs = list(db[COLL_QUARTERLY_EARNINGS].find(
         {'symbol': symbol}, {'income.net_income': 1, 'balance.capital_stock': 1}
     ).sort([('year', -1), ('season', -1)]).limit(8))
     if len(qs) < 4:

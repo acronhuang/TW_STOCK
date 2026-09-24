@@ -22,6 +22,9 @@ from dataclasses import dataclass
 import pandas as pd
 
 from src.chip_analysis import ChipAnalyzer
+from src.domain.collections import (
+    COLL_STOCK_PRICE,
+)
 from src.morphology.pattern_detector import PatternDetector
 from src.strategy.multi_factor_strategy import MultiFactorStrategy
 
@@ -171,7 +174,7 @@ class IntegratedStrategyV21:
         valid_stocks = set()
         if require_price_data:
             # 獲取所有有價格數據的股票（不限日期）
-            valid_stocks = set(self.db['stock_price'].distinct('stock_id'))
+            valid_stocks = set(self.db[COLL_STOCK_PRICE].distinct('stock_id'))
             print(f"可用股票池: {len(valid_stocks)} 支 (有價格數據)")
         
         # 使用 v2.0 因子策略選股（多選一些，以便過濾後仍有足夠數量）
@@ -530,7 +533,7 @@ class IntegratedStrategyV21:
             entry_price = holding['entry_price']
             
             # 獲取當前價格
-            price_data = self.db['stock_price'].find_one({
+            price_data = self.db[COLL_STOCK_PRICE].find_one({
                 'stock_id': stock_id,
                 'date': current_date
             })
@@ -569,7 +572,7 @@ class IntegratedStrategyV21:
             if self.exit_config['volume_divergence_exit']:
                 try:
                     # 簡化判斷：價漲量縮
-                    recent_data = list(self.db['stock_price'].find({
+                    recent_data = list(self.db[COLL_STOCK_PRICE].find({
                         'stock_id': stock_id,
                         'date': {'$lte': current_date}
                     }).sort('date', -1).limit(5))

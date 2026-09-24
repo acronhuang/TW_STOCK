@@ -15,6 +15,11 @@ import numpy as np
 import pandas as pd
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_FUNDAMENTAL_FACTORS,
+    COLL_STOCK_FACTORS,
+)
+
 # 添加專案路徑
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
@@ -42,7 +47,7 @@ class MultiFactorStrategy:
         if isinstance(date, str):
             date = _dt.strptime(date[:10], "%Y-%m-%d")
 
-        rows = self.db.fundamental_factors.aggregate([
+        rows = self.db[COLL_FUNDAMENTAL_FACTORS].aggregate([
             {"$match": {"available_from": {"$lte": date}}},
             {"$sort": {"stock_id": 1, "available_from": -1}},
             {"$group": {"_id": "$stock_id", "d": {"$first": "$$ROOT"}}},
@@ -295,7 +300,7 @@ class MultiFactorStrategy:
             包含 symbol, score, valid_factors 的 DataFrame
         """
         # 獲取當日所有因子數據
-        factors_cursor = self.db.stock_factors.find(
+        factors_cursor = self.db[COLL_STOCK_FACTORS].find(
             {'date': date},
             {'_id': 0, 'symbol': 1, **{
                 f: 1 for category in self.factor_config.values() 

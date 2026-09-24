@@ -15,6 +15,11 @@
 
 VaR：此倉佔淨值%、未實現損益佔淨值%、後續1日95%風險(參數法)。
 """
+from src.domain.collections import (
+    COLL_PORTFOLIO_POSITIONS,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+)
 
 
 def _f(v):
@@ -25,14 +30,14 @@ def _f(v):
 
 
 def _factor(db, symbol, field):
-    rec = db.stock_factors.find_one({'symbol': symbol, field: {'$ne': None}},
+    rec = db[COLL_STOCK_FACTORS].find_one({'symbol': symbol, field: {'$ne': None}},
                                     {field: 1}, sort=[('date', -1)])
     return _f(rec.get(field)) if rec else None
 
 
 def _daily_vol(db, symbol, days=30) -> float | None:
     """近 days 日簡單報酬標準差(日波動)。"""
-    closes = [_f(p.get('close')) for p in db.stock_price.find(
+    closes = [_f(p.get('close')) for p in db[COLL_STOCK_PRICE].find(
         {'symbol': symbol}, {'close': 1}).sort('date', -1).limit(days + 1)]
     closes = [c for c in closes if c]
     if len(closes) < 10:
@@ -47,11 +52,11 @@ def _daily_vol(db, symbol, days=30) -> float | None:
 def portfolio_snapshot(db) -> dict:
     """回 {nav, positions:{sym:{shares,cost,price,value,pnl_pct,weight}}}（合併所有 portfolio）。"""
     pos = {}
-    for d in db.portfolio_positions.find():
+    for d in db[COLL_PORTFOLIO_POSITIONS].find():
         sym = d.get('symbol')
         sh = _f(d.get('shares')) or 0
         cost = _f(d.get('avg_cost'))
-        p = db.stock_price.find_one({'symbol': sym}, sort=[('date', -1)])
+        p = db[COLL_STOCK_PRICE].find_one({'symbol': sym}, sort=[('date', -1)])
         price = _f((p or {}).get('close'))
         if not (sym and sh and price):
             continue

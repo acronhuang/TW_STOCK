@@ -24,6 +24,11 @@ from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
 from pymongo.errors import BulkWriteError
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_STOCK_PRICE,
+)
+
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
@@ -100,7 +105,7 @@ class AtomicAdjustedCloseCalculator:
         events = []
         
         # 查詢股利資料
-        dividends = list(self.db.dividend_detail.find(
+        dividends = list(self.db[COLL_DIVIDEND_DETAIL].find(
             {"stock_id": stock_id},
             {
                 "ex_dividend_trading_date": 1,
@@ -175,7 +180,7 @@ class AtomicAdjustedCloseCalculator:
                     )
             
             # 2. 獲取所有股價記錄（按日期排序，從舊到新）
-            prices = list(self.db.stock_price.find(
+            prices = list(self.db[COLL_STOCK_PRICE].find(
                 {"symbol": stock_id},
                 {"_id": 1, "date": 1, "close": 1}
             ).sort("date", 1))
@@ -258,7 +263,7 @@ class AtomicAdjustedCloseCalculator:
                 try:
                     self.logger.info("開始原子性批次更新...")
                     
-                    result = self.db.stock_price.bulk_write(
+                    result = self.db[COLL_STOCK_PRICE].bulk_write(
                         updates,
                         ordered=False  # 允許並行，但失敗會拋出異常
                     )
@@ -315,7 +320,7 @@ class AtomicAdjustedCloseCalculator:
         self.logger.info("="*80 + "\n")
         
         # 獲取所有股票
-        stock_ids = self.db.stock_price.distinct('symbol')
+        stock_ids = self.db[COLL_STOCK_PRICE].distinct('symbol')
         
         if limit:
             stock_ids = stock_ids[:limit]

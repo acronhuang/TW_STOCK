@@ -22,6 +22,13 @@ import numpy as np
 from bson import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_MONTHLY_REVENUE,
+    COLL_QUARTERLY_EARNINGS,
+    COLL_STOCK_PRICE,
+)
+
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
 
@@ -41,7 +48,7 @@ class HsiehAnalysis:
 
     def full_research(self, symbol: str) -> dict:
         """對單支股票做謝富旭式完整研究"""
-        p = self.db.stock_price.find_one({'symbol': symbol}, sort=[('date', -1)])
+        p = self.db[COLL_STOCK_PRICE].find_one({'symbol': symbol}, sort=[('date', -1)])
         if not p:
             return {'symbol': symbol, 'error': '無資料'}
         price = _tof(p['close'])
@@ -79,19 +86,19 @@ class HsiehAnalysis:
             新產 Q1 營收 +10% 但股價沒反映 → 套利空間大
         """
         # 最新月營收 YoY
-        rev = self.db.monthly_revenue.find_one(
+        rev = self.db[COLL_MONTHLY_REVENUE].find_one(
             {'symbol': symbol, 'yoy_growth': {'$ne': None}},
             sort=[('year_month', -1)])
         rev_yoy = rev.get('yoy_growth', 0) if rev else 0
 
         # 累計營收 YoY（近 3 月平均）
-        revs = list(self.db.monthly_revenue.find(
+        revs = list(self.db[COLL_MONTHLY_REVENUE].find(
             {'symbol': symbol, 'yoy_growth': {'$ne': None}}
         ).sort('year_month', -1).limit(3))
         avg_rev_yoy = np.mean([r.get('yoy_growth', 0) for r in revs]) if revs else 0
 
         # 股價近 3 月漲幅
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol}, {'close': 1}
         ).sort('date', -1).limit(60))
         closes = [_tof(p['close']) for p in prices if _tof(p.get('close'))]
@@ -131,7 +138,7 @@ class HsiehAnalysis:
           合理價 = (EPS × 配息率) ÷ 期望殖利率
         """
         # 近 4 季 EPS（TTM）
-        qes = list(self.db.quarterly_earnings.find(
+        qes = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(8))
 
@@ -142,7 +149,7 @@ class HsiehAnalysis:
         prev_eps = sum(_tof(q.get('income', {}).get('eps')) or 0 for q in qes[4:8]) if len(qes) >= 8 else ttm_eps
 
         # 配息率推估（從歷史股利 / EPS）
-        divs = list(self.db.dividend_detail.find(
+        divs = list(self.db[COLL_DIVIDEND_DETAIL].find(
             {'stock_id': symbol, 'cash_earnings_distribution': {'$gt': 0}}
         ).sort('date', -1).limit(3))
         avg_div = np.mean([_tof(d.get('cash_earnings_distribution', 0)) or 0 for d in divs]) if divs else 0
@@ -177,7 +184,7 @@ class HsiehAnalysis:
         如果獲利成長能追上股本膨脹 → 支持配股
         否則 → 反對（股本過度膨脹）
         """
-        latest_div = self.db.dividend_detail.find_one(
+        latest_div = self.db[COLL_DIVIDEND_DETAIL].find_one(
             {'stock_id': symbol}, sort=[('date', -1)])
         if not latest_div:
             return {'has_stock_dividend': False}
@@ -192,7 +199,7 @@ class HsiehAnalysis:
         dilution_pct = stock_div / 10 * 100
 
         # EPS 需要成長多少才能不被稀釋
-        qes = list(self.db.quarterly_earnings.find(
+        qes = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(4))
         ttm_eps = sum(_tof(q.get('income', {}).get('eps')) or 0 for q in qes[:4])
@@ -217,7 +224,7 @@ class HsiehAnalysis:
         老師原則：今年 EPS ≥ 去年 EPS → 填息機率高
         即使今年無法填息，只要 EPS 成長，明後年也會填
         """
-        qes = list(self.db.quarterly_earnings.find(
+        qes = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(8))
 
@@ -260,7 +267,7 @@ class HsiehAnalysis:
         持續性成長 = 趨勢向上（如台股成交量持續放大）
         至少成長達 3 年才算成長股
         """
-        qes = list(self.db.quarterly_earnings.find(
+        qes = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(12))
 
@@ -310,7 +317,7 @@ class HsiehAnalysis:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def three_stage_risk(self) -> dict:
         """大盤從年內高點跌落幅度 → 部位調整"""
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': '0050'}, {'close': 1}
         ).sort('date', -1).limit(250))
         closes = [_tof(p['close']) for p in prices if _tof(p.get('close'))]

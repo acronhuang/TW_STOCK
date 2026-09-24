@@ -18,6 +18,12 @@ import numpy as np
 from bson import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+)
+
 
 def _tof(v) -> float | None:
     if isinstance(v, Decimal128):
@@ -72,7 +78,7 @@ class TradingRules:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def check_stop_loss(self, symbol: str, cost: float) -> dict:
         """檢查止損：5% 無條件 + 破 60 日線清倉"""
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol}, {'close': 1, 'date': 1}
         ).sort('date', -1).limit(60))
 
@@ -150,9 +156,9 @@ class TradingRules:
     def buy_three_questions(self, symbol: str) -> dict:
         """買入前三問：為什麼漲？誰在買？還能漲嗎？"""
         # Q1: 為什麼漲？（邏輯）
-        factors = self.db.stock_factors.find_one(
+        factors = self.db[COLL_STOCK_FACTORS].find_one(
             {'symbol': symbol}, sort=[('date', -1)])
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol}, {'close': 1, 'volume': 1, 'date': 1}
         ).sort('date', -1).limit(20))
 
@@ -175,7 +181,7 @@ class TradingRules:
         q1_pass = ret_1m > -5
 
         # Q2: 誰在買？（資金）
-        flows = list(self.db.institutional_flow.find(
+        flows = list(self.db[COLL_INSTITUTIONAL_FLOW].find(
             {'stock_id': symbol}, {'foreign_net': 1, 'trust_net': 1}
         ).sort('date', -1).limit(5))
         total_fn = sum(_tof(f.get('foreign_net', 0)) or 0 for f in flows)
@@ -228,7 +234,7 @@ class TradingRules:
         冬藏期：炸板增多，量能萎縮，負面報道 → 空倉休息
         """
         # 用 0050 近 60 日走勢判斷
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': '0050'}, {'close': 1, 'volume': 1, 'date': 1}
         ).sort('date', -1).limit(60))
 
@@ -292,7 +298,7 @@ class TradingRules:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def detect_institution_phase(self, symbol: str) -> dict:
         """偵測主力目前在哪個階段"""
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol}, {'close': 1, 'volume': 1, 'high': 1, 'low': 1, 'date': 1}
         ).sort('date', -1).limit(60))
 

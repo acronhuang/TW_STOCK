@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 import requests
-from urllib.parse import urlparse
 
 GOOGLE_NEWS_RSS = "https://news.google.com/rss/search"
 WEB_SUPPLEMENT_MIN_SIMILARITY = 0.60

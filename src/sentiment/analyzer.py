@@ -31,6 +31,11 @@ import urllib3
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_STOCK_PRICE,
+)
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 project_root = Path(__file__).parent.parent.parent
@@ -271,7 +276,7 @@ class SentimentAnalyzer:
     def market_sentiment(self) -> dict:
         """市場整體情緒（融資融券、外資動向、漲跌比）"""
         # 漲跌家數比
-        latest_date = self.db.stock_price.find_one(
+        latest_date = self.db[COLL_STOCK_PRICE].find_one(
             {}, {'date': 1}, sort=[('date', -1)])
         if not latest_date:
             return {'error': '無資料'}
@@ -279,7 +284,7 @@ class SentimentAnalyzer:
         date = latest_date['date']
 
         # 統計當日漲跌
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'date': date},
             {'symbol': 1, 'close': 1}
         ))
@@ -287,7 +292,7 @@ class SentimentAnalyzer:
         up = down = flat = 0
         for p in prices:
             # 取前一日收盤價比較
-            prev = self.db.stock_price.find_one(
+            prev = self.db[COLL_STOCK_PRICE].find_one(
                 {'symbol': p['symbol'], 'date': {'$lt': date}},
                 {'close': 1},
                 sort=[('date', -1)]
@@ -304,7 +309,7 @@ class SentimentAnalyzer:
                         flat += 1
 
         # 外資買賣超
-        flows = list(self.db.institutional_flow.find(
+        flows = list(self.db[COLL_INSTITUTIONAL_FLOW].find(
             {'date': date},
             {'foreign_net': 1}
         ))
@@ -456,7 +461,7 @@ class SentimentAnalyzer:
                     return rec.get('stock_name', rec.get('name', ''))
             except Exception:
                 pass
-        rec = self.db.stock_price.find_one({'symbol': symbol}, {'name': 1})
+        rec = self.db[COLL_STOCK_PRICE].find_one({'symbol': symbol}, {'name': 1})
         return rec.get('name', '') if rec else ''
 
 

@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
+
 from src.domain.collections import (
     COLL_INSTITUTIONAL_FLOW,
     COLL_MONTHLY_REVENUE,

@@ -35,6 +35,11 @@ import requests
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
 
+from src.domain.collections import (
+    COLL_STOCK_PRICE,
+    COLL_STOCK_SPLIT_EVENTS,
+)
+
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
@@ -242,7 +247,7 @@ class StockSplitDownloader:
             )
         
         try:
-            result = self.db.stock_split_events.bulk_write(updates, ordered=False)
+            result = self.db[COLL_STOCK_SPLIT_EVENTS].bulk_write(updates, ordered=False)
             stats['inserted'] = result.upserted_count
             stats['updated'] = result.modified_count
             
@@ -295,7 +300,7 @@ class StockSplitDownloader:
         self.logger.info("="*80 + "\n")
         
         # 獲取所有股票
-        stock_ids = self.db.stock_price.distinct('symbol')
+        stock_ids = self.db[COLL_STOCK_PRICE].distinct('symbol')
         
         if limit:
             stock_ids = stock_ids[:limit]

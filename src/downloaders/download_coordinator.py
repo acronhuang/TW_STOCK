@@ -9,6 +9,10 @@ from datetime import datetime
 
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_TAIWAN_STOCK_INFO,
+)
+
 from .data_validator import DataValidator
 from .finmind_client import FinMindClient
 from .table_config import get_all_tables, get_tables_by_category
@@ -266,7 +270,7 @@ class DownloadCoordinator:
             # 實測不可達。而 tickers/stocks 是 Node 時代遺留(stocks 停更於
             # 2026-02),真被觸發只會拿到過期股票池、靜默下載錯的標的集合。
             # 寧可回空清單讓呼叫端察覺,也不要拿舊資料裝作正常。
-            symbols = list(self.db.taiwan_stock_info.distinct('stock_id'))
+            symbols = list(self.db[COLL_TAIWAN_STOCK_INFO].distinct('stock_id'))
             return self._filter_etf(symbols)
 
         except Exception as e:

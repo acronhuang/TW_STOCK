@@ -23,6 +23,12 @@ from pathlib import Path
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_PORTFOLIO_POSITIONS,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+)
+
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
@@ -80,7 +86,7 @@ class LiveAdvisor:
         # 兩者外觀一樣。ADR-0002:無資料必須與已判定區分開。
         warnings = []
         if not held:
-            avail = sorted(x for x in self.db['portfolio_positions']
+            avail = sorted(x for x in self.db[COLL_PORTFOLIO_POSITIONS]
                            .distinct('portfolio') if x)
             warnings.append(
                 f"投組 '{self.portfolio_name}' 沒有任何持倉 —— 賣出建議與再平衡"
@@ -206,7 +212,7 @@ class LiveAdvisor:
                 continue
 
             # RSI 超買 + 獲利
-            factor = self.db.stock_factors.find_one(
+            factor = self.db[COLL_STOCK_FACTORS].find_one(
                 {'symbol': sym, 'rsi_14': {'$ne': None}},
                 {'rsi_14': 1}, sort=[('date', -1)]
             )
@@ -292,7 +298,7 @@ class LiveAdvisor:
         return total
 
     def _get_latest_price(self, symbol: str) -> float | None:
-        rec = self.db.stock_price.find_one(
+        rec = self.db[COLL_STOCK_PRICE].find_one(
             {'symbol': symbol}, {'close': 1}, sort=[('date', -1)])
         return _to_float(rec['close']) if rec else None
 

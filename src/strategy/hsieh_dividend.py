@@ -36,6 +36,14 @@ import numpy as np
 from bson import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_FINANCIAL_STATEMENTS,
+    COLL_QUARTERLY_EARNINGS,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+)
+
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
 
@@ -77,7 +85,7 @@ class HsiehDividendStrategy:
         logger.info("開始謝富旭深度價值掃描...")
 
         # 取有殖利率 > 4% 的股票（先粗篩）
-        candidates = list(self.db.stock_factors.aggregate([
+        candidates = list(self.db[COLL_STOCK_FACTORS].aggregate([
             {'$match': {'dividend_yield': {'$gt': 4}}},
             {'$sort': {'date': -1}},
             {'$group': {
@@ -102,7 +110,7 @@ class HsiehDividendStrategy:
 
     def _evaluate(self, symbol: str) -> dict | None:
         """對單支股票做謝富旭全面評估"""
-        price_doc = self.db.stock_price.find_one(
+        price_doc = self.db[COLL_STOCK_PRICE].find_one(
             {'symbol': symbol}, sort=[('date', -1)])
         if not price_doc:
             return None
@@ -183,7 +191,7 @@ class HsiehDividendStrategy:
     def _check_profitability(self, symbol: str) -> dict:
         """毛利率穩定 + 營業利益率 + 議價能力"""
         score = 0
-        qes = list(self.db.quarterly_earnings.find(
+        qes = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(8))
 
@@ -246,7 +254,7 @@ class HsiehDividendStrategy:
         retained_ratio = None
         pass_count = 0
 
-        fs = self.db.financial_statements.find_one(
+        fs = self.db[COLL_FINANCIAL_STATEMENTS].find_one(
             {'symbol': symbol}, sort=[('year', -1), ('season', -1)])
 
         if fs:
@@ -282,7 +290,7 @@ class HsiehDividendStrategy:
                     pass_count += 1
         else:
             # 沒有 financial_statements，從 stock_factors 推算
-            f = self.db.stock_factors.find_one({'symbol': symbol}, sort=[('date', -1)])
+            f = self.db[COLL_STOCK_FACTORS].find_one({'symbol': symbol}, sort=[('date', -1)])
             if f:
                 pb = _tof(f.get('pb_ratio'))
                 pe = _tof(f.get('pe_ratio'))
@@ -319,7 +327,7 @@ class HsiehDividendStrategy:
     def _check_dividend_stability(self, symbol: str, price: float) -> dict:
         """連續配息年數 + 平均股利 + 殖利率"""
         score = 0
-        divs = list(self.db.dividend_detail.find(
+        divs = list(self.db[COLL_DIVIDEND_DETAIL].find(
             {'stock_id': symbol}, {'date': 1, 'cash_earnings_distribution': 1}
         ).sort('date', -1).limit(15))
 
@@ -445,7 +453,7 @@ class HsiehDividendStrategy:
     def _check_resilience(self, symbol: str) -> dict:
         """景氣冷衰退少、景氣熱成長多"""
         score = 0
-        qes = list(self.db.quarterly_earnings.find(
+        qes = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(8))
 
@@ -475,7 +483,7 @@ class HsiehDividendStrategy:
     def _check_upcoming_ex_dividend(self, symbol: str) -> dict | None:
         """檢查是否即將除息（已公布除息日但尚未除息）"""
         today = datetime.now()
-        divs = list(self.db.dividend_detail.find(
+        divs = list(self.db[COLL_DIVIDEND_DETAIL].find(
             {'stock_id': symbol, 'date': {'$gte': today.strftime('%Y-%m-%d')}},
         ).sort('date', 1).limit(1))
 
@@ -485,7 +493,7 @@ class HsiehDividendStrategy:
             return {'ex_date': ex_date, 'cash': cash, 'upcoming': True}
 
         # 也查近期的（可能日期格式不同）
-        divs2 = list(self.db.dividend_detail.find(
+        divs2 = list(self.db[COLL_DIVIDEND_DETAIL].find(
             {'stock_id': symbol}
         ).sort('date', -1).limit(1))
         if divs2:
@@ -501,7 +509,7 @@ class HsiehDividendStrategy:
 
     def _eps_trend(self, symbol: str) -> dict:
         """3 年 EPS 趨勢"""
-        qes = list(self.db.quarterly_earnings.find(
+        qes = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}
         ).sort([('year', -1), ('season', -1)]).limit(12))
 
@@ -540,7 +548,7 @@ class HsiehDividendStrategy:
 
     def market_risk_level(self) -> dict:
         """三段式風控：觀察大盤從年內高點跌落幅度"""
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': '0050'}, {'close': 1, 'date': 1}
         ).sort('date', -1).limit(250))
 

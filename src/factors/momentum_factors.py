@@ -17,6 +17,11 @@ import numpy as np
 import pandas as pd
 from bson.decimal128 import Decimal128
 
+from src.domain.collections import (
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_STOCK_PRICE,
+)
+
 
 class MomentumFactors:
     """動能因子計算器"""
@@ -54,7 +59,7 @@ class MomentumFactors:
         start_date = end_date - timedelta(days=days)
         
         # 取得期間內的價格數據
-        prices = list(self.db.stock_price.find({
+        prices = list(self.db[COLL_STOCK_PRICE].find({
             'symbol': symbol,
             'date': {'$gte': start_date, '$lte': end_date}
         }).sort('date', 1))
@@ -105,7 +110,7 @@ class MomentumFactors:
         start_date = date - timedelta(days=period * 2)  # 取更多數據以確保足夠樣本
         
         # 取得價格數據
-        prices = list(self.db.stock_price.find({
+        prices = list(self.db[COLL_STOCK_PRICE].find({
             'symbol': symbol,
             'date': {'$gte': start_date, '$lte': date}
         }).sort('date', 1))
@@ -171,7 +176,7 @@ class MomentumFactors:
         """
         start_date = date - timedelta(days=window * 2)
         
-        prices = list(self.db.stock_price.find({
+        prices = list(self.db[COLL_STOCK_PRICE].find({
             'symbol': symbol,
             'date': {'$gte': start_date, '$lte': date}
         }).sort('date', 1))
@@ -206,7 +211,7 @@ class MomentumFactors:
         含 20(短)/60(季線)/120(半年線)/240(年線)。截至 date。"""
         windows = windows or self.MA_BIAS_WINDOWS
         maxw = max(windows)
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol, 'date': {'$lte': date}},
             {'close': 1}).sort('date', -1).limit(maxw))
         closes = [self._to_float(p.get('close')) for p in prices]
@@ -226,7 +231,7 @@ class MomentumFactors:
           ma_above_long : 現價站上幾條長均線(0~3)，越多越多頭格局
           ma_long_trend : 長期排列方向 1=長多(60>120>240) / -1=長空(60<120<240) / 0=糾結
         年線是台股多空分界，底部型態在年線上方較可靠。截至 date。"""
-        prices = list(self.db.stock_price.find(
+        prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol, 'date': {'$lte': date}},
             {'close': 1}).sort('date', -1).limit(max(self.MA_LONG_WINDOWS)))
         closes = [self._to_float(p.get('close')) for p in prices]
@@ -251,7 +256,7 @@ class MomentumFactors:
                               lookback: int = 40) -> dict:
         """三大法人連續買/賣超天數(外資/投信)。+N=連N日買超, -N=連N日賣超, 0=中性/無資料。
         以連續『有資料的交易日』計(institutional_flow key=stock_id)。截至 date。"""
-        docs = list(self.db.institutional_flow.find(
+        docs = list(self.db[COLL_INSTITUTIONAL_FLOW].find(
             {'stock_id': symbol, 'date': {'$lte': date}},
             {'foreign_net': 1, 'trust_net': 1}).sort('date', -1).limit(lookback))
 
@@ -320,7 +325,7 @@ class MomentumFactors:
         results = []
         
         # 取得所有交易日
-        trading_dates = self.db.stock_price.distinct('date', {
+        trading_dates = self.db[COLL_STOCK_PRICE].distinct('date', {
             'date': {'$gte': start_date, '$lte': end_date}
         })
         

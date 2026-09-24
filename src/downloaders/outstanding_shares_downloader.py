@@ -36,6 +36,10 @@ import requests
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_TAIWAN_STOCK_INFO,
+)
+
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
@@ -214,7 +218,7 @@ class OutstandingSharesDownloader:
             
             # 2. 更新資料庫
             if not dry_run:
-                result = self.db.taiwan_stock_info.update_one(
+                result = self.db[COLL_TAIWAN_STOCK_INFO].update_one(
                     {'stock_id': stock_id},
                     {
                         '$set': {
@@ -283,7 +287,7 @@ class OutstandingSharesDownloader:
             未下載的股票代碼列表
         """
         # 查詢已有 outstanding_shares 的股票
-        existing_stocks = self.db.taiwan_stock_info.find(
+        existing_stocks = self.db[COLL_TAIWAN_STOCK_INFO].find(
             {
                 'stock_id': {'$in': stock_ids},
                 'outstanding_shares': {'$exists': True, '$ne': None}
@@ -324,7 +328,7 @@ class OutstandingSharesDownloader:
             stock_ids = self._load_priority_list()
             self.logger.info("來源: 優先股票列表 (核心 50 支)")
         else:
-            stock_ids = self.db.taiwan_stock_info.distinct('stock_id')
+            stock_ids = self.db[COLL_TAIWAN_STOCK_INFO].distinct('stock_id')
             self.logger.info("來源: 資料庫全部股票")
         
         # 跳過已下載

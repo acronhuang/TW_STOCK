@@ -10,6 +10,10 @@ Date: 2026-02-24
 import re
 from enum import Enum
 
+from src.domain.collections import (
+    COLL_TAIWAN_STOCK_INFO,
+)
+
 
 class SecurityType(Enum):
     """证券类型枚举"""
@@ -108,7 +112,7 @@ class StockClassifier:
             return code_type
         
         # 查询数据库
-        info = self.db.taiwan_stock_info.find_one({'stock_id': stock_id})
+        info = self.db[COLL_TAIWAN_STOCK_INFO].find_one({'stock_id': stock_id})
         
         if not info:
             # 数据库中没有记录，返回代码规则的结果

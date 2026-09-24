@@ -16,6 +16,9 @@ from pymongo import MongoClient, UpdateOne
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
+from src.domain.collections import (
+    COLL_STOCK_PRICE,
+)
 from src.factors.momentum_factors import MomentumFactors
 from src.factors.quality_factors import QualityFactors
 from src.factors.value_factors import ValueFactors
@@ -167,7 +170,7 @@ class FactorLibrary:
         end_dt = pd.to_datetime(end_date)
         
         # 取得交易日
-        trading_dates = self.db.stock_price.distinct('date', {
+        trading_dates = self.db[COLL_STOCK_PRICE].distinct('date', {
             'date': {'$gte': start_dt, '$lte': end_dt}
         })
         trading_dates = sorted(trading_dates)

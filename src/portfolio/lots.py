@@ -21,7 +21,11 @@ from datetime import datetime
 from bson.decimal128 import Decimal128
 
 from src.config import get_db
-from src.domain.collections import COLL_PORTFOLIO_LOTS, COLL_PORTFOLIO_POSITIONS
+from src.domain.collections import (
+    COLL_PORTFOLIO_LOTS,
+    COLL_PORTFOLIO_POSITIONS,
+    COLL_STOCK_PRICE,
+)
 
 CATS = ["波段", "債券ETF", "長期存股", "零成本", "零股"]
 NO_STOP_CATS = {"債券ETF", "長期存股", "零成本", "零股"}
@@ -190,7 +194,7 @@ def _fix_splits(s):
 
 def _adj_series(db, sym, start):
     import pandas as pd
-    cur = db.stock_price.find(
+    cur = db[COLL_STOCK_PRICE].find(
         {"symbol": sym, "date": {"$gte": start}},
         {"_id": 0, "date": 1, "adj_close": 1, "close": 1}
     ).sort("date", 1)

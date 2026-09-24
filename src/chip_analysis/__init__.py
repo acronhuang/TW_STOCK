@@ -18,6 +18,11 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from src.domain.collections import (
+    COLL_INSTITUTIONAL_INVESTORS_WIDE,
+    COLL_SHAREHOLDING,
+)
+
 
 def _to_utc_midnight(d) -> datetime:
     """日期（字串或 datetime）→ UTC 午夜 datetime。
@@ -76,8 +81,8 @@ class ChipAnalyzer:
         # institutional_trading（470 檔殘骸，且欄位名為 buy/sell/name，
         # 與本模組期待的 Foreign_Investor_Net 等欄位完全不符）→ 兩個 analyze
         # 方法無論輸入什麼股票都恆回 0，且被 `if ... in df.columns else 0` 靜默吞掉。
-        self.holdings_col = self.db['shareholding']                    # TDCC 集保大戶
-        self.trading_col = self.db['institutional_investors_wide']     # 重建的法人買賣寬表
+        self.holdings_col = self.db[COLL_SHAREHOLDING]                    # TDCC 集保大戶
+        self.trading_col = self.db[COLL_INSTITUTIONAL_INVESTORS_WIDE]     # 重建的法人買賣寬表
     
     def analyze_institutional_holdings(
         self,

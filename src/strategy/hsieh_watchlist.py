@@ -22,6 +22,11 @@ from datetime import datetime
 from bson import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+)
+
 
 def _tof(v) -> float | None:
     if isinstance(v, Decimal128): return float(v.to_decimal())
@@ -208,8 +213,8 @@ class HsiehWatchlist:
         results = []
         for sym, name, industry, attr, est_div, zone, ex_date in HSIEH_PICKS:
             # 即時資料
-            p = self.db.stock_price.find_one({'symbol': sym}, sort=[('date', -1)])
-            f = self.db.stock_factors.find_one({'symbol': sym}, sort=[('date', -1)])
+            p = self.db[COLL_STOCK_PRICE].find_one({'symbol': sym}, sort=[('date', -1)])
+            f = self.db[COLL_STOCK_FACTORS].find_one({'symbol': sym}, sort=[('date', -1)])
 
             price = _tof(p['close']) if p else None
             pe = _tof(f.get('pe_ratio')) if f else None

@@ -7,6 +7,7 @@
 
 
 from pymongo import MongoClient
+
 from src.domain.collections import (
     COLL_STOCK_PRICE,
     COLL_TECHNICAL_INDICATORS,

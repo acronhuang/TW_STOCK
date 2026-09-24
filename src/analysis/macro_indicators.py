@@ -20,6 +20,7 @@ from pathlib import Path
 
 import requests
 from pymongo import MongoClient
+
 from src.domain.collections import (
     COLL_INSTITUTIONAL_FLOW,
     COLL_MACRO_INDICATORS,

@@ -25,6 +25,15 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_INSTITUTIONAL_FLOW,
+    COLL_MONTHLY_REVENUE,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+    COLL_TEAM_ANALYSIS,
+)
+
 app = FastAPI(title="台股智能分析 API", version="1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -44,7 +53,7 @@ def tof(v):
 @app.get("/api/price/{symbol}")
 def get_price(symbol: str, days: int = 20):
     """取得個股近 N 日股價"""
-    prices = list(db.stock_price.find(
+    prices = list(db[COLL_STOCK_PRICE].find(
         {'symbol': symbol}, {'_id':0, 'date':1, 'open':1, 'high':1, 'low':1, 'close':1, 'volume':1}
     ).sort('date', -1).limit(days))
     return [{
@@ -65,7 +74,7 @@ def get_factors(symbol: str):
     """取得個股最新因子（PE/PB/殖利率/ROE/RSI 等）。
     注意：stock_factors 多來源(TWSE寫pe/pb/殖利率；factor_calc寫roe/rsi且最新筆常無pe)，
     故取『近30筆每欄首個非null』而非 naive 最新筆，否則 pe/dy/roe 會是 None。"""
-    recs = list(db.stock_factors.find({'symbol': symbol}, {'_id': 0}).sort('date', -1).limit(30))
+    recs = list(db[COLL_STOCK_FACTORS].find({'symbol': symbol}, {'_id': 0}).sort('date', -1).limit(30))
     if not recs:
         return {"error": "not found"}
     merged = {}
@@ -199,7 +208,7 @@ def get_anomaly(symbol: str, days: int = 30):
 @app.get("/api/institutional/{symbol}")
 def get_institutional(symbol: str, days: int = 10):
     """法人買賣超"""
-    flows = list(db.institutional_flow.find(
+    flows = list(db[COLL_INSTITUTIONAL_FLOW].find(
         {'stock_id': symbol},
         {'_id':0, 'date':1, 'foreign_net':1, 'trust_net':1, 'dealer_net':1, 'total_net':1}
     ).sort('date', -1).limit(days))
@@ -221,7 +230,7 @@ def get_institutional(symbol: str, days: int = 10):
 @app.get("/api/revenue/{symbol}")
 def get_revenue(symbol: str, months: int = 6):
     """月營收"""
-    revs = list(db.monthly_revenue.find(
+    revs = list(db[COLL_MONTHLY_REVENUE].find(
         {'symbol': symbol}, {'_id':0, 'year_month':1, 'revenue':1, 'yoy_growth':1, 'mom_growth':1}
     ).sort('year_month', -1).limit(months))
     return list(reversed(revs))
@@ -233,7 +242,7 @@ def get_revenue(symbol: str, months: int = 6):
 @app.get("/api/dividend/{symbol}")
 def get_dividend(symbol: str, years: int = 5):
     """股利明細"""
-    divs = list(db.dividend_detail.find(
+    divs = list(db[COLL_DIVIDEND_DETAIL].find(
         {'stock_id': symbol}, {'_id':0}
     ).sort('date', -1).limit(years * 3))
     for d in divs:
@@ -336,10 +345,10 @@ def scan_market(limit: int = 20):
 @app.get("/api/stocks")
 def list_stocks(limit: int = 50):
     """列出所有有數據的股票代號和名稱"""
-    symbols = db.stock_factors.distinct('symbol')
+    symbols = db[COLL_STOCK_FACTORS].distinct('symbol')
     stocks = []
     for sym in sorted(symbols):
-        name_rec = db.stock_price.find_one({'symbol': sym}, {'name': 1})
+        name_rec = db[COLL_STOCK_PRICE].find_one({'symbol': sym}, {'name': 1})
         name = name_rec.get('name', '') if name_rec else ''
         stocks.append({'symbol': sym, 'name': name})
     return {'total': len(stocks), 'stocks': stocks[:limit]}
@@ -369,7 +378,7 @@ def team_symbol(symbol: str, date: str | None = None):
     q = {'symbol': symbol}
     if date:
         q['date'] = datetime.strptime(date, '%Y%m%d')
-    doc = db.team_analysis.find_one(q, sort=[('date', -1)])
+    doc = db[COLL_TEAM_ANALYSIS].find_one(q, sort=[('date', -1)])
     if not doc:
         return {'error': f'查無 {symbol} 的團隊分析', 'symbol': symbol}
     return _clean(doc)
@@ -383,7 +392,7 @@ def team_verdicts(date: str | None = None, verdict: str | None = None,
     if date:
         d = datetime.strptime(date, '%Y%m%d')
     else:
-        latest = db.team_analysis.find_one({}, {'date': 1}, sort=[('date', -1)])
+        latest = db[COLL_TEAM_ANALYSIS].find_one({}, {'date': 1}, sort=[('date', -1)])
         if not latest:
             return {'date': None, 'total': 0, 'rows': []}
         d = latest['date']
@@ -394,7 +403,7 @@ def team_verdicts(date: str | None = None, verdict: str | None = None,
         q['verify.status'] = status
     proj = {'symbol': 1, 'name': 1, 'final_verdict': 1, 'consensus.tally': 1,
             'price_at_analysis': 1, 'verify.status': 1, 'verify.truth_close': 1, '_id': 0}
-    rows = list(db.team_analysis.find(q, proj).limit(limit))
+    rows = list(db[COLL_TEAM_ANALYSIS].find(q, proj).limit(limit))
     tally = {}
     for r in rows:
         tally[r.get('final_verdict')] = tally.get(r.get('final_verdict'), 0) + 1
@@ -406,7 +415,7 @@ def team_verdicts(date: str | None = None, verdict: str | None = None,
 # ──────────────────────────────────────────────
 @app.get("/api/health")
 def health():
-    latest = db.stock_price.find_one({}, {'date':1}, sort=[('date',-1)])
+    latest = db[COLL_STOCK_PRICE].find_one({}, {'date':1}, sort=[('date',-1)])
     return {
         "status": "ok",
         "latest_price_date": str(latest['date'])[:10] if latest else None,

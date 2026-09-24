@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from bson import Decimal128
 from pymongo import MongoClient
+
 from src.domain.collections import (
     COLL_BALANCE_SHEET_DETAIL,
     COLL_QUARTERLY_EARNINGS,

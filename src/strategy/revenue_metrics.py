@@ -7,6 +7,10 @@
 月營收偶有極端值(基期過低)，沿用全市場 >500% 截斷規則。
 供 HsiehValueScreen 存股成長精選等共用。
 """
+from src.domain.collections import (
+    COLL_MONTHLY_REVENUE,
+    COLL_QUARTERLY_EARNINGS,
+)
 
 YOY_CLAMP = 500.0    # 月營收 YoY 上限截斷(基期過低的假爆發)
 
@@ -20,7 +24,7 @@ def _f(v):
 
 def monthly_rev_yoy(db, symbol: str) -> float | None:
     """回最新月營收 YoY%（截斷 >500%）。無資料回 None。"""
-    d = db.monthly_revenue.find_one({'symbol': symbol}, sort=[('year_month', -1)])
+    d = db[COLL_MONTHLY_REVENUE].find_one({'symbol': symbol}, sort=[('year_month', -1)])
     y = (d or {}).get('yoy_growth')
     if y is None:
         return None
@@ -30,14 +34,14 @@ def monthly_rev_yoy(db, symbol: str) -> float | None:
 
 def quarterly_rev_yoy(db, symbol: str) -> float | None:
     """回最新季營收 YoY%（最新季 vs 去年同季）。資料不足回 None。"""
-    q = db.quarterly_earnings.find_one(
+    q = db[COLL_QUARTERLY_EARNINGS].find_one(
         {'symbol': symbol, 'income.revenue': {'$ne': None}},
         {'income.revenue': 1, 'year': 1, 'season': 1},
         sort=[('year', -1), ('season', -1)])
     if not q:
         return None
     rev = _f((q.get('income') or {}).get('revenue'))
-    yq = db.quarterly_earnings.find_one(
+    yq = db[COLL_QUARTERLY_EARNINGS].find_one(
         {'symbol': symbol, 'year': q['year'] - 1, 'season': q['season']},
         {'income.revenue': 1})
     rev0 = _f((yq or {}).get('income', {}).get('revenue')) if yq else None

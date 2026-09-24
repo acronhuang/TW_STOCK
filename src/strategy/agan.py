@@ -14,6 +14,14 @@ B. 護城河龍頭選股（品質型，有別於謝富旭高殖利率）
 """
 from datetime import timedelta
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_MACRO_INDICATORS,
+    COLL_QUARTERLY_EARNINGS,
+    COLL_STOCK_PRICE,
+    COLL_TAIWAN_STOCK_INFO,
+)
+
 
 def _f(v):
     try:
@@ -25,7 +33,7 @@ def _f(v):
 # ── A. 景氣燈號擇時 ──────────────────────────────────────────────────────
 def agan_market_signal(db) -> dict | None:
     """讀景氣對策信號分數 → 燈號 + 阿甘進出場訊號。無資料回 None。"""
-    d = db.macro_indicators.find_one({'indicator': 'leading'}, sort=[('date', -1)])
+    d = db[COLL_MACRO_INDICATORS].find_one({'indicator': 'leading'}, sort=[('date', -1)])
     score = (d.get('data') or {}).get('signal_score') if d else None
     if score is None:
         return None
@@ -55,21 +63,21 @@ class AganMoatScreen:
 
     def __init__(self, db):
         self.db = db
-        self._latest = db.stock_price.find_one(sort=[('date', -1)])['date']
+        self._latest = db[COLL_STOCK_PRICE].find_one(sort=[('date', -1)])['date']
 
     def _large_caps(self) -> dict[str, dict]:
         """市值前 TOP_MKTCAP 大型股 {symbol: {name, price, mktcap}}（市值=發行股數×最新收盤）。"""
         latest_px = {}
-        for d in self.db.stock_price.aggregate([
+        for d in self.db[COLL_STOCK_PRICE].aggregate([
             {'$sort': {'date': -1}},
             {'$group': {'_id': '$symbol', 'close': {'$first': '$close'},
                         'name': {'$first': '$name'}}}], allowDiskUse=True):
             latest_px[d['_id']] = d
         shares = {d['stock_id']: _f(d.get('outstanding_shares'))
-                  for d in self.db.taiwan_stock_info.find(
+                  for d in self.db[COLL_TAIWAN_STOCK_INFO].find(
                       {'outstanding_shares': {'$ne': None}}, {'stock_id': 1, 'outstanding_shares': 1})}
         cutoff = self._latest - timedelta(days=10)
-        active = set(s for s in self.db.stock_price.distinct('symbol', {'date': {'$gte': cutoff}})
+        active = set(s for s in self.db[COLL_STOCK_PRICE].distinct('symbol', {'date': {'$gte': cutoff}})
                      if isinstance(s, str) and s.isdigit() and len(s) == 4)
         caps = []
         for s in active:
@@ -84,7 +92,7 @@ class AganMoatScreen:
         """回 (TTM_ROE, 負債比)。
         ROE 用 **TTM(近4單季淨利加總/權益)** ——避免 stored.roe 的單季×4 年化失真
         (如宜鼎 Q1強 ×4=149%，TTM 才是真實年ROE 49%)。負債比用最新季。"""
-        qs = list(self.db.quarterly_earnings.find(
+        qs = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol}, {'income.net_income': 1, 'balance': 1}
         ).sort([('year', -1), ('season', -1)]).limit(4))
         if not qs:
@@ -100,7 +108,7 @@ class AganMoatScreen:
         return roe, debt
 
     def _payout_years(self, symbol: str) -> int:
-        yrs = self.db.dividend_detail.distinct(
+        yrs = self.db[COLL_DIVIDEND_DETAIL].distinct(
             'year', {'stock_id': symbol, 'cash_earnings_distribution': {'$gt': 0}})
         return len([y for y in yrs if str(y).isdigit()])
 

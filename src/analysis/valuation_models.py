@@ -20,6 +20,14 @@ import numpy as np
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_QUARTERLY_EARNINGS,
+    COLL_STOCK_FACTORS,
+    COLL_STOCK_PRICE,
+    COLL_TAIWAN_STOCK_INFO,
+)
+
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留供獨立 python <path>.py 呼叫
 
@@ -301,7 +309,7 @@ class ValuationAnalyzer:
 
         # 取近3年 PE 歷史
         cutoff = datetime.now() - timedelta(days=3 * 365)
-        records = list(self.db.stock_factors.find(
+        records = list(self.db[COLL_STOCK_FACTORS].find(
             {'symbol': symbol, 'date': {'$gte': cutoff}, 'pe_ratio': {'$ne': None}},
             {'date': 1, 'pe_ratio': 1}
         ).sort('date', 1))
@@ -392,7 +400,7 @@ class ValuationAnalyzer:
     #  資料存取輔助方法
     # ──────────────────────────────────────────────
     def _get_current_price(self, symbol: str) -> float | None:
-        rec = self.db.stock_price.find_one(
+        rec = self.db[COLL_STOCK_PRICE].find_one(
             {'symbol': symbol},
             {'close': 1},
             sort=[('date', -1)]
@@ -401,20 +409,20 @@ class ValuationAnalyzer:
 
     def _get_quarterly_earnings(self, symbol: str, years: int = 5) -> list[dict]:
         min_year = datetime.now().year - years
-        return list(self.db.quarterly_earnings.find(
+        return list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol, 'year': {'$gte': min_year}},
             {'year': 1, 'season': 1, 'income': 1, 'balance': 1}
         ).sort([('year', 1), ('season', 1)]))
 
     def _get_dividend_history(self, symbol: str) -> list[dict]:
-        return list(self.db.dividend_detail.find(
+        return list(self.db[COLL_DIVIDEND_DETAIL].find(
             {'stock_id': symbol},
             {'date': 1, 'cash_earnings_distribution': 1, 'stock_earnings_distribution': 1}
         ).sort('date', -1))
 
     def _get_shares_outstanding(self, symbol: str) -> float | None:
         """取得流通在外股數（DB 存千股，回傳實際股數）"""
-        info = self.db.taiwan_stock_info.find_one({'stock_id': symbol})
+        info = self.db[COLL_TAIWAN_STOCK_INFO].find_one({'stock_id': symbol})
         if info:
             shares = _to_float(info.get('outstanding_shares'))
             if shares and shares > 0:
@@ -432,7 +440,7 @@ class ValuationAnalyzer:
         直接加總 4 季 EPS 作為 TTM。只在「Q4 EPS > 同年 Q1+Q2+Q3 總和」
         這個明確訊號出現時，才判定 Q4 是累計值並改用前後比較法。
         """
-        records = list(self.db.quarterly_earnings.find(
+        records = list(self.db[COLL_QUARTERLY_EARNINGS].find(
             {'symbol': symbol},
             {'year': 1, 'season': 1, 'income.eps': 1}
         ).sort([('year', -1), ('season', -1)]).limit(8))
@@ -496,12 +504,12 @@ class ValuationAnalyzer:
         """用近1年日報酬率 vs 大盤估算 Beta"""
         cutoff = datetime.now() - timedelta(days=365)
 
-        stock_prices = list(self.db.stock_price.find(
+        stock_prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': symbol, 'date': {'$gte': cutoff}},
             {'date': 1, 'close': 1}
         ).sort('date', 1))
 
-        market_prices = list(self.db.stock_price.find(
+        market_prices = list(self.db[COLL_STOCK_PRICE].find(
             {'symbol': '0050', 'date': {'$gte': cutoff}},
             {'date': 1, 'close': 1}
         ).sort('date', 1))

@@ -4,6 +4,10 @@
 from bson.decimal128 import Decimal128
 
 from src.config import get_db
+from src.domain.collections import (
+    COLL_DIVIDEND_DETAIL,
+    COLL_STOCK_PRICE,
+)
 
 
 def check_types():
@@ -15,7 +19,7 @@ def check_types():
     
     # 檢查 dividend_detail
     print("\n[1] dividend_detail 集合:")
-    div = db.dividend_detail.find_one({'cash_earnings_distribution': {'$exists': True, '$ne': None}})
+    div = db[COLL_DIVIDEND_DETAIL].find_one({'cash_earnings_distribution': {'$exists': True, '$ne': None}})
     if div and 'cash_earnings_distribution' in div:
         val = div['cash_earnings_distribution']
         print("  欄位: cash_earnings_distribution")
@@ -27,7 +31,7 @@ def check_types():
     
     # 檢查 stock_price
     print("\n[2] stock_price 集合:")
-    price = db.stock_price.find_one({'close': {'$exists': True}})
+    price = db[COLL_STOCK_PRICE].find_one({'close': {'$exists': True}})
     if price and 'close' in price:
         val = price['close']
         print("  欄位: close")
@@ -50,7 +54,7 @@ def check_types():
         }}
     ]
     
-    for result in db.dividend_detail.aggregate(pipeline):
+    for result in db[COLL_DIVIDEND_DETAIL].aggregate(pipeline):
         print(f"  {result['_id']}: {result['count']} 筆")
     
     print("\n" + "="*80)
