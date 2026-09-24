@@ -8,15 +8,16 @@ Prompt 設計針對本專案語料的特性:
   2. 一律附上 [n] 出處編號 —— 這個語料不可盡信,使用者必須能回頭查證。
   3. 資料不足時要說「資料不足」,不要用常識補。
 
-模型:qwen2.5-14b(.28 上實測約 25 tok/s)。qwen2.5 系列預設傾向簡體,
+模型:qwen2.5-14b(.27)。qwen2.5 系列預設傾向簡體,
 故 prompt 明確要求繁體中文。
 """
 import json
+import os
 import sys
 import urllib.request
 from datetime import datetime
 
-OLLAMA = "http://172.16.9.28:11434"
+OLLAMA = os.getenv("RAG_OLLAMA_URL", "http://172.16.9.27:11434").rstrip("/")
 MODEL = "qwen2.5-14b:latest"
 
 if hasattr(sys.stdout, "reconfigure"):

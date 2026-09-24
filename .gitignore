@@ -64,3 +64,11 @@ deploy/DEPLOYED.txt
 scripts/finmind_watcher.sh
 scripts/run_fin13.sh
 scripts/run_resume.sh
+
+# A/B 測試與 verdict 產物(勿入版控)
+ab_*.json
+ab_verdict.txt
+ic_verdict.txt
+download_status.legacy-*.json
+# 本機備份目錄
+mongodb_backups/
