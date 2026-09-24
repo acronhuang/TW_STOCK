@@ -63,11 +63,11 @@
 ```
 Phase 0 ✅ 止血       MoE 守門 · EvidenceGuard · SSRF/XSS/注入 · CI 護欄
 Phase 1 ✅ 設定收斂    config.py · 路徑可攜 · sys.path.insert/MongoClient 收斂
-Phase 2 🟡 資料層      61 集合常數化 · repository/config.get_db 採用（續批進行中）
+Phase 2 ✅ 資料層      61 集合常數化 · 全樹裸集合存取歸零(51檔) · repository/config.get_db 採用
          ├─ 修脆弱測試 + 測試 DB 隔離
          ├─ 真實環境驗證（174 passed / 0 failed）
          └─ ✅ 正式部署上線（89705ce）+ 服務重啟 + 三管線健康驗證
-Phase 3 ⏸️ 待辦       上帝模組拆分 · MoE 雙路由合併 · 每日備份/replica set · ~~Dashboard SSO~~(暫緩)
+Phase 3 🟡 進行中    ✅每日備份 · 上帝模組拆分 · MoE 雙路由合併 · ~~Dashboard SSO~~(暫緩)
 ```
 
 ## 🔖 關鍵里程碑（git commits）
@@ -87,8 +87,8 @@ Phase 3 ⏸️ 待辦       上帝模組拆分 · MoE 雙路由合併 · 每日�
 | `52d4234` | 正式環境架構圖（時序 + 災難復原） |
 
 ## 📌 待辦與已知缺口（供 Phase 3 參考）
-- **Phase 2 續批**：高頻集合（`stock_price` 339 處…）全樹採用 `COLL_*`；37 處參數驅動 `MongoClient` 收斂到 repository 唯一入口。
-- **備份頻率**：目前每週備份 → 建議每日 mongodump 或 replica set。
+- **Phase 2 續批**：~~高頻集合全樹採用 `COLL_*`~~ → **✅ 完成**（全樹 `db.<coll>`/`db['<coll>']` 裸存取歸零，51 檔收斂）；37 處參數驅動 `MongoClient` 收斂到 repository 唯一入口仍待辦。
+- **備份頻率**：~~目前每週備份~~ → **✅ 已改每日備份**（`daily_mongodb_backup` 每日 01:00、保留 14 天 + 每週還原性驗證）。
 - ~~**Dashboard 曝險**：8501 綁 `0.0.0.0`，建議加反向代理/SSO。~~ → **暫緩（目前個人單機使用，無對外曝險需求；未來多人/對外曝險時再處理）**
 - **上帝模組**：strategy/senvision/downloaders/analysis 4000+ 行待拆薄殼。
 - **pre-existing**：`pyparsing` 版本相容（部署環境已 OK，本機需 upgrade）。
