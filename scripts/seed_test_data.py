@@ -22,6 +22,11 @@ import random
 from datetime import datetime, timedelta
 
 from pymongo import MongoClient
+from bson.decimal128 import Decimal128
+
+
+def _dec(x: float) -> Decimal128:
+    return Decimal128(f"{x:.4f}")
 
 SEED_SYMBOLS = ("2330", "TAIEX", "0050", "2317", "0056", "2603")
 BASES = {"2330": 900.0, "TAIEX": 23000.0, "0050": 190.0, "2317": 210.0, "0056": 38.0, "2603": 210.0}
@@ -85,31 +90,39 @@ def seed(db) -> None:
             docs.append({
                 "symbol": sym,
                 "date": d,
-                "open": open_,
-                "high": high,
-                "low": low,
-                "close": close,
+                "open": _dec(open_),
+                "high": _dec(high),
+                "low": _dec(low),
+                "close": _dec(close),  # 正式 schema 用 Decimal128（消費端 .to_decimal()）
                 "volume": rng.randint(10_000, 50_000) * 1000,
             })
     db["stock_price"].insert_many(docs)
 
-    # stock_factors（2330 最新一筆；buy_three_questions 讀 return_1m / rsi_14）
-    db["stock_factors"].delete_many({"symbol": "2330"})
-    c = series["2330"]
-    ret_1m = (c[-1] - c[-21]) / c[-21] * 100 if len(c) > 21 else 0.0
-    db["stock_factors"].insert_one({
-        "symbol": "2330",
-        "date": dates[-1],
-        "pe_ratio": 18.5,
-        "pb_ratio": 4.2,
-        "dividend_yield": 2.1,
-        "return_1m": round(ret_1m, 2),
-        "rsi_14": 55.0,
-    })
+    # stock_factors（每支一筆最新；必須含 StockRanker.FIELDS 全部欄位，否則建構時 ValueError）
+    db["stock_factors"].delete_many({"symbol": {"$in": list(SEED_SYMBOLS)}})
+    fdocs = []
+    for sym in SEED_SYMBOLS:
+        if sym == "TAIEX":
+            continue
+        c = series[sym]
+        ret_1m = (c[-1] - c[-21]) / c[-21] * 100 if len(c) > 21 else 0.0
+        fdocs.append({
+            "symbol": sym,
+            "date": dates[-1],
+            "pe_ratio": round(rng.uniform(12, 25), 2),
+            "pb_ratio": round(rng.uniform(1.5, 5.0), 2),
+            "dividend_yield": round(rng.uniform(1.0, 4.0), 2),
+            "roe": round(rng.uniform(8.0, 25.0), 2),
+            "operating_margin": round(rng.uniform(10.0, 40.0), 2),
+            "rsi_14": round(rng.uniform(40.0, 60.0), 1),
+            "return_1m": round(ret_1m, 2),
+            "volatility_30d": round(rng.uniform(0.18, 0.40), 3),
+        })
+    db["stock_factors"].insert_many(fdocs)
 
     print(
         f"✅ 已灌入種子：stock_price {len(docs)} 筆（{', '.join(SEED_SYMBOLS)}）"
-        f"、stock_factors 2330 x1（{len(dates)} 個交易日 {dates[0]:%Y-%m-%d}→{dates[-1]:%Y-%m-%d}）"
+        f"、stock_factors {len(fdocs)} 筆（{len(dates)} 個交易日 {dates[0]:%Y-%m-%d}→{dates[-1]:%Y-%m-%d}）"
     )
 
 

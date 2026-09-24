@@ -1,7 +1,8 @@
 """BDD step implementations for valuation.feature"""
 import pytest
 
-pytestmark = pytest.mark.integration
+# 世界事實/深財報模型（DCF/DDM 需季報與多年股利），合成種子難以可靠 → live-only。
+pytestmark = [pytest.mark.integration, pytest.mark.prod_data]
 
 
 class TestValuationBDD:
