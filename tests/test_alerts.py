@@ -41,7 +41,9 @@ class TestAlertManager:
 
     @pytest.mark.integration
     @pytest.mark.needs_data
-    def test_check_and_notify_runs(self):
-        am = AlertManager()
+    def test_check_and_notify_runs(self, write_db):
+        # 隔離:check_and_notify 觸發時會 insert_one 入 alert_history。
+        # 改指向 write_db(session 末自動 drop),不在正式庫名寫入歷史。
+        am = AlertManager(db_name=write_db.name)
         triggered = am.check_and_notify()
         assert isinstance(triggered, list)
