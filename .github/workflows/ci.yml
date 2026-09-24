@@ -64,7 +64,7 @@ jobs:
         env:
           MONGODB_URI: mongodb://localhost:27017/tw_stock_analysis
         run: |
-          pytest tests/ -v --tb=short -m "not slow" -k "not api"
+          pytest tests/ -v --tb=short -m "not slow and not prod_data" -k "not api"
 
   lint:
     runs-on: ubuntu-latest

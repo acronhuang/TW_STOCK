@@ -2,6 +2,9 @@
 import pytest
 from src.analysis.peer_comparison import PeerComparison
 
+# 資料驅動（查產業分類/同業股價）；無種子資料時自動 skip。
+pytestmark = pytest.mark.needs_data
+
 
 @pytest.fixture(scope="module")
 def pc():

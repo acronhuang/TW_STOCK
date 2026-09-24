@@ -2,6 +2,9 @@
 import pytest
 from pytest_bdd import scenarios, when, then
 
+# 資料驅動（市場週期判斷需價格/指標）；無種子資料時自動 skip。
+pytestmark = pytest.mark.needs_data
+
 scenarios('features/macro_analysis.feature')
 
 

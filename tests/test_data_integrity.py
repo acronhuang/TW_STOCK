@@ -1,6 +1,10 @@
 """資料完整性測試 — 確保 MongoDB 集合與欄位健康"""
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
+
+# 正式庫規模/新鮮度健康檢查（斷言 10萬+ 筆、5 天新鮮），種子資料無法滿足；
+# 只對 live 資料庫有意義，CI 以 '-m not prod_data' 排除。
+pytestmark = pytest.mark.prod_data
 
 
 class TestCollections:

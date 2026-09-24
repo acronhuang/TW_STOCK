@@ -2,6 +2,9 @@
 import pytest
 from src.analysis.valuation_models import ValuationAnalyzer
 
+# 資料驅動（查 2330 等價格/財報）；無種子資料時自動 skip。
+pytestmark = pytest.mark.needs_data
+
 
 @pytest.fixture(scope="module")
 def va():

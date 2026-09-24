@@ -14,6 +14,46 @@ sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / '.env')
 
 
+def pytest_configure(config):
+    # 需已灌入市場資料的整合測試；DB 無種子資料（canary 2330）時自動略過。
+    config.addinivalue_line(
+        "markers",
+        "needs_data: 需要已灌入市場資料的整合測試；無種子資料時自動略過（phase A 種子後執行）",
+    )
+    # 正式庫健康檢查（斷言 10 萬+ 筆、5 天新鮮度等），只對 live DB 有意義，CI 不跑。
+    config.addinivalue_line(
+        "markers",
+        "prod_data: 正式庫規模/新鮮度健康檢查；僅對 live 資料庫有意義，CI 以 '-m not prod_data' 排除",
+    )
+
+
+@pytest.fixture(scope="session")
+def _seed_present():
+    """canary：DB 是否已灌入最小種子資料（stock_price 有 2330）。
+
+    只在被 needs_data 守衛請求時才建立連線（短逾時），純 unit 測試不觸發任何 Mongo 連線。
+    """
+    from pymongo import MongoClient
+    from pymongo.errors import PyMongoError
+    uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
+    db_name = os.getenv('MONGODB_DATABASE', 'tw_stock_analysis')
+    try:
+        client = MongoClient(uri, serverSelectionTimeoutMS=1500)
+        present = client[db_name]['stock_price'].count_documents({'symbol': '2330'}, limit=1) > 0
+        client.close()
+        return present
+    except PyMongoError:
+        return False
+
+
+@pytest.fixture(autouse=True)
+def _guard_needs_data(request):
+    """標 needs_data 的測試在『無種子資料』時自動 skip（懶查 canary，不污染 unit 測試）。"""
+    if request.node.get_closest_marker('needs_data'):
+        if not request.getfixturevalue('_seed_present'):
+            pytest.skip('無種子資料（canary 2330 缺）；灌入種子後自動執行（見 scripts/seed_test_data.py）')
+
+
 @pytest.fixture(scope="session")
 def db():
     """MongoDB 「唯讀」連線（真實資料，session 共用）。

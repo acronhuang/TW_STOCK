@@ -31,6 +31,7 @@ class TestPositionSizing:
 
 
 @pytest.mark.integration
+@pytest.mark.needs_data
 class TestStopLoss:
     def test_stop_loss_returns_action(self, rules):
         r = rules.check_stop_loss('2330', 1000)
@@ -44,6 +45,7 @@ class TestStopLoss:
 
 
 @pytest.mark.integration
+@pytest.mark.needs_data
 class TestBuyThreeQuestions:
     def test_three_questions_format(self, rules):
         r = rules.buy_three_questions('2330')
@@ -54,6 +56,7 @@ class TestBuyThreeQuestions:
 
 
 @pytest.mark.integration
+@pytest.mark.needs_data
 class TestMarketCycle:
     def test_cycle_valid(self, rules):
         r = rules.market_cycle()
@@ -65,6 +68,7 @@ class TestMarketCycle:
 
 
 @pytest.mark.integration
+@pytest.mark.needs_data
 class TestInstitutionPhase:
     def test_phase_valid(self, rules):
         r = rules.detect_institution_phase('2603')

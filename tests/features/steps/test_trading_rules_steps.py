@@ -1,7 +1,7 @@
 """BDD step implementations for trading_rules.feature"""
 import pytest
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.needs_data]
 
 
 class TestTradingRulesBDD:
