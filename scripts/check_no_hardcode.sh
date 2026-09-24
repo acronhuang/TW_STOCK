@@ -26,7 +26,7 @@ DIFF=$(git diff "${BASE}...HEAD" -- src/ scripts/ dashboard/ \
        2>/dev/null || git diff "${BASE}" -- src/ scripts/ dashboard/)
 
 # 抽出新增行（+ 開頭，排除 diff 標頭 +++），去掉前導 + 與空白。
-ADDED=$(printf '%s\n' "${DIFF}" | grep -E '^\+' | grep -Ev '^\+\+\+' | sed -E 's/^\+[[:space:]]*//')
+ADDED=$(printf '%s\n' "${DIFF}" | grep -E '^\+' | grep -Ev '^\+\+\+' | sed -E 's/^\+[[:space:]]*//' || true)
 
 # 過濾純註解行（# 開頭）——文件/註解中的 IP 不算技術債；
 # 以及標注 `# allow-hardcode` 的刻意設定預設行（待 Phase 1 收斂至 config）。
