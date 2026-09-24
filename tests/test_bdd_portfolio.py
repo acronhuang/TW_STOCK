@@ -15,6 +15,10 @@ from pytest_bdd import scenarios, given, when, then, parsers
 
 from src.portfolio import lots as L
 
+# 寫入型整合測試(自備隔離測試庫 tw_stock_analysis_bddtest),需 mongo。
+# 標 needs_data → 空 DB / 無種子時自動 skip(不在無 mongo 的 dev 本機炋紅)。
+pytestmark = [pytest.mark.integration, pytest.mark.needs_data]
+
 scenarios('features/portfolio.feature')
 
 TEST_DB = 'tw_stock_analysis_bddtest'

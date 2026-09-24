@@ -77,15 +77,22 @@ def write_db():
     絕不碰正式 tw_stock_analysis。DB 名由 MONGODB_TEST_DATABASE 決定。
     """
     from pymongo import MongoClient
+    from pymongo.errors import PyMongoError
     uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
     db_name = os.getenv('MONGODB_TEST_DATABASE', 'tw_stock_analysis_pytest')
     assert db_name != os.getenv('MONGODB_DATABASE', 'tw_stock_analysis'), \
         '測試 DB 不得為正式庫'
-    client = MongoClient(uri)
+    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
     database = client[db_name]
     yield database
-    client.drop_database(db_name)  # 測試完自動清理
-    client.close()
+    # 清理防禦:測試被 skip(如本機無 mongo)時 fixture 仍可能被建立,
+    # drop 會 hard-connect(30s)→ 包 try/except 避免 teardown 污染測試結果。
+    try:
+        client.drop_database(db_name)  # 測試完自動清理
+    except PyMongoError:
+        pass
+    finally:
+        client.close()
 
 
 @pytest.fixture(scope="session")

@@ -20,6 +20,7 @@ class TestLineNotifier:
 
 class TestAlertManager:
     @pytest.mark.integration
+    @pytest.mark.needs_data
     def test_add_and_list_rules(self, write_db):
         # 隔離:AlertManager 改指向專用測試庫(session 結束自動 drop),
         # 不再經唯讀 db fixture 寫入正式庫名。
@@ -39,6 +40,7 @@ class TestAlertManager:
         assert len(rules) == 0
 
     @pytest.mark.integration
+    @pytest.mark.needs_data
     def test_check_and_notify_runs(self):
         am = AlertManager()
         triggered = am.check_and_notify()

@@ -5,8 +5,10 @@
 | 層 | marker | 數量 | 需要 MongoDB? | 在哪跑 |
 |---|---|:--:|---|---|
 | 純邏輯 | `unit` | 161 | ❌ 完全免 DB | `unit-gate`(無 mongo service)+ `test` |
-| 整合(可種子) | `needs_data` | 33 | ✅ 需最小種子資料 | `test`(seed 後執行;無種子→自動 skip) |
-| 世界事實/深資料 | `prod_data` | 27 | ✅ 需 live 正式庫 | **不進 CI**,由 .166 排程/手動驗證 |
+| 整合(可種子) | `needs_data` | 40 | ✅ 需最小種子資料 | `test`(seed 後執行;無種子→自動 skip) |
+| 世界事實/深資料 | `prod_data` | 29 | ✅ 需 live 正式庫 | **不進 CI**,由 .166 排程/手動驗證 |
+
+> 分層已收口:230 測試全數歸位(unit 161 + needs_data 40 + prod_data 29),**無 tier marker 殘留 = 0**。
 
 > `pytest.ini` 已設 `--strict-markers`:用未註冊的 marker 會直接報錯,防止誤標。
 

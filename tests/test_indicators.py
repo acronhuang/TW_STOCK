@@ -10,6 +10,7 @@ import numpy as np
 
 class TestRSI:
     @pytest.mark.integration
+    @pytest.mark.needs_data
     def test_rsi_range(self, db):
         from src.indicators.rsi import calculate_rsi
         closes = [float(p['close'].to_decimal()) for p in

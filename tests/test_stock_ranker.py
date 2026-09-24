@@ -9,7 +9,11 @@ def sr():
 
 
 class TestRanking:
+    # rank() 預設 financial_check=True → 依賴真實財報健康篩檢(同
+    # test_financial_filter_removes_unhealthy 的 live-only 理由)→ prod_data;
+    # 且全市場排序耗時 → 並標 slow。
     @pytest.mark.integration
+    @pytest.mark.prod_data
     @pytest.mark.slow
     def test_rank_returns_list(self, sr):
         result = sr.rank(limit=10)
@@ -18,6 +22,7 @@ class TestRanking:
         assert result[0]['total_score'] >= result[-1]['total_score']
 
     @pytest.mark.integration
+    @pytest.mark.prod_data
     @pytest.mark.slow
     def test_rank_fields(self, sr):
         result = sr.rank(limit=5)
@@ -31,6 +36,7 @@ class TestRanking:
             assert 0 <= s['total_score'] <= 100
 
     @pytest.mark.integration
+    @pytest.mark.needs_data
     def test_score_single_stock(self, sr):
         result = sr.score_stock('2330')
         assert result is not None
