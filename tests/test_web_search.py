@@ -7,6 +7,15 @@ import requests
 from src.analysis.web_search import google_news_search, search_news_by_mode
 
 
+@pytest.fixture(autouse=True)
+def _clear_news_cache():
+    """每測試前清快取，避免 TTL 快取跨測試污染。"""
+    from src.analysis import web_search as ws
+    ws.clear_news_cache()
+    yield
+    ws.clear_news_cache()
+
+
 @pytest.mark.unit
 def test_google_news_search_returns_title_url_and_source():
     response = Mock()
@@ -120,3 +129,58 @@ def test_safe_external_url_allows_http_only():
     assert safe_external_url("javascript:alert(1)") == ""
     assert safe_external_url("data:text/html,<script>") == ""
     assert safe_external_url("") == ""
+
+
+# ── NewsCache (M2)：TTL 快取，降低外部呼叫（CWE-400）──
+def _rss_response(title="A", url="https://x/a"):
+    resp = Mock()
+    resp.raise_for_status.return_value = None
+    resp.text = f'<rss><channel><item><title>{title}</title><link>{url}</link></item></channel></rss>'
+    return resp
+
+
+@pytest.mark.unit
+def test_news_cache_ttl_hit_avoids_second_request(monkeypatch):
+    from src.analysis import web_search as ws
+    monkeypatch.setattr(ws, "_clock", lambda: 1000.0)
+    with patch("src.analysis.web_search.requests.get", return_value=_rss_response()) as get:
+        r1 = ws.google_news_search("台股", max_items=1)
+        r2 = ws.google_news_search("台股", max_items=1)  # TTL 內
+    assert r1 == r2
+    assert get.call_count == 1  # 第二次走快取，不觸發 requests
+
+
+@pytest.mark.unit
+def test_news_cache_refetches_after_ttl_expiry(monkeypatch):
+    from src.analysis import web_search as ws
+    now = {"v": 0.0}
+    monkeypatch.setattr(ws, "_clock", lambda: now["v"])
+    with patch("src.analysis.web_search.requests.get", return_value=_rss_response()) as get:
+        ws.google_news_search("台股", max_items=1)
+        now["v"] = ws.NEWS_CACHE_TTL + 1  # 過期
+        ws.google_news_search("台股", max_items=1)
+    assert get.call_count == 2
+
+
+@pytest.mark.unit
+def test_news_cache_does_not_cache_failures(monkeypatch):
+    from src.analysis import web_search as ws
+    monkeypatch.setattr(ws, "_clock", lambda: 5.0)
+    with patch("src.analysis.web_search.requests.get",
+               side_effect=requests.RequestException) as get:
+        assert ws.google_news_search("台股") == []
+        assert ws.google_news_search("台股") == []
+    assert get.call_count == 2  # 失敗不快取，允許重試
+
+
+@pytest.mark.unit
+def test_google_news_search_bounds_work_to_max_items():
+    """大量 item 也只回 max_items（有界工作量，降 ReDoS/資源耗用）。"""
+    items = "".join(
+        f"<item><title>T{i}</title><link>https://x/{i}</link></item>" for i in range(500))
+    resp = Mock()
+    resp.raise_for_status.return_value = None
+    resp.text = f"<rss><channel>{items}</channel></rss>"
+    with patch("src.analysis.web_search.requests.get", return_value=resp):
+        results = google_news_search("q", max_items=3)
+    assert len(results) == 3

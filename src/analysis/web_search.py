@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -20,6 +21,28 @@ NEWS_REGIONS = {
 }
 INTERNATIONAL_SOURCE_QUERY = "(site:reuters.com OR site:bloomberg.com OR site:cnbc.com OR site:ft.com)"
 
+# ── NewsCache (M2)：TTL 快取，吸收重複查詢，降低外部 RSS 呼叫（CWE-400 資源耗用）。
+# _clock 可注入（測試用假時鐘）；僅快取「成功」結果，失敗不快取以允許重試。
+NEWS_CACHE_TTL = 600.0
+_clock = time.monotonic
+_NEWS_CACHE: dict[tuple, tuple[float, list[dict[str, str]]]] = {}
+
+
+def clear_news_cache() -> None:
+    """清空 NewsCache（供測試與手動失效用）。"""
+    _NEWS_CACHE.clear()
+
+
+def _cache_get(key: tuple) -> list[dict[str, str]] | None:
+    hit = _NEWS_CACHE.get(key)
+    if hit is not None and (_clock() - hit[0]) < NEWS_CACHE_TTL:
+        return [dict(r) for r in hit[1]]  # 回副本，避免呼叫端變動快取
+    return None
+
+
+def _cache_put(key: tuple, value: list[dict[str, str]]) -> None:
+    _NEWS_CACHE[key] = (_clock(), [dict(r) for r in value])
+
 
 def _rss_value(item: str, tag: str) -> str:
     match = re.search(
@@ -33,6 +56,10 @@ def google_news_search(
     if not query:
         return []
     config = NEWS_REGIONS.get(region, NEWS_REGIONS["taiwan_zh"])
+    cache_key = (query, region, max_items)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
     search_query = f"{query} {INTERNATIONAL_SOURCE_QUERY}" if region == "international_en" else query
     try:
         response = requests.get(
@@ -45,7 +72,9 @@ def google_news_search(
         body = response.text[:MAX_RESPONSE_BYTES]  # 上限解析量，降低 ReDoS/資源耗用風險
         results = []
         seen_urls = set()
-        for item in re.findall(r"<item>(.*?)</item>", body, re.DOTALL)[:max_items]:
+        # finditer + 提前 break：工作量有界於 max_items，不先建全文 item 清單。
+        for match in re.finditer(r"<item>(.*?)</item>", body, re.DOTALL):
+            item = match.group(1)
             title = _rss_value(item, "title")
             url = _rss_value(item, "link")
             if title and url and url not in seen_urls:
@@ -56,6 +85,9 @@ def google_news_search(
                     "published_at": _rss_value(item, "pubDate"),
                     "source": f"Google News RSS · {config['label']}",
                 })
+                if len(results) >= max_items:
+                    break
+        _cache_put(cache_key, results)
         return results
     except requests.RequestException:
         return []
