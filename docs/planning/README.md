@@ -67,7 +67,7 @@ Phase 2 🟡 資料層      61 集合常數化 · repository/config.get_db 採�
          ├─ 修脆弱測試 + 測試 DB 隔離
          ├─ 真實環境驗證（174 passed / 0 failed）
          └─ ✅ 正式部署上線（89705ce）+ 服務重啟 + 三管線健康驗證
-Phase 3 ⏸️ 待辦       上帝模組拆分 · MoE 雙路由合併 · 每日備份/replica set · Dashboard SSO
+Phase 3 ⏸️ 待辦       上帝模組拆分 · MoE 雙路由合併 · 每日備份/replica set · ~~Dashboard SSO~~(暫緩)
 ```
 
 ## 🔖 關鍵里程碑（git commits）
@@ -89,7 +89,7 @@ Phase 3 ⏸️ 待辦       上帝模組拆分 · MoE 雙路由合併 · 每日�
 ## 📌 待辦與已知缺口（供 Phase 3 參考）
 - **Phase 2 續批**：高頻集合（`stock_price` 339 處…）全樹採用 `COLL_*`；37 處參數驅動 `MongoClient` 收斂到 repository 唯一入口。
 - **備份頻率**：目前每週備份 → 建議每日 mongodump 或 replica set。
-- **Dashboard 曝險**：8501 綁 `0.0.0.0`，建議加反向代理/SSO。
+- ~~**Dashboard 曝險**：8501 綁 `0.0.0.0`，建議加反向代理/SSO。~~ → **暫緩（目前個人單機使用，無對外曝險需求；未來多人/對外曝險時再處理）**
 - **上帝模組**：strategy/senvision/downloaders/analysis 4000+ 行待拆薄殼。
 - **pre-existing**：`pyparsing` 版本相容（部署環境已 OK，本機需 upgrade）。
 
