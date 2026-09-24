@@ -65,8 +65,15 @@
 # 每週日凌晨 3:00 清理超過 30 天的日誌檔
 0 3 * * 0 find /home/mdsadmin/Stock/tw-stock-analysis/logs -name "*.log" -mtime +30 -delete
 
-# 每月 1 號凌晨 4:00 備份 MongoDB 資料庫
-0 4 1 * * cd /home/mdsadmin/Stock/tw-stock-analysis && ./backup_mongodb.sh >> logs/backup.log 2>&1
+# 每日凌晨 4:00 備份 MongoDB 資料庫（tw_stock_analysis + stockrag），保留 14 天
+# 註：資料健康檢查(scripts/data_health_check.py)以 48h 為門檻，故備份採每日一次。
+0 4 * * * cd /home/mdsadmin/Stock/tw-stock-analysis && ./backup_mongodb.sh --keep-days 14 >> logs/backup.log 2>&1
+
+# 每日凌晨 4:40 資料健康檢查（新鮮度+覆蓋率+備份新鮮度）→ 有問題寫 schedule_alerts（Dashboard 可見）
+40 4 * * * cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/data_health_check.py >> logs/data_health.log 2>&1
+
+# 每週日凌晨 5:00 備份可還原性驗證（還原到暫存 DB 比對筆數 → 確認備份真能救回來）
+0 5 * * 0 cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/verify_backup.py >> logs/verify_backup.log 2>&1
 
 # ============================================================================
 # 查看 Crontab 狀態

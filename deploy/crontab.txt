@@ -21,7 +21,7 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 0 3 23 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/quarterly_earnings_sync.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quarterly_earnings_sync.log 2>&1  # quarterly_earnings_sync
 0 3 8 * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/quarterly_earnings_sync.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quarterly_earnings_sync.log 2>&1  # quarterly_earnings_sync
 0 3 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/log_rotation.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_log_cleanup.log 2>&1  # weekly_log_cleanup
-0 1 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash backup_mongodb.sh --keep-days 14 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_mongodb_backup.log 2>&1  # weekly_mongodb_backup
+0 1 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash backup_mongodb.sh --keep-days 14 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_mongodb_backup.log 2>&1  # daily_mongodb_backup
 0 2 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/sync_shares_openapi.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_outstanding_shares.log 2>&1  # weekly_outstanding_shares
 0 8 * * 6  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/weekly_team_verify.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_team_verify.log 2>&1  # weekly_team_verify
 0 21 * * 5  cd /home/mdsadmin/Stock/tw-stock-analysis && /bin/bash scripts/weekly_team_full.sh >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_team_full.log 2>&1  # weekly_team_full
