@@ -22,6 +22,12 @@ def _fmt_pct(v):
     return f"{v:.1%}" if isinstance(v, (int, float)) else "N/A"
 
 
+def _pass_rate(counts: dict):
+    """prod_data 通過率 = passed /（passed+failed+error）;分母 0 回 None（不列入趨勢）。"""
+    denom = counts.get("passed", 0) + counts.get("failed", 0) + counts.get("error", 0)
+    return counts.get("passed", 0) / denom if denom else None
+
+
 def show():
     st.header("🩺 系統健康")
     db = get_db()
@@ -127,3 +133,41 @@ def show():
             st.warning(a)
         ts = dh.get("ts")
         st.caption(f"更新：{ts.strftime('%Y-%m-%d %H:%M') if isinstance(ts, datetime) else ts}")
+
+    st.divider()
+
+    # ── prod_data 真實庫驗證（世界事實不變式）─────────────────────────
+    st.subheader("🧪 prod_data 真實庫驗證（世界事實不變式）")
+    st.caption("prod_data 測試不進 CI（合成種子造假違 ADR-0011）；由 "
+               "`scripts/prod_data_health_report.py` 在 .166 排程對 live 庫定期驗證。")
+    pd_coll = db["prod_data_health_history"]
+    pdh = pd_coll.find_one({}, sort=[("ts", -1)])
+    if not pdh:
+        st.info("尚無 prod_data_health_history 資料。請先跑 "
+                "`scripts/prod_data_health_report.py --alert`（建議每日排程）。")
+    else:
+        c = pdh.get("counts", {})
+        ok = pdh.get("ok")
+        st.metric("整體狀態", "✅ 全通過" if ok else
+                  f"🔴 {c.get('failed', 0)} failed / {c.get('error', 0)} error")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("total", c.get("total", 0))
+        m2.metric("passed", c.get("passed", 0))
+        m3.metric("failed+error", c.get("failed", 0) + c.get("error", 0))
+        m4.metric("skipped", c.get("skipped", 0))
+        for f in pdh.get("failures", []):
+            st.warning(f"🔴 {f.get('test', '?')}：{f.get('detail', '')}")
+        ts = pdh.get("ts")
+        st.caption(f"标記：{pdh.get('marker', 'prod_data')}　·　更新："
+                   f"{ts.strftime('%Y-%m-%d %H:%M') if isinstance(ts, datetime) else ts}")
+
+        # 趨勢：通過率（passed /（passed+failed+error））
+        hist = list(pd_coll.find({}, {"ts": 1, "counts": 1}).sort("ts", 1).limit(180))
+        series = [(d["ts"], _pass_rate(d.get("counts", {}))) for d in hist
+                  if isinstance(d.get("ts"), datetime) and _pass_rate(d.get("counts", {})) is not None]
+        if len(series) >= 2:
+            st.markdown("**通過率趨勢**")
+            st.line_chart({"通過率": [v for _, v in series]})
+            st.caption(f"{series[0][0]:%Y-%m-%d} ～ {series[-1][0]:%Y-%m-%d}（{len(series)} 點）")
+        else:
+            st.info("通過率歷史不足 2 點；排程累積後即顯現趨勢。")
