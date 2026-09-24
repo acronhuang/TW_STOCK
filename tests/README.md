@@ -5,8 +5,8 @@
 | 層 | marker | 數量 | 需要 MongoDB? | 在哪跑 |
 |---|---|:--:|---|---|
 | 純邏輯 | `unit` | 159 | ❌ 完全免 DB | `unit-gate`(無 mongo service)+ `test` |
-| 整合(可種子) | `needs_data` | 26 | ✅ 需最小種子資料 | `test`(seed 後執行;無種子→自動 skip) |
-| 世界事實/深資料 | `prod_data` | 34 | ✅ 需 live 正式庫 | **不進 CI**,由 .166 排程/手動驗證 |
+| 整合(可種子) | `needs_data` | 28 | ✅ 需最小種子資料 | `test`(seed 後執行;無種子→自動 skip) |
+| 世界事實/深資料 | `prod_data` | 33 | ✅ 需 live 正式庫 | **不進 CI**,由 .166 排程/手動驗證 |
 
 > `pytest.ini` 已設 `--strict-markers`:用未註冊的 marker 會直接報錯,防止誤標。
 
@@ -21,7 +21,7 @@
 
 ### 2. `needs_data` — 整合邏輯,可用最小種子驗證
 查 `stock_price` / `stock_factors` 等,但**邏輯類、可用合成資料滿足**(如報酬/beta/週期/風險指標)。
-- 例:`test_risk_manager`、`test_trading_rules`(StopLoss/MarketCycle/InstitutionPhase/BuyThreeQuestions)、`test_trading_rules_steps`、`test_valuation`(DCF/DDM/PE Band,守衛式斷言)、`test_valuation_steps`。
+- 例:`test_risk_manager`、`test_trading_rules`(StopLoss/MarketCycle/InstitutionPhase/BuyThreeQuestions)、`test_trading_rules_steps`、`test_valuation`(DCF/DDM/PE Band,守衛式斷言)、`test_valuation_steps`、`test_ranking_steps`(筆數=limit + 分數遞減 + PE 範圍不變式)。
 - 機制:`conftest.py` 的 `_guard_needs_data` autouse fixture 檢查 canary(`stock_price` 是否有 `2330`):
   - **有種子** → 正常執行並驗證。
   - **無種子/DB 不可達** → 自動 `skip`(不 fail)。canary 為懶查詢,**不會拖慢純 unit 測試**。
@@ -37,11 +37,11 @@
 
 `scripts/seed_test_data.py` 灌入**最小**資料集:
 
-- `stock_price`:`2330 / TAIEX / 0050 / 2317 / 0056 / 2603`,各 120 交易日
+- `stock_price`:10 檔非-ETF 個股(`2330/2317/2454/2603/2412/2308/2881/2882/1301/3008`)+ `TAIEX/0050/0056`,各 120 交易日
   - OHLC 用 **Decimal128**(對齊正式 schema,消費端 `.to_decimal()`)
   - 個股 = 大盤 × 1.0 + 雜訊 → **beta ≈ 1**(落在測試要求的 0.3–3.0)
   - `|日報酬| < 20%`(避開分割/爛價過濾)
-- `stock_factors`:5 檔各一筆,**含 `StockRanker.FIELDS` 全部欄位**(`pe_ratio/pb_ratio/dividend_yield/roe/operating_margin/rsi_14/return_1m/volatility_30d`),否則建構期會 `ValueError`。另灌 `2330` 近 36 個月 PE 歷史(讓 PE Band ≥20 筆)。
+- `stock_factors`:12 檔各一筆,**含 `StockRanker.FIELDS` 全部欄位**(`pe_ratio/pb_ratio/dividend_yield/roe/operating_margin/rsi_14/return_1m/volatility_30d`),否則建構期會 `ValueError`。另灌 `2330` 近 36 個月 PE 歷史(讓 PE Band ≥20 筆)。2330 本位 + 其餘 9 檔 → `StockRanker.rank(limit=10)` 能滿 10 筆。
 - `quarterly_earnings`:`2330` 8 季正淨利/營收/EPS → DCF `fair_value>0`、`_get_trailing_eps` 可算。
 - `taiwan_stock_info`:`2330` 流通股數 → DCF `_get_shares_outstanding`。
 - `dividend_detail`:`2330 / 0056` 各 4 年正現金股利 → DDM `fair_value>0`。

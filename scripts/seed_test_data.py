@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Phase A — 最小測試種子資料（僅供 CI / 空測試庫）。
 
-灌入 price-logic 整合測試所需的最小資料集：
-  - stock_price：2330 / TAIEX / 0050（各 120 個交易日，2330 與 TAIEX/0050 相關 → beta≈1）
-  - stock_factors：2330 最新一筆（return_1m / rsi_14 / pe_ratio …）
+灌入 price-logic 整合測試所需的最小資料集:
+  - stock_price:10 檔非-ETF 個股 + TAIEX + 0050(beta 基準) + 0056(ETF),各 120 個交易日
+  - stock_factors:各檔最新一筆(return_1m / rsi_14 / pe_ratio …)+ 2330 PE 歷史
 
-涵蓋（needs_data）：test_risk_manager、test_trading_rules（4 類）、
-test_trading_rules_steps、test_bdd_macro。
+涵蓋(needs_data):test_risk_manager、test_trading_rules(4 類)、
+test_trading_rules_steps、test_bdd_macro、test_valuation(6)、test_ranking_steps(2)。
 
 ⚠️ 安全護欄：若 stock_price 已有 > 50 個不同 symbol（疑似正式庫），直接拒絕，
    避免誤刪/污染真實資料。CI 空庫（0 symbol）才會執行。
@@ -28,8 +28,18 @@ from bson.decimal128 import Decimal128
 def _dec(x: float) -> Decimal128:
     return Decimal128(f"{x:.4f}")
 
-SEED_SYMBOLS = ("2330", "TAIEX", "0050", "2317", "0056", "2603")
-BASES = {"2330": 900.0, "TAIEX": 23000.0, "0050": 190.0, "2317": 210.0, "0056": 38.0, "2603": 210.0}
+# 10 檔非-ETF 4 位數個股(供 StockRanker.rank需 exclude_etf 後≥檔)
+#   + 大盤 TAIEX / 基準 0050(beta) / ETF 0056(DDM 測試)。
+SEED_SYMBOLS = (
+    "2330", "2317", "2454", "2603", "2412",
+    "2308", "2881", "2882", "1301", "3008",
+    "TAIEX", "0050", "0056",
+)
+BASES = {
+    "2330": 900.0, "2317": 210.0, "2454": 1200.0, "2603": 210.0, "2412": 125.0,
+    "2308": 480.0, "2881": 90.0, "2882": 42.0, "1301": 95.0, "3008": 2500.0,
+    "TAIEX": 23000.0, "0050": 190.0, "0056": 38.0,
+}
 N_DAYS = 120
 PROD_GUARD_MAX_SYMBOLS = 50
 
