@@ -87,3 +87,7 @@ pytest -m prod_data            # 需連 live 正式庫才有意義
     ├─ 合成最小資料就能驗證邏輯? ──→ @pytest.mark.needs_data(記得種子能覆蓋所需 symbol/欄位)
     └─ 斷言真實世界事實/需大規模真資料? → @pytest.mark.prod_data(不進 CI 閘)
 ```
+
+> **必須擇一標記**:CI `unit-gate` 的 **tier-marker gate**(`scripts/check_tier_markers.py`)
+> 會擋下任何未標 `unit/needs_data/prod_data` 的測試(以 pytest 自身解析 module/class/function
+> 三層 marker)。本機可先跑 `python scripts/check_tier_markers.py` 自查。
