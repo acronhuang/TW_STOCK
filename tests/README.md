@@ -5,8 +5,8 @@
 | 層 | marker | 數量 | 需要 MongoDB? | 在哪跑 |
 |---|---|:--:|---|---|
 | 純邏輯 | `unit` | 159 | ❌ 完全免 DB | `unit-gate`(無 mongo service)+ `test` |
-| 整合(可種子) | `needs_data` | 28 | ✅ 需最小種子資料 | `test`(seed 後執行;無種子→自動 skip) |
-| 世界事實/深資料 | `prod_data` | 33 | ✅ 需 live 正式庫 | **不進 CI**,由 .166 排程/手動驗證 |
+| 整合(可種子) | `needs_data` | 33 | ✅ 需最小種子資料 | `test`(seed 後執行;無種子→自動 skip) |
+| 世界事實/深資料 | `prod_data` | 27 | ✅ 需 live 正式庫 | **不進 CI**,由 .166 排程/手動驗證 |
 
 > `pytest.ini` 已設 `--strict-markers`:用未註冊的 marker 會直接報錯,防止誤標。
 
