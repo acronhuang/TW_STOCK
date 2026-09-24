@@ -182,11 +182,38 @@ def seed(db) -> None:
         })
     db["stock_factors"].insert_many(pe_hist)
 
+    # macro_indicators + institutional_flow → MacroAnalyzer.overview()/market_signal() 可算
+    # → 支援 test_bdd_macro、test_cli::test_macro_command(均守衛式/不變式斷言:
+    #   score∈[-100,100]、verdict 含 偏多/偏空/中性、returncode 0)。
+    # doc schema:{indicator, date, data:{...}, updated_at}(updated_at=now → _is_fresh 命中。
+    db["macro_indicators"].delete_many({"indicator": {"$in": [
+        "money_supply", "interest_rate", "cpi", "exchange_rate"]}})
+    today_str = f"{dates[-1]:%Y-%m-%d}"
+    macro_docs = [
+        {"indicator": "money_supply", "data": {"m1b_yoy": 6.5, "m2_yoy": 5.0}},   # M1B>M2 → bullish
+        {"indicator": "interest_rate", "data": {"discount_rate": 1.875}},           # <2% → bullish
+        {"indicator": "cpi", "data": {"yoy": 2.2}},                                 # 1~3% → 溫和 bullish
+        {"indicator": "exchange_rate", "data": {"usd_twd": 31.5, "change_1m": -0.3}},  # |0.3|<0.5 → 無訊號
+    ]
+    for d in macro_docs:
+        d["date"] = today_str
+        d["updated_at"] = datetime.now()
+    db["macro_indicators"].insert_many(macro_docs)
+
+    # institutional_flow(近 5 日外資買超 → _get_taiex_summary foreign_net_5d>0 → bullish)
+    db["institutional_flow"].delete_many({"symbol": "2330"})
+    inst_docs = [{
+        "symbol": "2330", "date": d,
+        "foreign_net": 1_500_000_000, "trust_net": 200_000_000, "total_net": 1_700_000_000,
+    } for d in dates[-5:]]
+    db["institutional_flow"].insert_many(inst_docs)
+
     print(
         f"✅ 已灌入種子:stock_price {len(docs)} 筆({', '.join(SEED_SYMBOLS)})"
         f"、stock_factors {len(fdocs)}+{len(pe_hist)} 筆(含 2330 PE 歷史)"
         f"、quarterly_earnings 2330 x{len(qdocs)}、taiwan_stock_info 2330 x1"
         f"、dividend_detail x{len(ddocs)}(2330/0056)"
+        f"、macro_indicators x{len(macro_docs)}、institutional_flow 2330 x{len(inst_docs)}"
         f"({len(dates)} 個交易日 {dates[0]:%Y-%m-%d}→{dates[-1]:%Y-%m-%d})"
     )
 

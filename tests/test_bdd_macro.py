@@ -2,9 +2,11 @@
 import pytest
 from pytest_bdd import scenarios, when, then
 
-# 世界事實/深資料（總經評分/外資動向需 macro_indicators + institutional_flow 特定結構），
-# 合成種子脆弱 → live-only（prod_data）；市場週期邏輯已由 test_trading_rules_steps 涵蓋。
-pytestmark = pytest.mark.prod_data
+# 守衛式/不變式斷言:market_signal() 全程防禦(空值→score=0),斷言僅驗
+# score∈[-100,100]、verdict 詞彙、cycle enum、suggested_position —— 結構而非世界事實。
+# 種子(macro_indicators + institutional_flow,見 scripts/seed_test_data.py)後可靠執行。
+# 市場週期邏輯已由 test_trading_rules_steps 涵蓋。
+pytestmark = [pytest.mark.integration, pytest.mark.needs_data]
 
 scenarios('features/macro_analysis.feature')
 
