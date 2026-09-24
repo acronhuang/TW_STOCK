@@ -1,0 +1,15 @@
+flowchart TD
+  U[Streamlit rag_page.show] --> LS[本機向量檢索 stockrag_search]
+  U -->|needs_web_supplement<0.60| GN[google_news_search RSS]
+  U -->|國際分析開關| SM[search_news_by_mode 多地區]
+  SM --> GN
+  GN -->|articles| BP[build_prompt 受限提示]
+  BP --> GH{{assert_allowed_host 白名單}}
+  GH --> OL[generate_analysis Ollama qwen2.5-14b RAG_OLLAMA_URL]
+  OL --> EG[[EvidenceGuard 輸出後過濾]]
+  EG --> V[UI sanitize_markdown_text + safe_external_url]
+  GN -.失效.-> FO[fail-open 回空 本機結果不受影響]
+  subgraph pending[建議補件]
+    NC[NewsCache TTL] -.-> GN
+    RL[RateLimiter 退避] -.-> GN
+  end

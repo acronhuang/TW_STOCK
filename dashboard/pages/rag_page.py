@@ -9,11 +9,14 @@
    關掉衰減就會拿到舊的錯誤答案 —— 側邊欄可切換兩種排序自行比對。
 """
 from datetime import datetime
+from pathlib import Path
 
 import streamlit as st
 
+import os
 import sys
-sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis/scripts")
+# CWE-798: 以 Path(__file__) 相對推導 scripts 目錄（可跨 OS，不硬編碼絕對路徑）；RAG_SCRIPTS_DIR env 可覆寫。
+sys.path.insert(0, os.getenv("RAG_SCRIPTS_DIR", str(Path(__file__).resolve().parents[2] / "scripts")))
 from stockrag_search import load, search      # noqa: E402
 from stockrag_answer import generate, MODEL   # noqa: E402
 from src.analysis.international_news import generate_analysis
