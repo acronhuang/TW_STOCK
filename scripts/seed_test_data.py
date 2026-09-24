@@ -139,14 +139,45 @@ def seed(db) -> None:
             })
     db["quarterly_earnings"].insert_many(qdocs)
 
-    # taiwan_stock_info（2330 流通在外股數，千股）→ DCF _get_shares_outstanding
+    # taiwan_stock_info（2330 流通在外股數,千股)→ DCF _get_shares_outstanding
     db["taiwan_stock_info"].delete_many({"stock_id": "2330"})
     db["taiwan_stock_info"].insert_one({"stock_id": "2330", "outstanding_shares": 25_930_000})
 
+    # dividend_detail（2330 / 0056:4 個完整年,正現金股利)→ DDM fair_value>0
+    # → 支援 test_valuation::TestDDM(test_ddm_returns_fair_value / test_ddm_etf)。
+    #   守衛式斷言:資料不足時模型回 reason dict,種子後才真走 fair_value 分支。
+    DIV_CASH = {"2330": (10.0, 10.5, 11.0, 11.5), "0056": (1.5, 1.6, 1.75, 1.9)}
+    ddocs = []
+    for sym, cashes in DIV_CASH.items():
+        db["dividend_detail"].delete_many({"stock_id": sym})
+        for offset, cash in enumerate(reversed(cashes)):  # 最近年在前
+            yr = now_year - 1 - offset
+            ddocs.append({
+                "stock_id": sym,
+                "date": f"{yr}-06-15",
+                "cash_earnings_distribution": cash,
+                "stock_earnings_distribution": 0.0,
+            })
+    db["dividend_detail"].insert_many(ddocs)
+
+    # stock_factors PE 歷史（2330:近 36 個月 pe_ratio ∈ (11,23)）→ PE Band 需 ≥20 筆
+    # → 支援 test_valuation::TestPEBand::test_pe_band_analysis(否則回『PE 歷史資料不足』)。
+    #   皆早於 dates[-1],故 StockRanker 取用的『最新完整 factor』不受影響。
+    pe_hist = []
+    for m in range(1, 37):
+        pe_hist.append({
+            "symbol": "2330",
+            "date": dates[-1] - timedelta(days=30 * m),
+            "pe_ratio": round(rng.uniform(11.0, 23.0), 2),
+        })
+    db["stock_factors"].insert_many(pe_hist)
+
     print(
-        f"✅ 已灌入種子：stock_price {len(docs)} 筆（{', '.join(SEED_SYMBOLS)}）"
-        f"、stock_factors {len(fdocs)} 筆、quarterly_earnings 2330 x{len(qdocs)}、taiwan_stock_info 2330 x1"
-        f"（{len(dates)} 個交易日 {dates[0]:%Y-%m-%d}→{dates[-1]:%Y-%m-%d}）"
+        f"✅ 已灌入種子:stock_price {len(docs)} 筆({', '.join(SEED_SYMBOLS)})"
+        f"、stock_factors {len(fdocs)}+{len(pe_hist)} 筆(含 2330 PE 歷史)"
+        f"、quarterly_earnings 2330 x{len(qdocs)}、taiwan_stock_info 2330 x1"
+        f"、dividend_detail x{len(ddocs)}(2330/0056)"
+        f"({len(dates)} 個交易日 {dates[0]:%Y-%m-%d}→{dates[-1]:%Y-%m-%d})"
     )
 
 

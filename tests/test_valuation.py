@@ -2,8 +2,10 @@
 import pytest
 from src.analysis.valuation_models import ValuationAnalyzer
 
-# 世界事實/深財報模型（DCF/DDM/PE band 需真實財報與多年股利），合成種子難以可靠 → live-only。
-pytestmark = pytest.mark.prod_data
+# 守衛式斷言(fair_value 均 if 守衛;models_used>=1 由 DCF 保證;9999→None 為無種子事實)
+# → 補齊種子(quarterly_earnings + taiwan_stock_info + dividend_detail + PE 歷史)後可靠執行。
+# 種子見 scripts/seed_test_data.py;比照 test_valuation_steps 由 prod_data 回歸 needs_data。
+pytestmark = pytest.mark.needs_data
 
 
 @pytest.fixture(scope="module")
