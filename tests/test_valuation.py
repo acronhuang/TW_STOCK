@@ -2,8 +2,8 @@
 import pytest
 from src.analysis.valuation_models import ValuationAnalyzer
 
-# 資料驅動（查 2330 等價格/財報）；無種子資料時自動 skip。
-pytestmark = pytest.mark.needs_data
+# 世界事實/深財報模型（DCF/DDM/PE band 需真實財報與多年股利），合成種子難以可靠 → live-only。
+pytestmark = pytest.mark.prod_data
 
 
 @pytest.fixture(scope="module")

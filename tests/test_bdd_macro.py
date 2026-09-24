@@ -2,8 +2,9 @@
 import pytest
 from pytest_bdd import scenarios, when, then
 
-# 資料驅動（市場週期判斷需價格/指標）；無種子資料時自動 skip。
-pytestmark = pytest.mark.needs_data
+# 世界事實/深資料（總經評分/外資動向需 macro_indicators + institutional_flow 特定結構），
+# 合成種子脆弱 → live-only（prod_data）；市場週期邏輯已由 test_trading_rules_steps 涵蓋。
+pytestmark = pytest.mark.prod_data
 
 scenarios('features/macro_analysis.feature')
 

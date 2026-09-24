@@ -60,6 +60,12 @@ jobs:
           print(f'All {sum(1 for r,_,fs in os.walk(\"src\") for f in fs if f.endswith(\".py\"))} files OK')
           "
 
+      - name: Seed minimal test data (needs_data)
+        env:
+          MONGODB_URI: mongodb://localhost:27017
+          MONGODB_DATABASE: tw_stock_analysis
+        run: python scripts/seed_test_data.py
+
       - name: Run unit tests
         env:
           MONGODB_URI: mongodb://localhost:27017/tw_stock_analysis

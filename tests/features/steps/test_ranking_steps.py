@@ -1,7 +1,7 @@
 """BDD step implementations for stock_ranking.feature"""
 import pytest
 
-pytestmark = [pytest.mark.integration, pytest.mark.needs_data]
+pytestmark = [pytest.mark.integration, pytest.mark.prod_data]
 
 
 class TestStockRankingBDD:

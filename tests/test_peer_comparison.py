@@ -2,8 +2,8 @@
 import pytest
 from src.analysis.peer_comparison import PeerComparison
 
-# 資料驅動（查產業分類/同業股價）；無種子資料時自動 skip。
-pytestmark = pytest.mark.needs_data
+# 世界事實（斷言真實產業分類/同業數），合成種子無法滿足 → live-only（ADR-0011）。
+pytestmark = pytest.mark.prod_data
 
 
 @pytest.fixture(scope="module")
