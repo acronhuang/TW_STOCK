@@ -32,6 +32,10 @@ class _FakeDB:
     def __init__(self, docs):
         self.quarterly_earnings = _FakeColl(docs)
 
+    def __getitem__(self, name):
+        # COLL_* 重構後程式改用 db[COLL_X] 下標存取（非 db.attr），fake 需同步支援。
+        return getattr(self, name)
+
 
 def _analyzer_with(docs):
     """不呼叫 __init__（避免連 Mongo），直接注入 fake db。"""

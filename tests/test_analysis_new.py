@@ -83,6 +83,10 @@ class _FakeDB2:
         # 這個正常情境變成程式崩潰。
         self.stock_price = _PriceColl(price_series or {})
 
+    def __getitem__(self, name):
+        # COLL_* 重構後程式改用 db[COLL_X] 下標存取，fake 需同步支援。
+        return getattr(self, name)
+
 
 # ── 輕量 stub db（mimic pymongo find(filter, projection)）──
 class _FakeColl:
