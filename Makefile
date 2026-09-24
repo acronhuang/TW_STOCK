@@ -5,7 +5,7 @@ PYTHON  ?= $(VENV)/bin/python3
 PIP     ?= $(VENV)/bin/pip
 
 
-.PHONY: help install test lint api scan recommend team backup clean
+.PHONY: help install test test-unit lint api scan recommend team backup clean
 
 help:  ## 顯示所有指令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -15,6 +15,9 @@ install:  ## 安裝依賴
 
 test:  ## 跑 pytest
 	cd $(PROJECT) && $(PYTHON) -m pytest tests/ -v --tb=short
+
+test-unit:  ## 跑 DB-free unit 閘門（無需 MongoDB，幾秒內拓純邏輯回歸）
+	cd $(PROJECT) && $(PYTHON) -m pytest -m unit --tb=short -p no:cacheprovider
 
 lint:  ## 程式碼檢查
 	cd $(PROJECT) && $(PYTHON) -m ruff check src/

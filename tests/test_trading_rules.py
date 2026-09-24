@@ -2,8 +2,9 @@
 import pytest
 from src.strategy.trading_rules import TradingRules
 
-# ADR-0011 分類（2026-08-16）：純函式（TradingRules），不連 DB
-pytestmark = pytest.mark.unit
+# 分類修正：TradingRules 資料驅動法則會查 MongoDB（check_stop_loss / market_cycle /
+# detect_institution_phase / buy_three_questions），僅 position_334 為純函式。
+# 純函式 → unit；查 DB → integration（避免污染免-DB 的 unit gate）。
 
 
 @pytest.fixture(scope="module")
@@ -11,6 +12,7 @@ def rules():
     return TradingRules()
 
 
+@pytest.mark.unit
 class TestPositionSizing:
     def test_334_normal(self, rules):
         r = rules.position_334(1_000_000)
@@ -28,6 +30,7 @@ class TestPositionSizing:
         assert r['core_pct'] == 40
 
 
+@pytest.mark.integration
 class TestStopLoss:
     def test_stop_loss_returns_action(self, rules):
         r = rules.check_stop_loss('2330', 1000)
@@ -40,6 +43,7 @@ class TestStopLoss:
             assert r['action'] != '止損出場'
 
 
+@pytest.mark.integration
 class TestBuyThreeQuestions:
     def test_three_questions_format(self, rules):
         r = rules.buy_three_questions('2330')
@@ -49,6 +53,7 @@ class TestBuyThreeQuestions:
         assert 'pass' in r['q1_why']
 
 
+@pytest.mark.integration
 class TestMarketCycle:
     def test_cycle_valid(self, rules):
         r = rules.market_cycle()
@@ -59,6 +64,7 @@ class TestMarketCycle:
         assert 'suggested_position' in r
 
 
+@pytest.mark.integration
 class TestInstitutionPhase:
     def test_phase_valid(self, rules):
         r = rules.detect_institution_phase('2603')

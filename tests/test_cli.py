@@ -8,8 +8,8 @@ import sys
 # CWE-798: 以 repo 根目錄相對推導 cwd（跨 OS，不硬編碼 /home/mdsadmin）。
 _REPO_ROOT = str(Path(__file__).resolve().parents[1])
 
-# ADR-0011 分類（2026-08-16）：純 CLI 參數解析
-pytestmark = pytest.mark.unit
+# ADR-0011 分類修正：以 subprocess 執行 query.py，會連 MongoDB → integration（非 DB-free unit）。
+pytestmark = pytest.mark.integration
 
 
 class TestCLIQuery:
