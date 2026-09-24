@@ -113,6 +113,7 @@ LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0'))  # 0=greedy 完全可
 LLM_SEED = int(os.getenv('LLM_SEED', '42'))
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')       # 主力 .28
 OLLAMA_URL_27 = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議 .27
+OLLAMA_ALTOS_URL = os.getenv('OLLAMA_ALTOS_URL', '').rstrip('/')
 
 # 模型 → 主機：qwen2.5-14b/llama3.1 在 .27;qwen3/gemma2 在 .28。未列者走 OLLAMA_URL(.28)。
 MODEL_TO_URL = {
@@ -120,6 +121,8 @@ MODEL_TO_URL = {
     'gemma2:9b':             OLLAMA_URL,
     'llama3.1:8b':           OLLAMA_URL_27,
 }
+if OLLAMA_ALTOS_URL:
+    MODEL_TO_URL['qwen3:30b'] = OLLAMA_ALTOS_URL
 
 
 def ask_role(role: str,

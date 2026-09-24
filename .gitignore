@@ -72,3 +72,5 @@ ic_verdict.txt
 download_status.legacy-*.json
 # 本機備份目錄
 mongodb_backups/
+# 執行期狀態檔(勿入庫)
+download_status.json

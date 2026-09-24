@@ -23,7 +23,7 @@ from pymongo import MongoClient
 sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis/scripts")
 sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis")
 
-OLLAMA = "http://172.16.9.28:11434"
+OLLAMA = os.getenv("OLLAMA_URL", "http://172.16.9.28:11434")
 MODEL = "qwen2.5-14b:latest"
 ROOT = "/home/mdsadmin/Stock/tw-stock-analysis"
 
