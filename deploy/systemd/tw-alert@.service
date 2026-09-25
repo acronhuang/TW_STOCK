@@ -1,0 +1,7 @@
+[Unit]
+Description=tw-stock 排程失敗即時告警 for %i
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/mdsadmin/Stock/tw-stock-analysis
+ExecStart=/home/mdsadmin/Stock/.venv/bin/python3 scripts/systemd_alert.py %i

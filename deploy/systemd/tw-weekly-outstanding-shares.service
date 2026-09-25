@@ -2,6 +2,7 @@
 Description=tw-stock weekly_outstanding_shares（cron→systemd 遷移,Persistent 補跑）
 After=network-online.target mongod.service
 Wants=network-online.target
+OnFailure=tw-alert@%n.service
 
 [Service]
 Type=oneshot

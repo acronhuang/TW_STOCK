@@ -49,6 +49,8 @@ def parse():
     jobs: dict[str, dict] = {}
     for ln in CRONTAB.read_text(encoding="utf-8").splitlines():
         ln = ln.strip()
+        # 還原被 cutover 註解的遷移行,當作來源(即便已切 systemd 仍能重生)
+        ln = re.sub(r"^#\[migrated→systemd\]\s*", "", ln)
         if not ln or ln.startswith("#") or "=" in (ln.split(" ", 1)[0]):
             continue
         m = re.match(r"^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)", ln)
@@ -72,12 +74,24 @@ SERVICE_TMPL = """\
 Description=tw-stock {name}（cron→systemd 遷移,Persistent 補跑）
 After=network-online.target mongod.service
 Wants=network-online.target
+OnFailure=tw-alert@%n.service
 
 [Service]
 Type=oneshot
 WorkingDirectory=/home/mdsadmin/Stock/tw-stock-analysis
 # 保留原 cron 指令(含 >> logs 重導),行為等價
 ExecStart=/usr/bin/bash -c {cmd_quoted}
+"""
+
+# 失敗告警範本（OnFailure 觸發;%i = 失敗單元名）—— 非排程,無 timer。
+ALERT_TMPL = """\
+[Unit]
+Description=tw-stock 排程失敗即時告警 for %i
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/mdsadmin/Stock/tw-stock-analysis
+ExecStart=/home/mdsadmin/Stock/.venv/bin/python3 scripts/systemd_alert.py %i
 """
 
 TIMER_TMPL = """\
@@ -101,6 +115,8 @@ def sh_squote(s: str) -> str:
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     jobs = parse()
+    # 失敗告警範本（所有單元共用的 OnFailure 目標）
+    (OUT / "tw-alert@.service").write_text(ALERT_TMPL, encoding="utf-8")
     names = []
     for name, j in sorted(jobs.items()):
         unit = f"tw-{name.replace('_', '-')}"
