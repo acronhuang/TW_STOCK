@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock macro_signal_reminder
+
+[Timer]
+OnCalendar=*-*-27 18:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

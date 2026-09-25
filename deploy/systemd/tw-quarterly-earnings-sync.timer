@@ -1,0 +1,15 @@
+[Unit]
+Description=Timer: tw-stock quarterly_earnings_sync
+
+[Timer]
+OnCalendar=*-*-1 03:00:00
+OnCalendar=*-*-15 03:00:00
+OnCalendar=*-*-16 03:00:00
+OnCalendar=*-*-22 03:00:00
+OnCalendar=*-*-23 03:00:00
+OnCalendar=*-*-8 03:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

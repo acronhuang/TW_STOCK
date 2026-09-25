@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock weekly_outstanding_shares
+
+[Timer]
+OnCalendar=Sun *-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock requirement_weekly_summary
+
+[Timer]
+OnCalendar=Mon *-*-* 09:13:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

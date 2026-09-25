@@ -1,0 +1,10 @@
+[Unit]
+Description=tw-stock weekly_media_news（cron→systemd 遷移,Persistent 補跑）
+After=network-online.target mongod.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/mdsadmin/Stock/tw-stock-analysis
+# 保留原 cron 指令(含 >> logs 重導),行為等價
+ExecStart=/usr/bin/bash -c '/home/mdsadmin/Stock/.venv/bin/python3 scripts/media_news_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_weekly_media_news.log 2>&1'

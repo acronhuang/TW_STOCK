@@ -1,0 +1,10 @@
+[Unit]
+Description=tw-stock tdcc_shareholding（cron→systemd 遷移,Persistent 補跑）
+After=network-online.target mongod.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/mdsadmin/Stock/tw-stock-analysis
+# 保留原 cron 指令(含 >> logs 重導),行為等價
+ExecStart=/usr/bin/bash -c '/home/mdsadmin/Stock/.venv/bin/python3 scripts/tdcc_shareholding_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_tdcc_shareholding.log 2>&1'

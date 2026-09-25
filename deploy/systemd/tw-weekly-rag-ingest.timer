@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock weekly_rag_ingest
+
+[Timer]
+OnCalendar=Thu *-*-* 05:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

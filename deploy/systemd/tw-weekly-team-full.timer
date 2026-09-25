@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock weekly_team_full
+
+[Timer]
+OnCalendar=Fri *-*-* 21:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

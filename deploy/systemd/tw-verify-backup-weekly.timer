@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock verify_backup_weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

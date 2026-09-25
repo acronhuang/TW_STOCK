@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock monthly_verdict_sli
+
+[Timer]
+OnCalendar=*-*-1 06:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

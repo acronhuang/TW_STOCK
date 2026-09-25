@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock data_health_weekly_finmind
+
+[Timer]
+OnCalendar=Sat *-*-* 09:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock weekly_team_verify
+
+[Timer]
+OnCalendar=Sat *-*-* 08:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

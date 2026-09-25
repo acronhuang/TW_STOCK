@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: tw-stock foreign_shareholding_weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
