@@ -484,16 +484,33 @@ def run_one(window, a):
         DB.verdict_performance.insert_one(dict(snapshot))
         print("[ok] 已寫 verdict_performance 快照")
 
-    if a.alert and qual_pass is False and req:
+    if a.alert and req and qual_pass is not None:
         DB.schedule_alerts.create_index([('ts', -1)])
-        DB.schedule_alerts.insert_one({
-            'ts': datetime.datetime.now(), 'level': 'warning', 'source': 'verdict_sli',
-            'requirement': req,
-            'message': f"⚠️ {req} 未達標(前瞻 {window} 日): 買進超額命中 "
-                       f"{b['hit']*100:.1f}%(需≥{QUAL_HIT*100:.0f}%) 均超額 "
-                       f"{b['mean_excess']*100:+.2f}%(需≥{thr*100:.2f}%), N={b['n']}",
-            'resolved': False})
-        print(f"[alert] 已寫 schedule_alerts（{req}）")
+        if qual_pass is False:
+            # 24h 去重(以 requirement 區分 QUAL-001/002)——避免每日重複塞爆佇列
+            since = datetime.datetime.now() - datetime.timedelta(hours=24)
+            dup = DB.schedule_alerts.find_one({
+                'source': 'verdict_sli', 'requirement': req,
+                'resolved': {'$ne': True}, 'ts': {'$gte': since}})
+            if dup:
+                print(f"[alert] 24h 內已有 {req} 未解決告警,略過(去重)")
+            else:
+                DB.schedule_alerts.insert_one({
+                    'ts': datetime.datetime.now(), 'level': 'warning', 'source': 'verdict_sli',
+                    'requirement': req,
+                    'message': f"⚠️ {req} 未達標(前瞻 {window} 日): 買進超額命中 "
+                               f"{b['hit']*100:.1f}%(需≥{QUAL_HIT*100:.0f}%) 均超額 "
+                               f"{b['mean_excess']*100:+.2f}%(需≥{thr*100:.2f}%), N={b['n']}",
+                    'resolved': False})
+                print(f"[alert] 已寫 schedule_alerts（{req}）")
+        else:
+            # qual_pass is True → 回到門檻內,自動消解該 requirement 的既有告警
+            rr = DB.schedule_alerts.update_many(
+                {'source': 'verdict_sli', 'requirement': req, 'resolved': {'$ne': True}},
+                {'$set': {'resolved': True, 'resolved_at': datetime.datetime.now(),
+                          'resolved_reason': f'auto: {req} 回到門檻內(超額命中/均超額達標)'}})
+            if rr.modified_count:
+                print(f"[alert] {req} 已達標 → 自動消解 {rr.modified_count} 則舊告警")
 
     # 退化委員獨立告警 —— 與 NFR gate 分開,因為它是「委員會組成」的問題,
     # 不是「判斷準不準」的問題,兩者要能各自被看見(hermes3 就是被整體數字蓋過去的)
