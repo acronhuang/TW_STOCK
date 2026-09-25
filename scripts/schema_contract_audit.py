@@ -14,7 +14,7 @@
 """
 import sys
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pymongo import MongoClient
 
@@ -39,7 +39,10 @@ CONTRACTS = {
     "monthly_revenue": {"date_type": None, "id": ["symbol"], "num": ["revenue"], "check": "rev_batch"},
     "financial_statement_detail": {"date_type": "date", "id": ["stock_id"], "req": ["type", "value"]},
     "margin_purchase_short_sale": {"date_type": "date", "id": ["code"], "forbid": ["stock_id"]},
-    "team_analysis": {"date_type": "date", "id": ["symbol"], "coverage": ("final_verdict", 0.7)},
+    "team_analysis": {"date_type": "date", "id": ["symbol"], "coverage": ("final_verdict", 0.7),
+                      # 兩階段增量管線:phase1 寫 report、phase2 增量補 advisor/final_verdict。
+                      # 只量已沉澱(>36h)的世代,避免把當日 phase2 未完成誤判為契約違約。
+                      "coverage_min_age_hours": 36},
     "noticed_stocks": {"date_type": "date", "id": ["stock_id"], "enum": {"source": ["twse", "tpex"]}},
     "quarterly_earnings": {"date_type": None, "id": ["symbol"], "req": ["year", "season"]},
 }
@@ -48,10 +51,19 @@ CONTRACTS = {
 def latest_batch(col, spec):
     """取最新一批文件（date 表=最新日期整批；year_month 表=最新 year_month；否則最後寫入 N 筆）。"""
     if spec.get("date_type") == "date":
-        d = col.find_one({"date": {"$type": "date"}}, sort=[("date", -1)])
+        # 若設 coverage_min_age_hours:只量已沉澱(updated_at 足夠舊)的世代,
+        # 避免把別的增量管線當日未完成的 doc 誤判為覆蓋不足(假警)。
+        match = {"date": {"$type": "date"}}
+        min_age = spec.get("coverage_min_age_hours")
+        if min_age:
+            match["updated_at"] = {"$lt": datetime.now() - timedelta(hours=min_age)}
+        d = col.find_one(match, sort=[("date", -1)])
         if not d:
             return []
-        return list(col.find({"date": d["date"]}).limit(SAMPLE_CAP))
+        q = {"date": d["date"]}
+        if min_age:
+            q["updated_at"] = {"$lt": datetime.now() - timedelta(hours=min_age)}
+        return list(col.find(q).limit(SAMPLE_CAP))
     # year_month / year+season 類
     d = col.find_one(sort=[("_id", -1)])
     if d and "year_month" in d:
