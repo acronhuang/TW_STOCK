@@ -121,7 +121,10 @@ class DownloadCoordinator:
                 result = self.download_table(table_config, skip_existing)
                 results.append(result)
                 
-                if result['status'] == 'success':
+                if result['status'] in ('success', 'skipped', 'no_data'):
+                    # skipped=資料已最新、no_data=本期無新資料,皆非失敗;
+                    # 只有 'error'(例外/HTTP 錯誤)才是真失敗。修正前:資料已最新的表
+                    # (如 GoldPrice 每小時已無新資料)被誤計失敗 → 每小時觸發 scheduler 假警。
                     self.stats['completed_tables'] += 1
                 else:
                     self.stats['failed_tables'] += 1
@@ -530,7 +533,7 @@ class DownloadCoordinator:
                 t['name'] for t in get_tables_by_category(category)
             ]]
             if category_results:
-                success = len([r for r in category_results if r.get('status') == 'success'])
+                success = len([r for r in category_results if r.get('status') in ('success', 'skipped', 'no_data')])
                 total_records = sum(r.get('total_records', 0) for r in category_results)
                 self.logger.info(f"   {category}: {success}/{len(category_results)} ({total_records:,} 筆)")
         
