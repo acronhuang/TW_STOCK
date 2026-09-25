@@ -78,6 +78,11 @@ def main():
         msg = f"🏆 核心池{meta['n_core']}檔今日訊號" + chr(10) + chr(10).join(lines)
         try:
             db.schedule_alerts.create_index([("ts", -1)])
+            # 每日通知型:先消解同源既有未解決,只留今日最新一則(避免無限累積)
+            db.schedule_alerts.update_many(
+                {"source": "core_watchlist", "resolved": {"$ne": True}},
+                {"$set": {"resolved": True, "resolved_at": now,
+                          "resolved_reason": "auto: 每日通知,保留最新一則"}})
             db.schedule_alerts.insert_one({"ts": now, "level": "info", "source": "core_watchlist",
                                            "message": msg, "resolved": False})
             print("已寫 schedule_alerts(網頁🔔排程警報可查)")

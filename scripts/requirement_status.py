@@ -119,12 +119,18 @@ def alert_transition(req, prev_status, status, detail, now):
     arrow = f"{ICON.get(prev_status, '?')}{prev_status} → {ICON[status]}{status}"
     level = "info" if status == "pass" else "warning"
     DB.schedule_alerts.create_index([("ts", -1)])
+    # 轉為 pass:先消解該需求既有未解決告警(已不相關);本則為好消息直接標 resolved
+    if status == "pass":
+        DB.schedule_alerts.update_many(
+            {"source": "requirement_status", "requirement": req["id"], "resolved": {"$ne": True}},
+            {"$set": {"resolved": True, "resolved_at": now,
+                      "resolved_reason": f"auto: {req['id']} 回到 pass"}})
     DB.schedule_alerts.insert_one({
         "ts": now, "level": level, "source": "requirement_status",
         "requirement": req["id"],
         "message": f"{ICON[status]} {req['id']}（{req['name']}）狀態轉變：{arrow}。{detail}",
         "detail": {"requirement": req["id"], "from": prev_status, "to": status},
-        "resolved": False})
+        "resolved": status == "pass"})  # pass 是好消息,不佔未解決佇列
 
 
 def summary(now):
