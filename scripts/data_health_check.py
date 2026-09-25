@@ -18,23 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import get_db  # noqa: E402
 from src.domain.collections import COLL_DATA_HEALTH_HISTORY, COLL_SCHEDULE_ALERTS  # noqa: E402
 from src.monitoring.backup_health import check_backup_freshness  # noqa: E402
-from src.monitoring.data_quality import run_health_check  # noqa: E402
+from src.monitoring.data_quality import run_health_check, DEFAULT_HEALTH_CONFIG  # noqa: E402
 
-# 關鍵集合的新鮮度/覆蓋率門檻（依實機 schema 校正；可移至設定）。
-# 資料新鮮度以 updated_at（寫入時間）為準，反映「是否持續更新」。
-HEALTH_CONFIG = {
-    "freshness": {
-        "stock_price": {"date_field": "date", "max_age_days": 4},
-        "stock_factors": {"date_field": "date", "max_age_days": 4},
-        "institutional_flow": {"date_field": "date", "max_age_days": 4},
-        "quarterly_earnings": {"date_field": "updated_at", "max_age_days": 120},
-        "monthly_revenue": {"date_field": "updated_at", "max_age_days": 40},
-        "macro_indicators": {"date_field": "updated_at", "max_age_days": 40},
-    },
-    "coverage": {
-        "taiwan_stock_info": 1000,
-    },
-}
+# 單一真相源(見 src/monitoring/data_quality.py);不再本檔硬編碼門檻。
+HEALTH_CONFIG = DEFAULT_HEALTH_CONFIG
 BACKUP_DIR = os.getenv("MONGO_BACKUP_DIR",
                        str(Path.home() / "Stock" / "mongodb_backups"))
 

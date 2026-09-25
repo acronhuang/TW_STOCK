@@ -30,7 +30,7 @@
 
 ### 3. `prod_data` — 世界事實或深資料,只對 live 庫有意義
 斷言「真實世界的事實」或需大規模/多年真實資料,**合成種子造假既脆弱又違反 ADR-0011**。
-- 例:`test_data_integrity`(斷言 10 萬+ 筆、5 天新鮮)、`test_financial_health`(台積電 grade A / EPS>50 / ROE>10)、`test_peer_comparison`(產業=半導體、同業>10)、`test_stock_ranker`(rank 預設 financial_check)。
+- 例:`test_data_integrity`(斷言 10 萬+ 筆、新鮮度門檻從 `data_quality.DEFAULT_HEALTH_CONFIG` 單一真相源取,與 data_health 排程共用不漂移)、`test_financial_health`(台積電 grade A / EPS>50 / ROE>10)、`test_peer_comparison`(產業=半導體、同業>10)、`test_stock_ranker`(rank 預設 financial_check)。
 - CI 以 `-m "not prod_data"` 排除;應在 .166 真實庫(如 `data_health` 排程)驗證。
 - **定期驗證**:`scripts/prod_data_health_report.py --alert`(cron `45 22 * * *`,見 `deploy/crontab.txt`)
   在 .166 真實庫跑 `-m prod_data`,產 `logs/prod_data_report_<date>.md` + 寫 `prod_data_health_history`

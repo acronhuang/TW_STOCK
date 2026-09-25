@@ -2,8 +2,13 @@
 import pytest
 from datetime import datetime
 
-# 正式庫規模/新鮮度健康檢查（斷言 10萬+ 筆、5 天新鮮），種子資料無法滿足；
-# 只對 live 資料庫有意義，CI 以 '-m not prod_data' 排除。
+from src.monitoring.data_quality import DEFAULT_HEALTH_CONFIG
+
+# 新鮮度門檻從單一真相源取(與 data_health_check 共用),不再本檔硬編碼→根治漂移。
+_FRESH = DEFAULT_HEALTH_CONFIG["freshness"]
+
+# 正式庫規模/新鮮度健康檢查(斷言 10萬+ 筆、4 天新鮮),種子資料無法滿足;
+# 只對 live 資料庫有意義,CI 以 '-m not prod_data' 排除。
 pytestmark = pytest.mark.prod_data
 
 
@@ -27,24 +32,26 @@ class TestCollections:
 class TestDataFreshness:
     @pytest.mark.integration
     def test_stock_price_recent(self, db):
-        """stock_price 最新日期不超過 5 天"""
+        """stock_price 最新日期不超過新鮮度門檻(與 data_health 共用)"""
+        max_age = _FRESH["stock_price"]["max_age_days"]
         latest = db.stock_price.find_one({}, {'date': 1}, sort=[('date', -1)])
         assert latest is not None
         date = latest['date']
         if isinstance(date, str):
             date = datetime.fromisoformat(date)
         age = (datetime.now() - date).days
-        assert age <= 5, f'stock_price 最新日期距今 {age} 天'
+        assert age <= max_age, f'stock_price 最新日期距今 {age} 天(上限 {max_age})'
 
     @pytest.mark.integration
     def test_stock_factors_recent(self, db):
+        max_age = _FRESH["stock_factors"]["max_age_days"]
         latest = db.stock_factors.find_one({}, {'date': 1}, sort=[('date', -1)])
         assert latest is not None
         date = latest['date']
         if isinstance(date, str):
             date = datetime.fromisoformat(date)
         age = (datetime.now() - date).days
-        assert age <= 5, f'stock_factors 最新日期距今 {age} 天'
+        assert age <= max_age, f'stock_factors 最新日期距今 {age} 天(上限 {max_age})'
 
 
 class TestDataQuality:

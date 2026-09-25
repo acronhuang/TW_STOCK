@@ -14,6 +14,24 @@ from src.domain.collections import (
     COLL_SCHEDULE_ALERTS,
 )
 
+# ── 單一真相源:資料健康門檻 ──────────────────────────────────────
+# 新鮮度/覆蓋率門檻的唯一權威來源。scripts/data_health_check.py(排程監控)
+# 與 tests/test_data_integrity.py(真實庫測試)均從此 import,避免兩處門檻各自
+# 漂移(曾發生:data_health 4 天 vs test_data_integrity 5 天)。
+DEFAULT_HEALTH_CONFIG = {
+    "freshness": {
+        "stock_price": {"date_field": "date", "max_age_days": 4},
+        "stock_factors": {"date_field": "date", "max_age_days": 4},
+        "institutional_flow": {"date_field": "date", "max_age_days": 4},
+        "quarterly_earnings": {"date_field": "updated_at", "max_age_days": 120},
+        "monthly_revenue": {"date_field": "updated_at", "max_age_days": 40},
+        "macro_indicators": {"date_field": "updated_at", "max_age_days": 40},
+    },
+    "coverage": {
+        "taiwan_stock_info": 1000,
+    },
+}
+
 
 def _coerce_dt(value):
     """將值轉為 datetime：支援 datetime 與 ISO 字串（'2026-09-22'、'2026-08'）。無法解析回 None。"""
