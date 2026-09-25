@@ -58,6 +58,16 @@ def main() -> int:
             })
         except Exception as e:
             print(f"⚠️ 寫入 {COLL_SCHEDULE_ALERTS} 失敗：{e}")
+    else:
+        # 回穩（全部正常）→ 自動消解既有 data_health_check 告警，避免陳舊永掛
+        try:
+            from src.monitoring.data_quality import auto_resolve_alerts
+            n = auto_resolve_alerts(db, "data_health_check", now=now,
+                                    reason="指標回穩（健康檢查全通過）")
+            if n:
+                print(f"✅ 自動消解 {n} 則舊 data_health_check 告警")
+        except Exception as e:
+            print(f"⚠️ auto_resolve 失敗：{e}")
 
     # 摘要
     status = "✅ 全部正常" if report["ok"] else f"🔴 {len(report['alerts'])} 項異常"
