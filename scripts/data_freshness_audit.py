@@ -144,6 +144,10 @@ EXEMPT = {
     # "portfolio_dividends": 已刪除
     "core_watchlist": "核心池設定,人工維護",
     "verdict_performance": "決策績效回顧,週期性產出",
+    # 分析指標快照(非市場資料):新鮮度由 verdict_sli(SLI)+ 儀表板趨勢把關,
+    # 不該由市場資料新鮮度審核監控(產出归 FR-OUT-001,見本檔首部說明)。
+    "verdict_metrics": "verdict 命中率指標快照,由 verdict_attribution 產出;監控見 verdict_sli",
+    "verdict_ab": "verdict A/B 一致率指標快照,由 verdict_ab_eval 產出;監控同上",
     # 衍生/中繼資料:由主表推導,主表有監控即可
     "adjustment_factors": "除權息係數,由 corporate_actions 推導;主表已監控",
     "dividend_results": "股利計算結果,由 dividend_detail 推導;主表已監控",
