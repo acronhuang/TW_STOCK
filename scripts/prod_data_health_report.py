@@ -30,6 +30,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = "prod_data_health_report"
 
+# 失敗初步分類啟發式(僅供參考,仍需人工三分;見 tests/README runbook)。
+# 以「檔名」為主(最可靠),「失敗訊息關鍵字」為覆寫(新鮮度/筆數→資料類)。
+DATA_FILES = ("test_data_integrity",)
+FACT_FILES = ("test_financial_health", "test_peer_comparison", "test_stock_ranker", "test_ranking_steps")
+DATA_HINTS = ("距今", "日期距", "筆數", "新鮮", "覆蓋", "股票數", "比例過高", "資料不足")
+FACT_HINTS = ("grade", "ROE", "EPS", "產業", "同業", "半導體", "評等")
+CLASS_LABEL = {"data": "📉 資料管線", "fact": "🌍 世界事實", "code": "🔴 程式回歸"}
+
+
+def classify(test: str, detail: str) -> str:
+    """回 "data" / "fact" / "code"(初步分類,人工三分的起點)。"""
+    if any(h in detail for h in DATA_HINTS):        # 新鮮度/筆數類訊息 → 資料優先
+        return "data"
+    if any(f in test for f in DATA_FILES):
+        return "data"
+    if any(f in test for f in FACT_FILES) or any(h in detail for h in FACT_HINTS):
+        return "fact"
+    return "code"
+
 
 def run_pytest(marker: str, junit_path: Path) -> int:
     """在真實庫上跑指定 marker 的測試,結果寫 junit xml。回傳 pytest 退場碼。"""
@@ -67,6 +86,7 @@ def parse_junit(junit_path: Path) -> dict:
                 "status": status,
                 "time": float(tc.get("time", 0) or 0),
                 "detail": detail,
+                "triage": classify(name, detail) if status in ("failed", "error") else "",
             })
     counts = {k: sum(1 for c in cases if c["status"] == k)
               for k in ("passed", "failed", "error", "skipped")}
@@ -85,16 +105,26 @@ def to_markdown(result: dict, now: datetime, marker: str) -> str:
         f"- 結果:**{head}**",
         f"- 統計:total {c['total']} · passed {c['passed']} · failed {c['failed']} "
         f"· error {c['error']} · skipped {c['skipped']}",
+    ]
+    # 失敗初步三分統計(📉資料 / 🌍事實 / 🔴程式)
+    tri = {k: sum(1 for x in result["cases"]
+                  if x["status"] in ("failed", "error") and x.get("triage") == k)
+           for k in ("data", "fact", "code")}
+    if sum(tri.values()):
+        lines.append("- 初步分類(僅參考,仍需人工三分):"
+                     + " · ".join(f"{CLASS_LABEL[k]} {v}" for k, v in tri.items() if v))
+    lines += [
         "",
-        "| 測試 | 狀態 | 秒 | 訊息 |",
-        "|---|---|--:|---|",
+        "| 測試 | 狀態 | 初步分類 | 秒 | 訊息 |",
+        "|---|---|---|--:|---|",
     ]
     order = {"failed": 0, "error": 1, "skipped": 2, "passed": 3}
     emoji = {"passed": "✅", "failed": "🔴", "error": "💥", "skipped": "⏭️"}
     for cse in sorted(result["cases"], key=lambda x: (order.get(x["status"], 9), x["test"])):
         msg = cse["detail"].replace("|", "\\|") if cse["detail"] else ""
+        tri_lbl = CLASS_LABEL.get(cse.get("triage", ""), "")
         lines.append(f"| {cse['test']} | {emoji.get(cse['status'],'?')} {cse['status']} "
-                     f"| {cse['time']:.1f} | {msg} |")
+                     f"| {tri_lbl} | {cse['time']:.1f} | {msg} |")
     lines.append("")
     return "\n".join(lines)
 
@@ -136,7 +166,8 @@ def main() -> int:
     print(f"報告:{report_file}")
     for cse in result["cases"]:
         if cse["status"] in ("failed", "error"):
-            print(f"  - {cse['status'].upper()} {cse['test']}: {cse['detail']}")
+            print(f"  - [{CLASS_LABEL.get(cse.get('triage',''),'?')}] "
+                  f"{cse['status'].upper()} {cse['test']}: {cse['detail']}")
 
     if args.no_db:
         return 0
@@ -156,7 +187,7 @@ def main() -> int:
                 "ts": now, "level": "warning", "source": SOURCE,
                 "message": f"prod_data 真實庫驗證異常:{c['failed']} failed / {c['error']} error",
                 "detail": {"counts": c,
-                           "failures": [f"{x['test']}: {x['detail']}"
+                           "failures": [f"[{CLASS_LABEL.get(x.get('triage',''),'?')}] {x['test']}: {x['detail']}"
                                         for x in result["cases"]
                                         if x["status"] in ("failed", "error")]},
                 "resolved": False,
