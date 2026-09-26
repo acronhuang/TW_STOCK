@@ -25,12 +25,15 @@ pytestmark = [pytest.mark.integration, pytest.mark.prod_data]
 
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://localhost:8501")
 SHOTS = pathlib.Path(__file__).parent / "_screenshots"
-PAGE_LABEL = "📈 買方改良對照"   # M5 側邊欄選項(待建)
+PAGE_LABEL = "📈 買方改良對照"   # M5 子選項(策略研究 → 買方改良對照)
+PARENT_LABEL = "📊 策略研究"
 
 
 def _goto_page(page):
     page.goto(DASHBOARD_URL, wait_until="networkidle", timeout=30_000)
-    # Streamlit 側邊欄 radio → 點選目標頁
+    # 兩層側邊欄:先點頂層「策略研究」再點子選項
+    page.get_by_text(PARENT_LABEL, exact=False).first.click(timeout=15_000)
+    page.wait_for_timeout(2_000)
     page.get_by_text(PAGE_LABEL, exact=False).first.click(timeout=15_000)
     page.wait_for_timeout(3_000)  # 等 rerun/websocket 渲染
 
