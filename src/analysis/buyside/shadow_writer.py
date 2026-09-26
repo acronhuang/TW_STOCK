@@ -27,18 +27,22 @@ def build_universe(db) -> dict:
     避免真實庫掃百萬筆;亦更符合「當前横切面」的百分位語意。"""
     latest = db["stock_factors"].find_one({}, {"date": 1}, sort=[("date", -1)])
     q = {"date": latest["date"]} if latest else {}
-    pe, pb = [], []
-    for f in db["stock_factors"].find(q, {"pe_ratio": 1, "pb_ratio": 1}):
+    pe, pb, roe = [], [], []
+    for f in db["stock_factors"].find(q, {"pe_ratio": 1, "pb_ratio": 1, "roe": 1}):
         p = _to_f(f.get("pe_ratio"))
         b = _to_f(f.get("pb_ratio"))
+        rv = _to_f(f.get("roe"))
         if p is not None:
             pe.append(p)
         if b is not None:
             pb.append(b)
-    return {"pe": pe, "pb": pb}
+        if rv is not None:
+            roe.append(rv)
+    return {"pe": pe, "pb": pb, "roe": roe}
 
 
-def run_shadow(db, window: int = 20, dry_run: bool = False) -> int:
+def run_shadow(db, window: int = 20, dry_run: bool = False,
+               scorer=rescore, field: str = "buy_v2") -> int:
     """對指定 window 的所有『買進』列寫 buy_v2 shadow。回處理筆數。"""
     uni = build_universe(db)
     n = 0
@@ -50,11 +54,11 @@ def run_shadow(db, window: int = 20, dry_run: bool = False) -> int:
             "pb": _to_f(fac.get("pb_ratio")) if fac else None,
             "roe": _to_f(fac.get("roe")) if fac else None,
         }
-        res = rescore(extract_buy_features(rec, uni))
+        res = scorer(extract_buy_features(rec, uni))
         if not dry_run:
             db["verdict_detail"].update_one(
                 {"_id": r["_id"]},
-                {"$set": {"buy_v2": res["v2"], "buy_v2_reason": res["reason"],
-                          "buy_v2_score": res["score"]}})
+                {"$set": {field: res["v2"], f"{field}_reason": res["reason"],
+                          f"{field}_score": res["score"]}})
         n += 1
     return n

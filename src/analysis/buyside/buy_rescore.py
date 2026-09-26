@@ -33,3 +33,19 @@ def rescore(feat: dict) -> dict:
         return {"v2": "降級持有", "score": score, "reason": why}
 
     return {"v2": "買進", "score": 0.0, "reason": "維持買進"}
+
+
+# ── v3:純品質(ROE)tilt(證據驅動,見 docs/plans/verdict_buyside_v3.md)──
+QUALITY_LO_PCTILE = 25.0   # ROE 百分位 < 25(底四分位)= 品質差 → 降級
+
+
+def rescore_v3(feat: dict) -> dict:
+    """純品質:ROE 底四分位 → 降級持有;否則維持買進。特徵不足/無法排名 → 維持。"""
+    if not feat.get("coverage_ok"):
+        return {"v2": "買進", "score": 0.0, "reason": "特徵不足,維持原判"}
+    rp = feat.get("roe_pctile")
+    if rp is None:
+        return {"v2": "買進", "score": 0.0, "reason": "ROE 無法排名,維持"}
+    if rp < QUALITY_LO_PCTILE:
+        return {"v2": "降級持有", "score": round((100 - rp) / 100.0, 3), "reason": "品質差(底四分位 ROE)"}
+    return {"v2": "買進", "score": 0.0, "reason": "品質足,維持買進"}

@@ -32,11 +32,13 @@ def extract_buy_features(rec: dict, universe: dict) -> dict:
     roe = rec.get("roe")
     pe_pctile = pctile_rank(pe, universe.get("pe", [])) if pe is not None else None
     pb_pctile = pctile_rank(pb, universe.get("pb", [])) if pb is not None else None
+    roe_pctile = pctile_rank(roe, universe.get("roe", [])) if roe is not None else None
     coverage_ok = pe is not None and roe is not None and pe_pctile is not None
     return {
         "prior_20d": rec.get("prior_20d"),
         "pe_pctile": pe_pctile,
         "pb_pctile": pb_pctile,
         "roe": roe,
+        "roe_pctile": roe_pctile,
         "coverage_ok": coverage_ok,
     }

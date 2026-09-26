@@ -19,10 +19,10 @@ def _stats(subset: list[dict]) -> dict:
     }
 
 
-def compare(db, window: int = 20) -> dict:
-    """回 {v1, v2, downgraded}。v2 = buy_v2 仍為『買進』的子集。"""
+def compare(db, window: int = 20, field: str = "buy_v2") -> dict:
+    """回 {v1, v2, downgraded}。v2 = {field} 仍為『買進』的子集(預設 buy_v2;可傳 buy_v3)。"""
     rows = list(db["verdict_detail"].find({"window": window, "verdict": "買進"}))
-    v2_rows = [r for r in rows if r.get("buy_v2", "買進") == "買進"]
+    v2_rows = [r for r in rows if r.get(field, "買進") == "買進"]
     v1, v2 = _stats(rows), _stats(v2_rows)
     delta_hit = (v2["hit_rate"] - v1["hit_rate"]) if (v1["hit_rate"] is not None and v2["hit_rate"] is not None) else None
     delta_ex = (v2["mean_excess"] - v1["mean_excess"]) if (v1["mean_excess"] is not None and v2["mean_excess"] is not None) else None
