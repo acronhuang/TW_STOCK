@@ -23,9 +23,12 @@ def _to_f(v):
 
 
 def build_universe(db) -> dict:
-    """全市場最新因子的 PE/PB 清單(百分位母體)。"""
+    """最新一日横切面因子的 PE/PB 清單(百分位母體)。取最新 date 而非全歷史,
+    避免真實庫掃百萬筆;亦更符合「當前横切面」的百分位語意。"""
+    latest = db["stock_factors"].find_one({}, {"date": 1}, sort=[("date", -1)])
+    q = {"date": latest["date"]} if latest else {}
     pe, pb = [], []
-    for f in db["stock_factors"].find({}, {"pe_ratio": 1, "pb_ratio": 1}):
+    for f in db["stock_factors"].find(q, {"pe_ratio": 1, "pb_ratio": 1}):
         p = _to_f(f.get("pe_ratio"))
         b = _to_f(f.get("pb_ratio"))
         if p is not None:
