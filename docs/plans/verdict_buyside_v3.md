@@ -92,3 +92,18 @@ TRAIN 06/19–07/31 定 ROE cutoff=9.18 → 套 TEST 08 月 held-out:
 **最終方向校正**:post-hoc 過濾出局(撞天花板 + 不 robust)。regime 分類是可信**框架**非 alpha。
 **唯一的路 = 生成端**:趨勢市抑制買進追高(改 committee/facilitator),須再 out-of-sample。
 侷限:單分割、TEST 空頭 n=24 薄;但主結論(結構泛化/tilt 不泛化)穩固。
+
+---
+
+## 8. 生成端診斷 — 追高偏誤在哪個階段進來(純讀取,N=13468)
+各階段「買進動能 − 非買進動能」:
+
+| 階段 | 追高差距 |
+|---|--:|
+| **advisor(顧問整合)** | **+4.87pp** ⬅️ 病灶已成形 |
+| committee | +5.14pp(僅 +0.27,微幅放大)|
+| final | +5.14pp(=committee,零額外)|
+
+**結論:追高偏誤在 advisor(investment-advisor)階段就已成形;委員會/主持人只繼承,非源頭。**
+→ **v5 開刀點 = advisor**(趨勢市降動能權重、買進需估值/品質確認);審計上游 technical-analyst 報告。
+**不要**動 committee(零貢獻)、**不要**再 post-hoc(已出局)。
