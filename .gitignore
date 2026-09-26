@@ -74,3 +74,4 @@ download_status.legacy-*.json
 mongodb_backups/
 # 執行期狀態檔(勿入庫)
 download_status.json
+tests/_screenshots/
