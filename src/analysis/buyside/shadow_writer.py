@@ -90,3 +90,42 @@ def run_shadow_cohort_quality(db, window: int = 20, field: str = "buy_v3c",
             db["verdict_detail"].update_one({"_id": r["_id"]}, {"$set": {field: v2}})
         n += 1
     return {"n": n, "cut": cut, "downgraded": dg}
+
+
+def run_shadow_regime_aware(db, window: int = 20, field: str = "buy_v4",
+                            thr: float = 3.0, dry_run: bool = False, regime_fn=None) -> dict:
+    """v4 regime-aware:僅『趨勢市(多頭/空頭)』的買進套品質 tilt(ROE 底四分位→降級);
+    『盤整』一律維持買進(多區間驗證:盤整買進已達標,套 tilt 反傷)。
+
+    regime_fn(dt)->regime 可注入(測試用);預設用 classify_regime。回 {n, cut, downgraded}。
+    """
+    import numpy as np
+    from src.analysis.buyside.regime import classify_regime
+    rf = regime_fn or (lambda dt: classify_regime(db, dt, thr=thr))
+
+    buys = list(db["verdict_detail"].find({"window": window, "verdict": "買進"}))
+    info = {}
+    reg_cache = {}
+    for r in buys:
+        key = str(r.get("date"))[:10]
+        if key not in reg_cache:
+            reg_cache[key] = rf(r.get("date"))
+        fac = db["stock_factors"].find_one({"symbol": r.get("symbol")}, sort=[("date", -1)])
+        info[r["_id"]] = (reg_cache[key], _to_f(fac.get("roe")) if fac else None)
+
+    trend_roes = [roe for reg, roe in info.values()
+                  if reg in ("多頭", "空頭") and roe is not None]
+    cut = float(np.quantile(trend_roes, 0.25)) if trend_roes else None
+
+    n = dg = 0
+    for r in buys:
+        reg, roe = info[r["_id"]]
+        low = reg in ("多頭", "空頭") and cut is not None and roe is not None and roe <= cut
+        v = "降級持有" if low else "買進"
+        if low:
+            dg += 1
+        if not dry_run:
+            db["verdict_detail"].update_one(
+                {"_id": r["_id"]}, {"$set": {field: v, f"{field}_regime": reg}})
+        n += 1
+    return {"n": n, "cut": cut, "downgraded": dg}
