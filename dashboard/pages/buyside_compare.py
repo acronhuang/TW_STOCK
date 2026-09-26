@@ -19,11 +19,14 @@ def _ex(v):
 
 
 def show():
-    st.header("📈 買方改良對照（v1 vs v2 影子）")
-    st.caption("影子模式:不動 live verdict;比較買方 v1(現行)與 v2(降級追高)之命中率/均超額。"
+    st.header("📈 買方改良對照（v1 vs shadow）")
+    st.caption("影子模式:不動 live verdict;比較買方 v1(現行)與 shadow 版之命中率/均超額。"
                "升級 live 前須 out-of-sample 回測佐證(見 docs/plans/verdict_buyside_v1.md)。")
     db = get_db()
-    res = compare(db, window=20)
+    ver = st.radio("shadow 版本", ["v3.1 純品質(buy_v3c)", "v2 混合(buy_v2)"],
+                   horizontal=True, key="bs_ver", label_visibility="collapsed")
+    field = "buy_v3c" if "v3.1" in ver else "buy_v2"
+    res = compare(db, window=20, field=field)
     v1, v2 = res["v1"], res["v2"]
 
     if not v1["n"]:
@@ -34,15 +37,15 @@ def show():
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("v1 買進命中", _pct(v1["hit_rate"]))
     dh = res.get("delta_hit")
-    c2.metric("v2 買進命中", _pct(v2["hit_rate"]),
+    c2.metric(f"{ver.split()[0]} 買進命中", _pct(v2["hit_rate"]),
               delta=(f"{dh*100:+.1f}pp" if isinstance(dh, (int, float)) else None))
     c3.metric("v1 均超額", _ex(v1["mean_excess"]))
-    c4.metric("降級(追高)數", f"{res['downgraded']} / {v1['n']}")
+    c4.metric("降級數", f"{res['downgraded']} / {v1['n']}")
 
-    st.markdown("**v1 vs v2 對照**")
+    st.markdown(f"**v1 vs {ver.split()[0]} 對照**")
     st.dataframe([
         {"版本": "v1(全買進)", "樣本": v1["n"], "命中率": _pct(v1["hit_rate"]), "均超額": _ex(v1["mean_excess"])},
-        {"版本": "v2(移除降級)", "樣本": v2["n"], "命中率": _pct(v2["hit_rate"]), "均超額": _ex(v2["mean_excess"])},
+        {"版本": f"{ver.split()[0]}(移除降級)", "樣本": v2["n"], "命中率": _pct(v2["hit_rate"]), "均超額": _ex(v2["mean_excess"])},
     ], hide_index=True, use_container_width=True)
 
     de = res.get("delta_excess")

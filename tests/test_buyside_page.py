@@ -21,6 +21,7 @@ def _fake_streamlit():
         st._cols_created.append(cs)
         return cs
     st.columns = _columns
+    st.radio = MagicMock(return_value="v3.1 品質(buy_v3c)")
     return st
 
 
@@ -45,8 +46,8 @@ def test_page_with_data_renders_compare(monkeypatch):
     importlib.reload(page)
     db = mongomock.MongoClient()["tw_stock_analysis"]
     db["verdict_detail"].insert_many([
-        {"symbol": "A", "window": 20, "verdict": "買進", "hit": False, "excess": -0.05, "buy_v2": "降級持有"},
-        {"symbol": "B", "window": 20, "verdict": "買進", "hit": True, "excess": 0.04, "buy_v2": "買進"},
+        {"symbol": "A", "window": 20, "verdict": "買進", "hit": False, "excess": -0.05, "buy_v3c": "降級持有"},
+        {"symbol": "B", "window": 20, "verdict": "買進", "hit": True, "excess": 0.04, "buy_v3c": "買進"},
     ])
     monkeypatch.setattr(page, "get_db", lambda *a, **k: db)
     page.show()
