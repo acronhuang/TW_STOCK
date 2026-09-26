@@ -62,3 +62,31 @@ def run_shadow(db, window: int = 20, dry_run: bool = False,
                           f"{field}_score": res["score"]}})
         n += 1
     return n
+
+
+def run_shadow_cohort_quality(db, window: int = 20, field: str = "buy_v3c",
+                              pctile_lo: float = 25.0, dry_run: bool = False) -> dict:
+    """v3.1 群體相對純品質:買進『群體內』ROE 底 pctile_lo → 降級持有。
+
+    兩趟:先收集買進群 ROE 定 cutoff(修正 v3 用全市場母體→買進偏高品質幾乎不觸發)。
+    回 {n, cut, downgraded}。
+    """
+    import numpy as np
+    buys = list(db["verdict_detail"].find({"window": window, "verdict": "買進"}))
+    roes = {}
+    for r in buys:
+        fac = db["stock_factors"].find_one({"symbol": r.get("symbol")}, sort=[("date", -1)])
+        roes[r["_id"]] = _to_f(fac.get("roe")) if fac else None
+    have = [v for v in roes.values() if v is not None]
+    cut = float(np.quantile(have, pctile_lo / 100.0)) if have else None
+    n = dg = 0
+    for r in buys:
+        rv = roes[r["_id"]]
+        low = cut is not None and rv is not None and rv <= cut
+        v2 = "降級持有" if low else "買進"
+        if low:
+            dg += 1
+        if not dry_run:
+            db["verdict_detail"].update_one({"_id": r["_id"]}, {"$set": {field: v2}})
+        n += 1
+    return {"n": n, "cut": cut, "downgraded": dg}
