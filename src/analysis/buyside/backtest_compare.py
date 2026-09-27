@@ -28,3 +28,44 @@ def compare(db, window: int = 20, field: str = "buy_v2") -> dict:
     delta_ex = (v2["mean_excess"] - v1["mean_excess"]) if (v1["mean_excess"] is not None and v2["mean_excess"] is not None) else None
     return {"v1": v1, "v2": v2, "downgraded": len(rows) - len(v2_rows),
             "delta_hit": delta_hit, "delta_excess": delta_ex}
+
+
+def eval_v5_shadow(db, window: int = 20, date_lo: str = None, date_hi: str = None) -> dict:
+    """把 team_analysis.advisor_v5_rating(影子)接回 verdict_detail 的前瞻超額,
+    比較『live-買進』全集 vs 『v5-買進(未被 v5 降級)』子集 —— 分整體/趨勢/盤整。
+
+    date_lo/date_hi:限定 verdict date 區間(供時間切段 out-of-sample)。回 dict。
+    """
+    # (symbol,date) -> advisor_v5_rating / regime
+    shadow = {}
+    for a in db["team_analysis"].find(
+            {"advisor_v5_rating": {"$exists": True}},
+            {"symbol": 1, "date": 1, "advisor_v5_rating": 1, "advisor_v5_regime": 1}):
+        shadow[(a["symbol"], str(a.get("date"))[:10])] = (
+            a.get("advisor_v5_rating"), a.get("advisor_v5_regime"))
+
+    rows = []
+    for d in db["verdict_detail"].find({"window": window, "verdict": "買進"},
+                                       {"symbol": 1, "date": 1, "excess": 1, "hit": 1}):
+        ds = str(d.get("date"))[:10]
+        if date_lo and ds < date_lo:
+            continue
+        if date_hi and ds >= date_hi:
+            continue
+        rat, reg = shadow.get((d["symbol"], ds), (None, None))
+        if rat is None:
+            continue                      # 尚無影子評級 → 不計
+        rows.append({"excess": d.get("excess"), "hit": d.get("hit"),
+                     "reg": reg, "v5_buy": rat in ("買進", "強力買進")})
+
+    def block(g):
+        live = g
+        v5 = [x for x in g if x["v5_buy"]]
+        return {"live": _stats(live), "v5": _stats(v5), "downgraded": len(live) - len(v5)}
+
+    out = {"overall": block(rows)}
+    for reg in ("多頭", "盤整", "空頭"):
+        g = [x for x in rows if x["reg"] == reg]
+        if g:
+            out[reg] = block(g)
+    return out
