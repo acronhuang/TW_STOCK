@@ -24,6 +24,9 @@ import pytest
 playwright = pytest.importorskip("playwright.sync_api")
 from playwright.sync_api import Page, expect  # noqa: E402
 
+# E2E:需 live dashboard + ollama → prod_data(不進 CI 一般閘;playwright 未裝時亦由上方 importorskip 略過)
+pytestmark = [pytest.mark.integration, pytest.mark.prod_data]
+
 BASE_URL = os.getenv("E2E_BASE_URL", "http://localhost:8501")
 SHOT_DIR = Path(__file__).parent / "screenshots"
 SHOT_DIR.mkdir(exist_ok=True)
