@@ -46,16 +46,17 @@ def extract_rating(text: str):
 
 def default_ask(prompt: str) -> str:
     import requests
-    # qwen3 為 thinking model:預算不足會只輸出 <think> 而無評級。先大預算,
-    # 若仍抽不到評級,附 /no_think 重試一次(直接答)。
-    def _post(p, npred):
+    # qwen3 為 thinking model:預算不足會只輸出 <think> 而無評級(~17% None)。
+    # 用 ollama 頂層 think=false 硬關思考 → 直接輸出評級,又快又穩(比 /no_think prompt 可靠)。
+    def _post(think):
         r = requests.post(f"{OLLAMA_28}/api/generate",
-                          json={"model": MODEL, "prompt": p, "stream": False,
-                                "options": {"temperature": 0.1, "num_predict": npred}}, timeout=200)
+                          json={"model": MODEL, "prompt": prompt, "stream": False,
+                                "think": think,
+                                "options": {"temperature": 0.1, "num_predict": 320}}, timeout=120)
         return r.json().get("response", "")
-    out = _post(prompt, 1500)
-    if extract_rating(out) is None:
-        out = _post(prompt + "\n直接輸出評級,勿思考。/no_think", 400)
+    out = _post(False)
+    if extract_rating(out) is None:            # 極少數仍缺 → 開 thinking 重試一次(較慢但語意完整)
+        out = _post(True)
     return out
 
 
