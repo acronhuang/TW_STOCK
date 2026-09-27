@@ -45,3 +45,11 @@ shadow 驗證 → OOS 過 → feature-flag(預設 off)→ 團隊審 + 灰度 →
 1. **prompt 改動的效果未必轉成前瞻超額** —— 讓模型「不追高」≠「選到更好的買進」;可能只是少買、覆蓋降,超額未必升。須影子量化。
 2. **OOS 泛化**(同 v4 教訓):趨勢市樣本跨區間可能不穩;單窗好看不算數。
 3. **LLM 非決定論**:同 prompt 多次評級可能飄;需固定 temperature + 多次取眾數,否則 shadow 訊號含噪。
+
+---
+
+## 7. 影子 runner 已建 + smoke 驗證(scripts/buyside_shadow_advisor_v5.py)
+- TDD 綠(趨勢寫 shadow / 盤整略過 / live 不變);--limit/--dry-run。
+- .166 smoke(limit=2,真 LLM):**3481 群創 live 買進 → shadow 觀望(多頭)**——真實 flip;
+  live final_verdict 不變 ✓。2603 回 None(thinking 預算不足)→ 已修:num_predict 1500 + /no_think 重試。
+- **全量跑 = 團隊執行**(數千檔 × 1 LLM,數小時);之後分市況 compare → OOS walk-forward 閘門 → flag。

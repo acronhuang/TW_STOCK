@@ -46,10 +46,17 @@ def extract_rating(text: str):
 
 def default_ask(prompt: str) -> str:
     import requests
-    r = requests.post(f"{OLLAMA_28}/api/generate",
-                      json={"model": MODEL, "prompt": prompt, "stream": False,
-                            "options": {"temperature": 0.1, "num_predict": 900}}, timeout=180)
-    return r.json().get("response", "")
+    # qwen3 為 thinking model:預算不足會只輸出 <think> 而無評級。先大預算,
+    # 若仍抽不到評級,附 /no_think 重試一次(直接答)。
+    def _post(p, npred):
+        r = requests.post(f"{OLLAMA_28}/api/generate",
+                          json={"model": MODEL, "prompt": p, "stream": False,
+                                "options": {"temperature": 0.1, "num_predict": npred}}, timeout=200)
+        return r.json().get("response", "")
+    out = _post(prompt, 1500)
+    if extract_rating(out) is None:
+        out = _post(prompt + "\n直接輸出評級,勿思考。/no_think", 400)
+    return out
 
 
 def run(db, window: int = 20, limit: int | None = None, dry_run: bool = False,
