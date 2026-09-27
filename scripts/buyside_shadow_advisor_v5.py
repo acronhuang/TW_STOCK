@@ -60,15 +60,18 @@ def default_ask(prompt: str) -> str:
 
 
 def run(db, window: int = 20, limit: int | None = None, dry_run: bool = False,
-        ask_fn=None, regime_fn=None) -> dict:
+        ask_fn=None, regime_fn=None, resume: bool = False) -> dict:
     ask = ask_fn or default_ask
     rf = regime_fn or (lambda dt: classify_regime(db, dt))
-    n = flipped = skipped_sideways = 0
+    n = flipped = skipped_sideways = resumed = 0
     for a in db["team_analysis"].find(
             {"final_verdict": "買進", "reports.technical-analyst": {"$exists": True}},
-            {"symbol": 1, "date": 1, "reports": 1}):
+            {"symbol": 1, "date": 1, "reports": 1, "advisor_v5_rating": 1}):
         if limit and n >= limit:
             break
+        if resume and a.get("advisor_v5_rating") is not None:
+            resumed += 1                   # 已跑過 → 跳過(可中斷續跑,不白燒 LLM)
+            continue
         reg = rf(a.get("date"))
         if reg not in ("多頭", "空頭"):
             skipped_sideways += 1
@@ -82,7 +85,7 @@ def run(db, window: int = 20, limit: int | None = None, dry_run: bool = False,
         n += 1
         if rating and rating not in ("買進", "強力買進"):
             flipped += 1
-    return {"n": n, "flipped": flipped, "skipped_sideways": skipped_sideways}
+    return {"n": n, "flipped": flipped, "skipped_sideways": skipped_sideways, "resumed": resumed}
 
 
 def main() -> int:
@@ -91,11 +94,12 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--window", type=int, default=20)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--resume", action="store_true", help="跳過已寫 advisor_v5_rating 者(可中斷續跑)")
     args = ap.parse_args()
     db = MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017")).tw_stock_analysis
-    res = run(db, window=args.window, limit=args.limit, dry_run=args.dry_run)
+    res = run(db, window=args.window, limit=args.limit, dry_run=args.dry_run, resume=args.resume)
     print(f"[v5-shadow] 趨勢市買進處理 {res['n']}(降級/觀望 {res['flipped']})、"
-          f"盤整略過 {res['skipped_sideways']}")
+          f"盤整略過 {res['skipped_sideways']}、續跑略過 {res.get('resumed',0)}")
     return 0
 
 

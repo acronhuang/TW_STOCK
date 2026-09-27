@@ -90,6 +90,7 @@ def main() -> int:
     ap.add_argument("--repeats", type=int, default=3)
     ap.add_argument("--min-n", type=int, default=100)
     ap.add_argument("--skip-shadow", action="store_true", help="只用既有影子重算閘門(不跑 LLM)")
+    ap.add_argument("--resume", action="store_true", help="影子續跑(跳過已評級者)")
     args = ap.parse_args()
 
     from pymongo import MongoClient
@@ -98,7 +99,7 @@ def main() -> int:
     if not args.skip_shadow:
         from scripts.buyside_shadow_advisor_v5 import run as shadow_run
         res = shadow_run(db, window=args.window, limit=args.limit,
-                         ask_fn=lambda p: voting_ask(p, args.repeats))
+                         ask_fn=lambda p: voting_ask(p, args.repeats), resume=args.resume)
         print(f"[Step1-2 影子+去噪] 趨勢市買進處理 {res['n']}(觀望/降級 {res['flipped']})、"
               f"盤整略過 {res['skipped_sideways']}")
 
