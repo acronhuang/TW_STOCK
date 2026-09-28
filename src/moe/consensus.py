@@ -155,6 +155,29 @@ def verify_committee(force: bool = False) -> dict:
     return {'committee': list(COMMITTEE), 'missing': missing}
 
 
+_HOLLOW_RE = re.compile(r'投下以下票數[:：]?\s*$|^\s*我是投資決策委員會的成員')
+
+
+def is_hollow_reason(reason: str) -> bool:
+    """空模板/無實質理由的票(小模型常吐開場白)。"""
+    r = (reason or '').strip()
+    return bool(_HOLLOW_RE.search(r)) or len(r) < 10
+
+
+def _drop_hollow_enabled() -> bool:
+    """P1 壞票守門旗標。預設關(0)→ live 行為一字不變。簽核後設 1 即啟用。"""
+    return os.getenv('CONSENSUS_DROP_HOLLOW', '0').lower() in ('1', 'true', 'yes', 'on')
+
+
+def _active_votes(votes: list) -> list:
+    """計 tally 時的有效票。旗標啟用時剔除壞票;若會剔光則保留原票(不毀訊號)。
+    旗標關閉時原樣回傳 votes → 不改變任何 live tally。"""
+    if not _drop_hollow_enabled():
+        return votes
+    kept = [v for v in votes if v.get('vote') and not is_hollow_reason(v.get('reason'))]
+    return kept if kept else votes
+
+
 def deliberate(symbol: str, name: str, advisor_draft: str, data_summary: str,
                timeout: int = 120) -> dict:
     """委員會對顧問草案投票。回 {votes, tally, final, dissent}。"""
@@ -178,8 +201,9 @@ def deliberate(symbol: str, name: str, advisor_draft: str, data_summary: str,
                 break
         votes.append({'model': m, 'vote': vote,
                       'reason': reason[:60] if reason else (resp[:40] if resp.startswith('ERR:') else '')})
-    tally = {v: sum(1 for x in votes if x['vote'] == v) for v in VOTES}
-    valid = [x for x in votes if x['vote']]
+    _active = _active_votes(votes)
+    tally = {v: sum(1 for x in _active if x['vote'] == v) for v in VOTES}
+    valid = [x for x in _active if x['vote']]
     draft_r = _advisor_rating(advisor_draft)
     if not valid:
         final = draft_r or '持有'
@@ -220,8 +244,9 @@ def _parse_vote_reason(resp: str):
 
 def _finalize(votes: list, advisor_draft: str):
     """末輪投票 → (final, tally, n_valid)。平手回退顧問草案評級，再退保守持有。"""
-    tally = {v: sum(1 for x in votes if x['vote'] == v) for v in VOTES}
-    valid = [x for x in votes if x['vote']]
+    _active = _active_votes(votes)
+    tally = {v: sum(1 for x in _active if x['vote'] == v) for v in VOTES}
+    valid = [x for x in _active if x['vote']]
     draft_r = _advisor_rating(advisor_draft)
     if not valid:
         return draft_r or '持有', tally, 0
