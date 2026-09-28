@@ -19,6 +19,7 @@ from pathlib import Path
 from pymongo import MongoClient
 
 PROJECT = Path('/home/mdsadmin/Stock/tw-stock-analysis')
+sys.path.insert(0, str(PROJECT))  # 供 import src.monitoring.market_calendar(獨立執行時)
 
 # 主板筆數基線，來自記憶 data-audit-baseline-2026-07-18（06-22~07-17 觀測區間）
 MAIN_BOARD_MIN = 1900
