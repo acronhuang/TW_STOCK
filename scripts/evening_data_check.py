@@ -41,26 +41,9 @@ def prev_trading_day(db, d):
 
 
 def is_market_open(day) -> bool | None:
-    """判定 day(date) 是否為台股交易日。
-
-    週末→False;否則向 FinMind 問 2330 該日是否有資料（源頭權威）。
-    回 True(交易日) / False(休市) / None(無法判定,如 API 失敗→保守當異常)。
-    """
-    if day.weekday() >= 5:            # 週六/日必休市,免打 API
-        return False
-    try:
-        import os
-        import requests
-        tok = os.getenv('FINMIND_API_TOKEN', '')
-        r = requests.get('https://api.finmindtrade.com/api/v4/data',
-                         params={'dataset': 'TaiwanStockPrice', 'data_id': '2330',
-                                 'start_date': day.isoformat(), 'end_date': day.isoformat(),
-                                 'token': tok}, timeout=20)
-        if r.status_code != 200:
-            return None
-        return len(r.json().get('data', [])) > 0
-    except Exception:
-        return None
+    """已抽至共用 src.monitoring.market_calendar(供 freshness 等檢查共用)。"""
+    from src.monitoring.market_calendar import is_market_open as _imo
+    return _imo(day)
 
 
 def main():

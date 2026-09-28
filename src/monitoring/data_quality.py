@@ -60,10 +60,12 @@ def _latest_date(db, collection: str, date_field: str):
     return docs[0].get(date_field)
 
 
-def check_freshness(db, specs: dict, now: datetime | None = None) -> list[dict]:
+def check_freshness(db, specs: dict, now: datetime | None = None, is_open_fn=None) -> list[dict]:
     """檢查各集合新鮮度。
 
     specs: {collection: {'date_field': str, 'max_age_days': int}}
+    is_open_fn: 若提供,對 date_field=='date' 的市場集合改以「交易日」計落後
+                (休市不算落後) → 根治連假誤報。預設 None = 原日曆日行為。
     回傳 [{collection, latest, age_days, max_age_days, stale}]
     """
     now = now or datetime.now()
@@ -79,6 +81,12 @@ def check_freshness(db, specs: dict, now: datetime | None = None) -> list[dict]:
         latest_dt = _coerce_dt(latest)
         age = (now - latest_dt).days if latest_dt else None
         stale = age is None or age > max_age
+        # 市場型集合(date_field=='date')+ 已提供 is_open_fn:休市不算落後 → 改用交易日重算
+        if stale and latest_dt is not None and field == "date" and is_open_fn is not None:
+            from src.monitoring.market_calendar import trading_days_behind
+            tdays = trading_days_behind(latest_dt, now, is_open_fn)
+            stale = tdays > max_age
+            age = tdays
         out.append({"collection": collection, "latest": latest,
                     "age_days": age, "max_age_days": max_age, "stale": stale})
     return out
@@ -113,14 +121,15 @@ def validate_document(doc: dict, rules: dict) -> list[str]:
     return violations
 
 
-def run_health_check(db, config: dict, now: datetime | None = None) -> dict:
+def run_health_check(db, config: dict, now: datetime | None = None, is_open_fn=None) -> dict:
     """整合新鮮度 + 覆蓋率 → 健康報告。
 
     config: {'freshness': {...specs}, 'coverage': {collection: min_count}}
+    is_open_fn: 傳給 check_freshness(市場集合改以交易日計,休市不誤報)。
     回傳 {ok, ts, freshness, coverage, stale_count, low_coverage_count, alerts}
     """
     now = now or datetime.now()
-    freshness = check_freshness(db, config.get("freshness", {}), now=now)
+    freshness = check_freshness(db, config.get("freshness", {}), now=now, is_open_fn=is_open_fn)
     coverage = [check_coverage(db, c, n) for c, n in config.get("coverage", {}).items()]
 
     alerts = []

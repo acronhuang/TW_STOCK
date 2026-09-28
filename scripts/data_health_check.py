@@ -19,6 +19,7 @@ from src.config import get_db  # noqa: E402
 from src.domain.collections import COLL_DATA_HEALTH_HISTORY, COLL_SCHEDULE_ALERTS  # noqa: E402
 from src.monitoring.backup_health import check_backup_freshness  # noqa: E402
 from src.monitoring.data_quality import run_health_check, DEFAULT_HEALTH_CONFIG  # noqa: E402
+from src.monitoring.market_calendar import is_market_open  # noqa: E402
 
 # 單一真相源(見 src/monitoring/data_quality.py);不再本檔硬編碼門檻。
 HEALTH_CONFIG = DEFAULT_HEALTH_CONFIG
@@ -29,7 +30,8 @@ BACKUP_DIR = os.getenv("MONGO_BACKUP_DIR",
 def main() -> int:
     db = get_db()
     now = datetime.now()
-    report = run_health_check(db, HEALTH_CONFIG, now=now)
+    # is_market_open:市場集合以交易日計新鮮度 → 連假不誤報 stock_price 落後
+    report = run_health_check(db, HEALTH_CONFIG, now=now, is_open_fn=is_market_open)
 
     backup = check_backup_freshness(BACKUP_DIR, max_age_hours=48)
     if not backup["ok"]:
