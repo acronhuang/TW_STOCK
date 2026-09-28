@@ -63,6 +63,9 @@ fi
 step "8/9 團隊分析（Phase1+2）"
 bash scripts/team_daily_50.sh || echo "  team 失敗（續）"
 
+step "8d 影子一致性 lint（買進 verdict 紅旗，只寫 shadow_lint）"
+$PY scripts/buyside_verdict_lint.py || echo "  verdict_lint 失敗（續）"
+
 step "9/9 彙整推播（2-3 則）"
 unset LINE_SPOOL                     # digest 需實發（內部亦會 pop 一次防呆）
 $PY scripts/evening_digest.py --spool "$SPOOL" || echo "  digest 失敗"

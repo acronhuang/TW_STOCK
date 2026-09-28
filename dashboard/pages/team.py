@@ -33,7 +33,8 @@ def show():
 
     docs = list(col.find({"date": dt}, {
         "symbol": 1, "name": 1, "final_verdict": 1, "consensus.tally": 1,
-        "price_at_analysis": 1, "verify.status": 1, "verify.truth_close": 1, "_id": 0}))
+        "price_at_analysis": 1, "verify.status": 1, "verify.truth_close": 1,
+        "shadow_lint.score": 1, "_id": 0}))
     if not docs:
         st.info("此日無資料"); return
 
@@ -63,9 +64,12 @@ def show():
         if (all_verdicts and fv and v not in fv and v is not None) or (s not in fs):
             continue
         t = (d.get("consensus") or {}).get("tally") or {}
+        _lint = d.get("shadow_lint") or {}
+        _sc = _lint.get("score")
         rows.append({
             "代號": d["symbol"], "名稱": d.get("name", ""),
             "定案": v or "—",
+            "紅旗": ("✅ 0" if _sc == 0 else f"⚠️ {_sc}" if _sc else "—"),
             "買": t.get("買進") or 0, "持": t.get("持有") or 0, "賣": t.get("賣出") or 0,
             "分析收盤": d.get("price_at_analysis"),
             "權威收盤": (d.get("verify") or {}).get("truth_close"),
@@ -94,6 +98,17 @@ def show():
     if fm:
         ok = "✅ 一致" if fm.get("match") else "⚠️ 背離"
         st.write(f"**FinMind 複核**：DB `{fm.get('db_close')}` vs FinMind `{fm.get('finmind_close')}` → {ok}")
+
+    # ── 可信度紅旗（shadow_lint，純觀測，不影響 live 判斷）──
+    lint = full.get("shadow_lint")
+    if lint:
+        sc = lint.get("score", 0)
+        if sc:
+            st.warning(
+                f"⚠️ **可信度紅旗 {sc} 項**（shadow lint，觀測用，不改 live 定案）\n\n"
+                + "\n".join(f"- {f}" for f in lint.get("flags", [])))
+        else:
+            st.caption("✅ 可信度 lint：無紅旗")
 
     cons = full.get("consensus")
     if cons:
