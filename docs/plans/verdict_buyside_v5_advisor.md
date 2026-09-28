@@ -53,3 +53,22 @@ shadow 驗證 → OOS 過 → feature-flag(預設 off)→ 團隊審 + 灰度 →
 - .166 smoke(limit=2,真 LLM):**3481 群創 live 買進 → shadow 觀望(多頭)**——真實 flip;
   live final_verdict 不變 ✓。2603 回 None(thinking 預算不足)→ 已修:num_predict 1500 + /no_think 重試。
 - **全量跑 = 團隊執行**(數千檔 × 1 LLM,數小時);之後分市況 compare → OOS walk-forward 閘門 → flag。
+
+---
+
+## 8. 全量 OOS 驗證結果(n=1885)— 🔴 NO-GO(v5 也過擬合)
+```
+① 整體 v5>live: 命中 40.4%→41.3% · 超額 -0.30%→-0.37%(整體反變差)
+② 前後段一致 : 前段 +0.42%→+0.63%(改善) | 後段 -1.05%→-1.54%(惡化)← OOS 崩
+③ 樣本足夠   : n=1885 ✅   ⑤ 盤整未受影響 ✅   None率 0
+>>> NO-GO
+```
+**v5 與 v4 同一死法:in-sample 改善、out-of-sample 惡化。** 先前樣本 82.6% 是早期 cherry-pick。
+
+## 9. 最終結論(買方修補全線收束)
+- **post-hoc 過濾**(v2/v3/v3.1/v4)❌ OOS 不泛化
+- **生成端 prompt**(v5 advisor 追高防制)❌ OOS 惡化
+- → **兩法皆證偽**:買方追高反轉非穩定可利用,可能是期間噪音。
+- **唯一 robust edge = 賣出側**(60%/+0.73%,一致)。
+- **建議**:停止買方修補,策略重心移向賣出/迴避(long-short);買方接受極限。
+- **live 全程未動**;OOS 閘門兩度擋下過擬合部署(v4、v5)。
