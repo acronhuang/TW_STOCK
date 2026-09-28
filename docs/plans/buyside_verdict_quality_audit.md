@@ -39,3 +39,25 @@
 ## 現況
 - 稽核為讀取;live consensus/final_verdict **未動**。
 - 任何修法走既有治理:shadow A/B → verdict 變動率 + OOS 中性檢查 → signoff → 灰度。
+
+## 狀態更新 — P2 已落地(2026-09-28)
+
+**P2(shadow 一致性 lint)已完成並上線,全程純附加影子欄,live 未動。**
+
+| 元件 | 檔案 | commit |
+|---|---|---|
+| 純函式 lint(TDD 3 綠)| `src/analysis/buyside/verdict_lint.py` | 6c92ffd |
+| CLI + 影子寫入器 | `scripts/buyside_verdict_lint.py` | 6c92ffd |
+| 測試 | `tests/test_verdict_lint.py` | 6c92ffd |
+| 儀表板顯示(表格紅旗欄 + 單檔 flags)| `dashboard/pages/team.py` | f5b91cc |
+| Nightly 自動 lint(evening_pipeline 8d)| `scripts/evening_pipeline.sh` | f5b91cc |
+
+**寫入結果(全庫 3608 檔買進)**:只有 **29.5% 零紅旗**;① 追高 14.9%、② 買進0張 6.6%、
+③ 風報比<1 31.1%、④ 含合議壞票 49.1%。→ 七成買進 verdict 帶至少一個內部矛盾,
+現已逐檔寫入 `team_analysis.shadow_lint`。
+
+**驗證**:寫入前後 2471 的 live 指紋(final_verdict+advisor+consensus)`fd1955e21b1e`
+**完全相同** → 只新增 `shadow_lint`,未動任何 live 判斷。儀表板/nightly 皆只讀/只寫影子。
+
+**尚未做(需簽核,觸及 live consensus)**:P1 合議壞票守門、P3 小模型格式硬約束/換 qwen2.5-14b 票源。
+這兩項會改變 live final,須走 shadow A/B → verdict 變動率量測 → signoff。
