@@ -40,6 +40,29 @@ def prev_trading_day(db, d):
     return doc['date'] if doc else None
 
 
+def is_market_open(day) -> bool | None:
+    """判定 day(date) 是否為台股交易日。
+
+    週末→False;否則向 FinMind 問 2330 該日是否有資料（源頭權威）。
+    回 True(交易日) / False(休市) / None(無法判定,如 API 失敗→保守當異常)。
+    """
+    if day.weekday() >= 5:            # 週六/日必休市,免打 API
+        return False
+    try:
+        import os
+        import requests
+        tok = os.getenv('FINMIND_API_TOKEN', '')
+        r = requests.get('https://api.finmindtrade.com/api/v4/data',
+                         params={'dataset': 'TaiwanStockPrice', 'data_id': '2330',
+                                 'start_date': day.isoformat(), 'end_date': day.isoformat(),
+                                 'token': tok}, timeout=20)
+        if r.status_code != 200:
+            return None
+        return len(r.json().get('data', [])) > 0
+    except Exception:
+        return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--date', default=None, help='檢查日期 YYYY-MM-DD，預設今天(台北)')
@@ -48,6 +71,12 @@ def main():
 
     today = (datetime.strptime(args.date, '%Y-%m-%d').date() if args.date
              else datetime.now(TPE).date())
+    # FinMind 交易日判定需 token → 先載 .env(cron 環境不自動帶)
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(str(PROJECT / '.env'))
+    except Exception:
+        pass
 
     db = MongoClient('mongodb://localhost:27017/')['tw_stock_analysis']
     dt = utc_midnight(today)
@@ -61,8 +90,17 @@ def main():
     total_n = db.stock_price.count_documents({'date': dt})
 
     if main_n == 0:
-        ok = False
-        lines.append(f'❌ stock_price 當日 0 筆（漏抓或休市？需人工確認）')
+        # 自動分辨休市 vs 漏抓(不再逐假日吐「需人工確認」)
+        opened = is_market_open(today)
+        if opened is False:
+            lines.append('\U0001f3d6️ stock_price 當日 0 筆 — 休市(FinMind 源頭無資料,非漏抓)')
+            # ok 保持 True:休市為正常
+        elif opened is True:
+            ok = False
+            lines.append('❌ stock_price 當日 0 筆,但 FinMind 有資料 → 漏抓!需補下載')
+        else:
+            ok = False
+            lines.append('❓ stock_price 當日 0 筆,且無法向 FinMind 確認(API 失敗)→ 需人工確認')
     elif MAIN_BOARD_MIN <= main_n <= MAIN_BOARD_MAX:
         lines.append(f'✅ stock_price 主板 {main_n} 筆（總 {total_n}）')
     else:
