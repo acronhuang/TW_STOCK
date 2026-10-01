@@ -76,12 +76,14 @@ if page == "🏠 總覽":
     else:
         from pages import system_health; system_health.show()
 elif page == "🎯 每日決策":
-    d = st.radio("決策", ["🏆 核心池", "🏛️ 每日選股", "🗳️ 團隊合議", "💬 決策問答", "📬 收盤快訊"],
+    d = st.radio("決策", ["🏆 核心池", "🏛️ 每日選股", "🌀 VCP候選", "🗳️ 團隊合議", "💬 決策問答", "📬 收盤快訊"],
                  horizontal=True, key="dd_view", label_visibility="collapsed")
     if d == "🏆 核心池":
         from pages import core_pool_page; core_pool_page.show()
     elif d == "🏛️ 每日選股":
         from pages import picks; picks.show()
+    elif d == "🌀 VCP候選":
+        from pages import vcp_page; vcp_page.show()
     elif d == "🗳️ 團隊合議":
         from pages import team; team.show()
     elif d == "💬 決策問答":
@@ -120,10 +122,14 @@ elif page == "🔍 個股分析":
         else:
             from pages import factors; factors.show()
 elif page == "💼 持倉風控":
-    from pages import risk_page
-    risk_page.show()
+    v = st.radio("風控", ["🛡️ 持倉風控", "📝 模擬盤"],
+                 horizontal=True, key="pf_view", label_visibility="collapsed")
+    if v == "🛡️ 持倉風控":
+        from pages import risk_page; risk_page.show()
+    else:
+        from pages import paper_trading_page; paper_trading_page.show()
 elif page == "📊 策略研究":
-    v = st.radio("研究", ["回測視覺化", "策略比較", "2560戰法", "🎯 判斷準確度", "📈 買方改良對照", "融資融券(全市場榜)"],
+    v = st.radio("研究", ["回測視覺化", "策略比較", "2560戰法", "🎯 判斷準確度", "📈 買方改良對照", "🎲 選擇權價差", "🔗 配對交易", "融資融券(全市場榜)"],
                  horizontal=True, key="sr_view", label_visibility="collapsed")
     if v == "回測視覺化":
         from pages import backtest_viz; backtest_viz.show()
@@ -135,6 +141,10 @@ elif page == "📊 策略研究":
         from pages import verdict_accuracy_page; verdict_accuracy_page.show()
     elif v == "📈 買方改良對照":
         from pages import buyside_compare; buyside_compare.show()
+    elif v == "🎲 選擇權價差":
+        from pages import options_page; options_page.show()
+    elif v == "🔗 配對交易":
+        from pages import pairs_page; pairs_page.show()
     else:
         from pages import margin_market_page; margin_market_page.show()
 elif page == "📚 知識庫":

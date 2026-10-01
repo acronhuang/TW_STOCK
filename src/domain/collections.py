@@ -73,6 +73,12 @@ COLL_MEDIA_NEWS = "media_news"
 COLL_PORTFOLIO_LOTS = "portfolio_lots"
 COLL_PORTFOLIO_POSITIONS = "portfolio_positions"
 
+# ── 模擬盤 (paper trading) ─────────────────────────────────────────────
+COLL_PAPER_ACCOUNTS = "paper_accounts"
+COLL_PAPER_POSITIONS = "paper_positions"
+COLL_PAPER_ORDERS = "paper_orders"
+COLL_PAPER_TRADES = "paper_trades"
+
 # ── 告警 / 系統 / 健康 ─────────────────────────────────────────────────
 COLL_SCHEDULE_ALERTS = "schedule_alerts"
 COLL_ALERT_RULES = "alert_rules"
@@ -91,6 +97,7 @@ COLL_PEER_COMPARISON = "peer_comparison"
 COLL_NOTICED_STOCKS = "noticed_stocks"
 COLL_PUNISHED_STOCKS = "punished_stocks"
 COLL_ETF_DCA_RANK = "etf_dca_rank"
+COLL_VCP_CANDIDATES = "vcp_candidates"
 
 
 def all_collections() -> dict[str, str]:

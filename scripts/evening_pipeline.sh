@@ -48,6 +48,7 @@ $PY scripts/daily_recommendations.py || echo "  recommendations 失敗（續）"
 step "6/9 量價掃描 / OBV 背離"
 $PY scripts/volume_price_scan.py || echo "  volume_price 失敗（續）"
 $PY scripts/obv_bottom_divergence_scan.py || echo "  obv 失敗（續）"
+$PY scripts/vcp_scan.py || echo "  vcp 失敗（續）"
 
 step "7/9 主力散戶籌碼 / 雙訊號"
 $PY scripts/chip_score_scan.py || echo "  chip 失敗（續）"

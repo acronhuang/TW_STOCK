@@ -9,6 +9,7 @@
 - 頸線突破 (Neckline Breakout)
 - 量價噴出 (Volume Surge)
 - 量價背離 (Volume-Price Divergence)
+- VCP 波動收縮 (Volatility Contraction Pattern)
 
 作者: Ming
 版本: v2.1.0
@@ -19,6 +20,7 @@ from .bottom_reversal import detect_bottom_reversal
 from .neckline_breakout import detect_neckline_breakout
 from .pattern_detector import PatternDetector
 from .pattern_scorer import PatternScorer, calculate_pattern_strength
+from .vcp import detect_vcp, screen_vcp_market
 from .volume_analysis import detect_volume_price_divergence, detect_volume_surge
 from .w_bottom import detect_w_bottom
 
@@ -31,7 +33,9 @@ __all__ = [
     "calculate_pattern_strength",
     "detect_bottom_reversal",
     "detect_neckline_breakout",
+    "detect_vcp",
     "detect_volume_price_divergence",
     "detect_volume_surge",
     "detect_w_bottom",
+    "screen_vcp_market",
 ]
