@@ -10,7 +10,18 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-PYTHON="/home/mdsadmin/Stock/.venv/bin/python3"
+
+# Python 直譯器：可用 NOTIFY_PYTHON 覆寫；寫死路徑不存在時退回 PATH 上的 python3/python。
+# 背景：原本寫死 /home/mdsadmin/Stock/.venv/bin/python3，一旦該 venv 搬移或缺 pymongo，
+# `from pymongo import MongoClient` 會直接 ImportError → DB 寫入失敗 → 每次都走 LINE 備援。
+PYTHON="${NOTIFY_PYTHON:-/home/mdsadmin/Stock/.venv/bin/python3}"
+if [ ! -x "$PYTHON" ]; then
+    PYTHON="$(command -v python3 || command -v python)"
+fi
+if [ -z "$PYTHON" ]; then
+    echo "找不到可用的 python 直譯器，無法記錄排程警報" >&2
+    exit 1
+fi
 
 MESSAGE="${1:-排程執行失敗}"
 SOURCE="${2:-scheduler}"
@@ -25,6 +36,15 @@ message = os.environ.get("MSG", "排程執行失敗")
 source = os.environ.get("SRC", "scheduler")
 root = os.getcwd()
 sys.path.insert(0, root)
+
+# 先載入 .env，讓「寫 MongoDB」與「LINE 備援」使用同一組設定（MONGODB_URI 等）。
+# 背景：原本只有 LINE 備援分支才 load_dotenv，DB 寫入階段直接 os.getenv 取不到 .env 的值，
+# 若正式環境 MONGODB_URI 非預設（含 host/auth）就會連錯 → DB 寫入失敗 → 恆走 LINE 備援。
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(root, ".env"))
+except Exception as _e:
+    print(f".env 載入略過: {_e!r}")
 
 # 嚴重度：含 ❌/無法/中止 視為 error，其餘 warning
 level = "error" if any(k in message for k in ("❌", "無法", "中止", "critical")) else "warning"

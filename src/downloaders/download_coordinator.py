@@ -444,8 +444,13 @@ class DownloadCoordinator:
             if symbol and 'stock_id' not in record:
                 record['stock_id'] = symbol
             
-            # 資料驗證（僅針對價格資料）
-            if dataset and 'Price' in dataset:
+            # 資料驗證（僅針對台股 OHLC 價格資料）
+            # 2026-10-01 修：原本寫 `'Price' in dataset`，會誤把 GoldPrice / CrudeOilPrices /
+            # 各種 ReferencePrice 都丟進「最高>=收>=最低」的股價驗證。黃金資料是
+            # {'Price':..., 'date':...}（無 OHLC/stock_id），現行 validator 會瞄連通過，但一旦
+            # validator 收緊（例如強制要求 close>0）黃金就會被整批 continue 丟掉。
+            # 改為只認 TaiwanStockPrice，排除商品與參考價資料表。
+            if dataset and 'StockPrice' in dataset:
                 is_valid, error_msg = self.validator.validate_price_data(record)
                 if not is_valid:
                     validation_errors += 1
