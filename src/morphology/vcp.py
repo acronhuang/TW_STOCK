@@ -65,8 +65,8 @@ def _trend_template(df: pd.DataFrame) -> dict:
 
 def detect_vcp(
     df: pd.DataFrame,
-    min_contractions: int = 2,
-    max_base_depth: float = 0.35,
+    min_contractions: int = 3,
+    max_base_depth: float = 0.30,
     pivot_proximity: float = 0.08,
     swing_order: int = 5,
 ) -> dict:
@@ -74,8 +74,8 @@ def detect_vcp(
 
     Args:
         df: 日線 DataFrame（升冪），含 open/high/low/close/volume。
-        min_contractions: 最少收斂次數（典型 2~4）。
-        max_base_depth: 整理區間（base）允許的最大深度（0.35=35%）。
+        min_contractions: 最少收斂次數（典型 2~4，預設 3 較選別）。
+        max_base_depth: 整理區間（base）允許的最大深度（0.30=30%）。
         pivot_proximity: 現價距樞紐價多近才算「貼近突破」（0.08=8%）。
         swing_order: 轉折點偵測窗。
 
@@ -125,20 +125,30 @@ def detect_vcp(
     # 量能枯竭：近 10 日均量 < 前 50 日均量
     vol_recent = float(volume[-10:].mean())
     vol_prior = float(volume[-60:-10].mean()) if len(volume) >= 60 else float(volume.mean())
-    volume_dryup = bool(vol_prior > 0 and vol_recent < vol_prior * 0.85)
+    vol_ratio = vol_recent / vol_prior if vol_prior > 0 else 1.0
+    volume_dryup = bool(vol_prior > 0 and vol_ratio < 0.85)
 
     # 樞紐價 = 整理區最後一段高點（突破買點）
     pivot = float(base_close[highs[-1]]) if highs else float(base_close.max())
-    near_pivot = bool(pivot > 0 and (pivot - price) / pivot <= pivot_proximity and price <= pivot * 1.02)
+    pivot_dist = (pivot - price) / pivot if pivot > 0 else 1.0
+    near_pivot = bool(0 <= pivot_dist <= pivot_proximity and price <= pivot * 1.02)
 
-    # 評分
-    score = 0
-    score += min(tt["passed"], 8) * 6          # 趨勢樣板 0~48
-    score += 20 if contracting else 0
-    score += 12 if volume_dryup else 0
-    score += 10 if base_ok else 0
-    score += 10 if near_pivot else 0
-    score = min(score, 100)
+    # 連續評分 0~100（著重 VCP 專有品質，讓 is_vcp 候選排得開）
+    def _clamp(x: float) -> float:
+        return max(0.0, min(1.0, x))
+
+    final_depth = contractions[-1] if contractions else 100.0
+    ratio = (contractions[-1] / contractions[0]) if len(contractions) >= 2 and contractions[0] > 0 else 1.0
+    score = (
+        (tt["passed"] / 8) * 15                              # 趨勢樣板 0~15
+        + (min(len(contractions), 4) / 4) * 15               # 收斂段數 0~15（3+ 為佳）
+        + _clamp((15 - final_depth) / 12) * 25               # 最後一段越淺越好 0~25
+        + _clamp(1.0 - ratio) * 15                           # 收斂比（last/first）越小越好 0~15
+        + _clamp((max_base_depth - base_depth) / max_base_depth) * 10  # 整理越緊越好 0~10
+        + _clamp((0.85 - vol_ratio) / 0.35) * 10             # 量縮程度 0~10
+        + _clamp((pivot_proximity - pivot_dist) / pivot_proximity) * 10  # 貼近樞紐 0~10
+    )
+    score = round(min(max(score, 0.0), 100.0), 1)
 
     is_vcp = bool(tt["ok"] and contracting and base_ok and len(contractions) >= min_contractions)
 
