@@ -173,8 +173,12 @@ def screen_vcp_market(
     min_score: int = 70,
     lookback_days: int = 400,
     limit_symbols: int | None = None,
+    require_vcp: bool = True,
 ) -> list[dict]:
-    """全市場 VCP 掃描；回傳 score >= min_score 的清單（分數降冪）。"""
+    """全市場 VCP 掃描；回傳符合条件的清單（分數降冪）。
+
+    require_vcp=True（預設）：以 is_vcp 為硬門檻（趨勢樣板 + 逐次收斂 + 整理深度），
+    再以 score>=min_score 排序；避免「強趨勢但未收斂」的個股混入。"""
     from datetime import datetime, timedelta
 
     from pymongo import MongoClient
@@ -204,6 +208,8 @@ def screen_vcp_market(
         try:
             res = detect_vcp(df)
         except ValueError:
+            continue
+        if require_vcp and not res.get("is_vcp"):
             continue
         if res.get("score", 0) >= min_score:
             res["symbol"] = sym
