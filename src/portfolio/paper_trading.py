@@ -116,6 +116,20 @@ class PaperTradingAccount:
         if price is None:
             return {"status": "rejected", "reason": f"{symbol} 無行情"}
 
+        # 賣單下單當下即檢查持倉，避免無券/超額掛單（含待撮合的同標的賣單）
+        if side == "SELL":
+            held = self._position(symbol)
+            held_lots = held["lots"] if held else 0
+            pending_sell = sum(
+                o["lots"] for o in self.db[COLL_PAPER_ORDERS].find(
+                    {"account_id": self.account_id, "symbol": symbol,
+                     "side": "SELL", "status": "pending"}, {"lots": 1}
+                )
+            )
+            if lots > held_lots - pending_sell:
+                return {"status": "rejected",
+                        "reason": f"持倉不足(持 {held_lots} 張，已掛賣 {pending_sell} 張)"}
+
         # 市價單或限價已滿足 → 直接成交；否則掛單等撮合
         fillable = limit is None or (side == "BUY" and price <= limit) or (side == "SELL" and price >= limit)
         order = {
