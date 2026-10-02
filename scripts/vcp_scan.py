@@ -39,7 +39,8 @@ def _name_map(db, symbols: list[str]) -> dict[str, str]:
 
 
 def persist(db, scan_date, hits: list[dict]) -> None:
-    db[COLL_VCP_CANDIDATES].delete_many({})
+    # 只覆蓋同一掃描日，保留歷史快照供日後命中率/回測分析
+    db[COLL_VCP_CANDIDATES].delete_many({"scan_date": scan_date})
     if not hits:
         return
     docs = []

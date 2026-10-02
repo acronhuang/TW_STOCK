@@ -26,7 +26,12 @@ def _f(v):
 @st.cache_data(ttl=300, show_spinner=False)
 def _candidates():
     db = _db()
-    rows = list(db[COLL_VCP_CANDIDATES].find({}, {"_id": 0}).sort("score", -1))
+    latest = db[COLL_VCP_CANDIDATES].find_one(sort=[("scan_date", -1)])
+    if not latest:
+        return []
+    rows = list(db[COLL_VCP_CANDIDATES].find(
+        {"scan_date": latest["scan_date"]}, {"_id": 0}
+    ).sort("score", -1))
     return rows
 
 
