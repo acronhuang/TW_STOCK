@@ -152,7 +152,7 @@ class PairsTrader:
             "pair": [s1, s2],
             "cointegrated": cointegrated,
             "hedge_ratio": round(beta, 4),
-            "adf_tstat": round(tstat, 3),
+            "adf_tstat": round(tstat, 4),
             "adf_pvalue": pval,
             "half_life_days": hl,
             "correlation": round(corr, 3),
