@@ -323,6 +323,8 @@ DATA_TABLES = {
         {
             "name": "減資恢復買賣參考價格",
             "dataset": "TaiwanStockCapitalReductionReferencePrice",
+            "disabled": True,
+            "disabled_reason": "FinMind 需付費 sponsor 級(HTTP 400);減資參考價改由 TWSE corporate_actions 取得",
             "collection": "capital_reduction_price",
             "params": {},
             "indexes": [("stock_id", ASCENDING), ("date", DESCENDING)],
@@ -343,6 +345,8 @@ DATA_TABLES = {
         {
             "name": "台股分割後參考價",
             "dataset": "TaiwanStockSplitReferencePrice",
+            "disabled": True,
+            "disabled_reason": "FinMind 回 HTTP 422(端點疑棄用);分割參考價改由 TWSE corporate_actions 取得",
             "collection": "split_reference_price",
             "params": {},
             "indexes": [("stock_id", ASCENDING), ("date", DESCENDING)],
@@ -353,6 +357,8 @@ DATA_TABLES = {
         {
             "name": "台灣股票變更面額恢復買賣參考價格",
             "dataset": "TaiwanStockChangeParValueReferencePrice",
+            "disabled": True,
+            "disabled_reason": "FinMind 回 HTTP 422(端點疑棄用);變更面額參考價改由 TWSE corporate_actions 取得",
             "collection": "change_par_value_price",
             "params": {},
             "indexes": [("stock_id", ASCENDING), ("date", DESCENDING)],
