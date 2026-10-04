@@ -25,12 +25,27 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(PROJECT_ROOT / ".env")  # 讓 --line 能讀到 LINE 憑證
+except Exception:
+    pass
+
 from pymongo import MongoClient  # noqa: E402
 
 from src.analysis.stock_ranker import StockRanker  # noqa: E402
 
 DISCLAIMER = ("研究名單 ≠ 買進名單；型態 ≠ 未來上漲；AI 篩選 ≠ 投資保證。"
               "本清單僅供研究起點，投資決策請自行確認。")
+
+
+def line_message(rows, dstr, top=12):
+    greens = [r for r in rows if r["tier"] == "🟢"]
+    head = f"🔬 台股研究名單 {dstr}\n🟢 值得深入研究 {len(greens)} 檔（Top {min(top, len(greens))}）"
+    body = "\n".join(
+        f"{r['symbol']} {r['name']} {r['score']:.1f}"
+        for r in greens[:top] if r["score"] is not None)
+    return f"{head}\n{body}\n⚠️ 研究名單≠買進名單，僅供研究"
 
 
 def factor_date(uri="mongodb://localhost:27017/"):
@@ -106,6 +121,7 @@ def main():
     ap.add_argument("--red", type=float, default=50, help="🔴 門檻：綜合分 <（預設 50）")
     ap.add_argument("--out-dir", default=None, help="另存 CSV+JSON 的目錄（預設不存檔）")
     ap.add_argument("--quiet", action="store_true", help="只寫檔不印表（需搭配 --out-dir）")
+    ap.add_argument("--line", action="store_true", help="推播 🟢 名單摘要到 LINE（遵守 LINE_SPOOL）")
     a = ap.parse_args()
 
     if a.red > a.green:
@@ -123,6 +139,11 @@ def main():
             counts = {t: sum(1 for r in rows if r["tier"] == t) for t in ("🟢", "🟡", "🔴")}
             print(f"[{dstr}] 研究名單已寫出：🟢{counts['🟢']} 🟡{counts['🟡']} 🔴{counts['🔴']} "
                   f"→ {csv_path} / {json_path}")
+
+    if a.line:
+        from src.alerts.line_notifier import LineNotifier
+        ok = LineNotifier().send(line_message(rows, dstr))
+        print(f"[LINE] {'已送出/暫存' if ok else '未發送（未設定或停用）'}")
 
     if not a.quiet:
         print_report(rows, dstr, a.green, a.red)
