@@ -66,6 +66,9 @@ curl -s localhost:8888/api/ranking?limit=30
 curl -s localhost:8888/api/score/2330
 ```
 
+**互動檢視**：Dashboard 已有「📊 策略研究 → 🔬 研究篩選」頁，直接呈現 🟢🟡🔴 分級、
+六維拆解與可調門檻，並可下載 CSV（`dashboard/pages/research_screener.py`）。
+
 ## 🟢🟡🔴 分級規則（在既有輸出上做分類，不另算）
 
 把 `daily_recommendations` / `stock_ranker` 綜合分、`financial_health` 等級、型態旗標、籌碼訊號組合成三燈。**預設門檻（可依使用者指定調整）：**
@@ -75,6 +78,25 @@ curl -s localhost:8888/api/score/2330
 - 🔴 **暫不納入研究**：綜合分 **< 50**，或 財報 **D–F**，或 型態未收斂，或 籌碼出現 🔴 斷頭/融資過熱。
 
 遇到資料缺漏（某檔無因子/無財報）→ 標 🟡 並註明「資料不足，無法分級」，不要猜。
+
+## 步驟 11 — 驗證與報告（標準流程，必做）
+
+產出 🟢🟡🔴 名單**之後**，標準流程必須再跑一層驗證，確認這套因子/評分的優勢不是
+樣本巧合或前視洩漏，否則 🟢 名單不可信。三件事都要做並附在報告：
+
+1. **多因子評分報告** — 輸出綜合分的維度拆解（估值/品質/動能/安全/籌碼/成長）與分佈，
+   讓使用者看到每檔 🟢 是靠哪些維度得分。
+   `/home/mdsadmin/Stock/.venv/bin/python3 scripts/factor_ic_analysis.py`（因子 IC / 衰減）。
+2. **回測 + Walk-Forward** — 用同一套評分在歷史上滾動驗證（樣本內/外對比），報告
+   年化報酬、夏普、最大回撤、勝率。
+   `scripts/backtest_integrated_v21.py --start-date 2022-01-01`（內含 6 月滾動 Walk-Forward）。
+   績效指標模組：`src/backtesting/performance.py`。
+3. **前視洩漏 / A-B 穩健性閘門** — 確認品質因子沒有偷看未來財報；覆蓋率 <85% 應拒跑。
+   `scripts/run_ab_robust.py` → 結論寫入 `ab_verdict.txt`（PASS/FAIL）。
+
+**判讀規則：** 若回測 Walk-Forward 樣本外績效崩壞，或 A-B 判定 FAIL（疑前視洩漏），
+則**在報告開頭明確警告**「本期評分優勢可能不穩健／疑似前視」，🟢 名單降級為僅供觀察，
+不可當成可信研究結論。IC 與回測同向才算站得住。
 
 ## 輸出格式（固定模板）
 
@@ -94,11 +116,8 @@ curl -s localhost:8888/api/score/2330
 
 ## 進階模組（使用者要求再跑）
 
-- 回測 / Walk-Forward：`scripts/backtest_integrated_v21.py --start-date 2022-01-01`
-- 因子 IC：`scripts/factor_ic_analysis.py`
-- 前視洩漏 / A-B 穩健性：`scripts/run_ab_robust.py`（結論寫入 `ab_verdict.txt`）
-- 績效指標（年化/夏普/最大回撤/勝率）：`src/backtesting/performance.py`
 - 單檔 7 角色深度：`python scripts/team_analyze.py <代號>`
+- 每日自動候選（排程）：`evening_pipeline.sh` 已含選股/合議，產出每日 picks。
 
 ## 常見陷阱
 
