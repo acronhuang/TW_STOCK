@@ -129,7 +129,7 @@ elif page == "💼 持倉風控":
     else:
         from pages import paper_trading_page; paper_trading_page.show()
 elif page == "📊 策略研究":
-    v = st.radio("研究", ["回測視覺化", "策略比較", "2560戰法", "🎯 判斷準確度", "📈 買方改良對照", "🎲 選擇權價差", "🔗 配對交易", "🔬 研究篩選", "融資融券(全市場榜)"],
+    v = st.radio("研究", ["回測視覺化", "策略比較", "2560戰法", "🎯 判斷準確度", "📈 買方改良對照", "🎲 選擇權價差", "🔗 配對交易", "🔬 研究篩選", "📈 命中率回看", "融資融券(全市場榜)"],
                  horizontal=True, key="sr_view", label_visibility="collapsed")
     if v == "回測視覺化":
         from pages import backtest_viz; backtest_viz.show()
@@ -147,6 +147,8 @@ elif page == "📊 策略研究":
         from pages import pairs_page; pairs_page.show()
     elif v == "🔬 研究篩選":
         from pages import research_screener; research_screener.show()
+    elif v == "📈 命中率回看":
+        from pages import research_hitrate; research_hitrate.show()
     else:
         from pages import margin_market_page; margin_market_page.show()
 elif page == "📚 知識庫":
