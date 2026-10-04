@@ -98,6 +98,9 @@ curl -s localhost:8888/api/score/2330
 則**在報告開頭明確警告**「本期評分優勢可能不穩健／疑似前視」，🟢 名單降級為僅供觀察，
 不可當成可信研究結論。IC 與回測同向才算站得住。
 
+**自動化：** 已排每週週報 `scripts/weekly_research_report.py --full`（週六 10:00），
+跑 A-B 穩健性驗證、落地 `reports/research_validation_<date>.md` 並推 LINE 摘要。
+
 ## 輸出格式（固定模板）
 
 ```
