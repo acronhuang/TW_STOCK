@@ -23,7 +23,7 @@ OUT = ROOT / "deploy" / "systemd"
 SELECTED = {
     # weekly（單一 dow）
     "weekly_outstanding_shares", "weekly_team_verify", "weekly_team_full",
-    "data_health_weekly_finmind", "verify_backup_weekly", "tdcc_shareholding",
+    "verify_backup_weekly", "tdcc_shareholding",
     "weekly_media_news", "history_continuity", "evening_data_check",
     "weekly_corp_actions", "foreign_shareholding_weekly", "weekly_rag_ingest",
     "requirement_weekly_summary",
