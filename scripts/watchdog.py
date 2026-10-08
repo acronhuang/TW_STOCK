@@ -52,6 +52,11 @@ WATCHED = {
     # 全年每日跑故無 weekdays 限制；非即時關鍵，grace/overdue 給寬鬆值。
     "openapi_financial": {"name": "財報 OpenAPI 同步", "hour": 6, "weekdays_only": False,
                           "grace_h": 3, "overdue_h": 3},
+    # 新聞抓取健康：cron `30 19 * * 1-5`（每交易日 19:30，收盤管線 20:00 前先量 Google News 死活）。
+    # 為何非有不可：google_titles() 是 fail-open，新聞源壞掉時 verdict 會默默失去消息面佐證，
+    # 資料面完全看不出來（照常跑、照常出結果）——只有這條心跳＋成功率快照抓得到靜默失效。
+    "news_health": {"name": "新聞抓取健康", "hour": 19, "weekdays_only": True,
+                    "grace_h": 2, "overdue_h": 2},
 }
 REALERT_HOURS = 12  # 同一 job 兩次告警至少間隔（去重，避免每輪都吵）
 DISK_WARN_PCT = 85  # 根檔案系統使用率超過此值即告警（曾因 runaway log 逼近磁碟滿）
