@@ -96,6 +96,18 @@ def main():
 
     print(f"[{datetime.now():%F %T}] 完成：有新聞 {got}、空 {empty}、略過(今日已抓) {skip}", flush=True)
 
+    # 心跳：讓 watchdog 偵測「週五預抓 job 是否有跑」。別為何非有不可：這 job 正常
+    # 結果就是「大多數有新聞」，與「整支死掉沒跑」在資料面難分（快取會慢慢過期），
+    # 只有心跳分得出死活。
+    try:
+        DB.system_heartbeat.update_one(
+            {"_id": "media_news"},
+            {"$set": {"last_run": datetime.now(), "status": "ok",
+                      "got": got, "empty": empty, "skip": skip}},
+            upsert=True)
+    except Exception as e:
+        print(f"  ⚠️ 心跳寫入失敗: {e}", flush=True)
+
 
 if __name__ == "__main__":
     main()

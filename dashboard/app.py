@@ -65,7 +65,7 @@ page = st.sidebar.radio(
 
 # 路由到 6 大頁(每頁內以 radio 子選單分面向,只執行選中頁 show())
 if page == "🏠 總覽":
-    v = st.radio("總覽", ["系統總覽", "資料監控", "排程警報", "🩺 系統健康"],
+    v = st.radio("總覽", ["系統總覽", "資料監控", "排程警報", "🩺 系統健康", "📰 新聞健康"],
                  horizontal=True, key="ov_view", label_visibility="collapsed")
     if v == "系統總覽":
         from pages import home; home.show()
@@ -73,6 +73,8 @@ if page == "🏠 總覽":
         from pages import monitor; monitor.show()
     elif v == "排程警報":
         from pages import schedule_alerts_page; schedule_alerts_page.show()
+    elif v == "📰 新聞健康":
+        from pages import news_health_page; news_health_page.show()
     else:
         from pages import system_health; system_health.show()
 elif page == "🎯 每日決策":

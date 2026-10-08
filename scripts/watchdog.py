@@ -19,6 +19,7 @@
 HEALTHCHECK_URL 選項：完整度 job 成功時 ping 外部，外部服務在「該 ping 沒來」時告警。
 """
 import argparse
+import os
 import shutil
 import sys
 from datetime import datetime, timedelta
@@ -57,10 +58,15 @@ WATCHED = {
     # 資料面完全看不出來（照常跑、照常出結果）——只有這條心跳＋成功率快照抓得到靜默失效。
     "news_health": {"name": "新聞抓取健康", "hour": 19, "weekdays_only": True,
                     "grace_h": 2, "overdue_h": 2},
+    # media_news 週五預抓：cron `30 19 * * 5`（每週五 19:30）。為何非有不可：全市場批次
+    # 分析的新聞佐證靠這份預抓快取，job 死掉→快取逐步過期→新聞静默消失。
+    "media_news": {"name": "媒體新聞週預抓", "hour": 19, "weekdays_only": False,
+                   "weekdays": {4}, "grace_h": 3, "overdue_h": 3},
 }
 REALERT_HOURS = 12  # 同一 job 兩次告警至少間隔（去重，避免每輪都吵）
 DISK_WARN_PCT = 85  # 根檔案系統使用率超過此值即告警（曾因 runaway log 逼近磁碟滿）
 DISK_PATH = "/"
+SPOOL_STALE_H = 10  # line_spool 殘留超過此小時數視為「digest 未發出」（收盤 20:00 跑，隔天早上彜至已遠超）
 
 
 def last_expected(now, hour, weekdays_only, grace_h, weekdays=None):
@@ -86,7 +92,6 @@ def last_expected(now, hour, weekdays_only, grace_h, weekdays=None):
 
 def _line(msg):
     try:
-        import os
         sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis")
         from dotenv import load_dotenv
         load_dotenv("/home/mdsadmin/Stock/tw-stock-analysis/.env")
@@ -154,6 +159,34 @@ def main():
     problems = list(overdue)
     if disk_alert:
         problems.append(disk_alert)
+
+    # LINE 送達守衛：line_spool.jsonl 是「暫存待發」佇列，evening_digest 應在收盤後 flush 清空。
+    # 若佇列殘留且「變舊」（上次修改超過門檻小時），代表 digest 沒把它發出去 ——
+    # 這是告警系統自身的單點故障（LINE 掛了→所有告警靜默失效），必須被看見。
+    spool_alert = None
+    spool_path = os.getenv("LINE_SPOOL",
+                           "/home/mdsadmin/Stock/tw-stock-analysis/logs/line_spool.jsonl")
+    try:
+        if os.path.exists(spool_path) and os.path.getsize(spool_path) > 0:
+            age_h = (now.timestamp() - os.path.getmtime(spool_path)) / 3600
+            nlines = sum(1 for _ in open(spool_path, encoding="utf-8"))
+            mark = "🚨" if age_h >= SPOOL_STALE_H else "✅"
+            print(f"{mark} LINE spool 殘留 {nlines} 則（{age_h:.1f}h 未 flush）")
+            if age_h >= SPOOL_STALE_H and not args.status:
+                sdoc = hb.get("_line_spool")
+                s_alerted = sdoc.get("watchdog_alerted_at") if sdoc else None
+                if not (s_alerted and (now - s_alerted) < timedelta(hours=REALERT_HOURS)):
+                    spool_alert = (f"📬 LINE 推播可能未發出：line_spool 殘留 {nlines} 則、已 {age_h:.0f}h 未 flush\n"
+                                   f"  → evening_digest 或 LINE API 可能故障；查 logs/evening_pipeline_*.log 與 LINE token")
+                    db.system_heartbeat.update_one(
+                        {"_id": "_line_spool"}, {"$set": {"watchdog_alerted_at": now}}, upsert=True)
+        else:
+            print("✅ LINE spool 已清空（無待發殘留）")
+    except Exception as e:
+        print(f"⚠️ LINE spool 檢查失敗: {e}")
+    if spool_alert:
+        problems.append(spool_alert)
+
     if problems and not args.status:
         _line("系統守衛偵測到異常：\n\n" + "\n\n".join(problems)
               + "\n\n→ 排程：systemctl is-active cron；timedatectl　→ 空間：df -h /")

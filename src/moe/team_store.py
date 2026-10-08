@@ -54,10 +54,32 @@ def _final_verdict(analysis: dict):
     return m.group(1) if m else None
 
 
+def _news_fields(analysis: dict) -> dict:
+    """從 analysis['news']（餘新聞佐證文字）萃出可審計/可回測的結構化欄位。
+    背景：新聞會餘進分析角色 prompt，但過去只有 LLM 回應入庫、prompt 不存，
+    於是「新聞到底有沒有被餘、有沒有提升命中率」無法審計。這裡把它存成欄位。
+    ★ 來源沒有 'news' 鍵（如 phase2 從 DB 載回的那半段）→ 回 {}，避免用 0/False
+    覆蓋 phase1 已寫入的真值（空值過濾只擋 ""，擋不住 0/False）。"""
+    if "news" not in analysis:
+        return {}
+    txt = analysis.get("news") or ""
+    # news_evidence 組裝格式：每條新聞以 "- " 開頭
+    count = sum(1 for ln in txt.splitlines() if ln.strip().startswith("- "))
+    has_official = "官方訊息" in txt
+    has_media = "[媒體]" in txt
+    return {
+        "news": txt,                         # 原始佐證文字（可回溯發出給 LLM 的是什麼）
+        "news_count": count,                 # 餘入幾條新聞
+        "catalyst": count > 0,               # 有無消息面催化劑
+        "news_official": has_official,       # 含 TWSE 官方重大訊息
+        "news_media": has_media,             # 含媒體（Google News）標題
+    }
+
+
 def to_doc(analysis: dict, date: datetime, name: str = "", source_file: str = "") -> dict:
     """把單筆 analysis 轉為 team_analysis 文件（不含 _id）。"""
     now = datetime.now()
-    return {
+    doc = {
         "symbol": analysis["symbol"],
         "name": name or "",
         "date": date,
@@ -76,6 +98,8 @@ def to_doc(analysis: dict, date: datetime, name: str = "", source_file: str = ""
         "source_file": source_file,
         "updated_at": now,
     }
+    doc.update(_news_fields(analysis))       # news / news_count / catalyst / ...
+    return doc
 
 
 # 這些欄位「有值」比「沒值」珍貴，來源缺這些欄位時不得覆蓋既有值。
@@ -85,7 +109,8 @@ def to_doc(analysis: dict, date: datetime, name: str = "", source_file: str = ""
 # 8 檔全滅，log 卻一路顯示成功（合議定案都印出來了），只有查 DB 才看得見。
 # 對照組：不在該 JSON 內的另外 49 檔完全不受影響，證實是覆蓋而非寫入失敗。
 _PRECIOUS = ("advisor", "consensus", "final_verdict", "reports", "models",
-             "median_turnover", "evidence", "senvision", "extra", "price_at_analysis")
+             "median_turnover", "evidence", "senvision", "extra", "price_at_analysis",
+             "news", "news_count", "catalyst")
 
 
 def upsert_analyses(db, analyses: list, date: datetime, meta: dict = None,

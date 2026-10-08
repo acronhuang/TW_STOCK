@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import time
 from datetime import datetime, timedelta
 from statistics import median
 
@@ -41,7 +40,8 @@ sys.path.insert(0, _ROOT)
 from dotenv import load_dotenv  # noqa: E402
 from pymongo import MongoClient  # noqa: E402
 
-from src.analysis.news_evidence import google_titles  # noqa: E402
+from src.analysis.news_evidence import fetch_google_news  # noqa: E402
+from src.analysis.web_search import google_news_search  # noqa: E402
 from src.domain.collections import (  # noqa: E402
     COLL_MAJOR_NEWS,
     COLL_MEDIA_NEWS,
@@ -82,46 +82,68 @@ def _sample_symbols(db, n: int) -> list[tuple[str, str]]:
 
 
 def _probe(db, n: int) -> dict:
-    """抽樣即時打 Google News，統計成功/空回/失敗與延遲。"""
+    """抽樣即時打 Google News，依狀態碼精確統計成功/空回/被擋/逾時/錯誤與延遲。"""
     sample = _sample_symbols(db, n)
-    ok = empty = fail = 0
+    ok = empty = blocked = timeout = error = 0
     lats: list[float] = []
     worst_empty: list[str] = []
+    status_tally: dict[str, int] = {}
     for code, name in sample:
-        if not name:
-            fail += 1
-            continue
-        t = time.time()
-        try:
-            titles = google_titles(name)  # fail-open：內部吃掉例外回 []
-            dt = time.time() - t
+        titles, status, dt = fetch_google_news(name)   # 不吞例外，回精確狀態
+        status_tally[status] = status_tally.get(status, 0) + 1
+        if dt:
             lats.append(dt)
-            # google_titles 回 [] 既可能是「空回」也可能是「失敗被吃掉」。
-            # 用延遲粗分：極短（<0.15s，通常是連不上/DNS/逾時立即失敗）判 fail，
-            # 否則判 empty（連得上但該檔確實 0 筆）。有標題一律 ok。
-            if titles:
-                ok += 1
-            elif dt < 0.15:
-                fail += 1
-            else:
-                empty += 1
-                if len(worst_empty) < 5:
-                    worst_empty.append(f"{code}{name}")
-        except Exception:
-            fail += 1
+        if status == "ok":
+            ok += 1
+        elif status == "empty":
+            empty += 1
+            if len(worst_empty) < 5:
+                worst_empty.append(f"{code}{name}")
+        elif status == "blocked":
+            blocked += 1
+        elif status in ("timeout", "conn_error"):
+            timeout += 1
+        else:                                            # http_error/error/no_name
+            error += 1
     total = len(sample) or 1
+    fail = blocked + timeout + error                     # 任何「非正常回應」都算失敗
     return {
         "sample": len(sample),
         "ok": ok,
         "empty": empty,
+        "blocked": blocked,
+        "timeout": timeout,
+        "error": error,
         "fail": fail,
         "success_rate": round(ok / total, 3),
         "empty_rate": round(empty / total, 3),
         "fail_rate": round(fail / total, 3),
+        "blocked_rate": round(blocked / total, 3),
+        "status_tally": status_tally,
         "lat_p50": round(median(lats), 2) if lats else None,
         "lat_p95": round(sorted(lats)[int(len(lats) * 0.95)], 2) if len(lats) >= 2 else None,
         "empty_samples": worst_empty,
     }
+
+
+def _probe_international(db, n: int = 3) -> dict:
+    """抽樣探 Dashboard RAG 用的國際新聞路徑（web_search.google_news_search / 英文源）。
+    這條路徑原本完全沒監控；用少量抽樣確認外部英文 RSS 是否可用。"""
+    sample = _sample_symbols(db, n)
+    ok = fail = 0
+    for _code, name in sample:
+        if not name:
+            continue
+        try:
+            rows = google_news_search(name, max_items=3, region="international_en")
+            if rows:
+                ok += 1
+            else:
+                fail += 1
+        except Exception:
+            fail += 1
+    total = ok + fail or 1
+    return {"sample": ok + fail, "ok": ok, "success_rate": round(ok / total, 3)}
 
 
 def _cache_health(db) -> dict:
@@ -152,12 +174,18 @@ def _problems(probe: dict, cache: dict) -> list[str]:
         out.append(
             f"Google News 成功率 {probe['success_rate']*100:.0f}% "
             f"< 門檻 {MIN_SUCCESS*100:.0f}%（抽 {probe['sample']} 檔，"
-            f"ok {probe['ok']}/空 {probe['empty']}/失敗 {probe['fail']}）"
+            f"ok {probe['ok']}/空 {probe['empty']}/被擋 {probe['blocked']}/逾時 {probe['timeout']}/錯 {probe['error']}）"
+        )
+    # 被擋（429/403）是最嚴重的訊號：代表 Google 開始限流 → 即時抓會成片失效
+    if probe["blocked"] >= max(2, probe["sample"] // 4):
+        out.append(
+            f"Google News 被限流/擋（429/403）{probe['blocked']}/{probe['sample']} 檔 "
+            f"→ 即時新聞抓取將大量落空，verdict 將失去消息面佐證"
         )
     if probe["sample"] and probe["empty_rate"] > MAX_EMPTY:
         out.append(
             f"Google News 空回率 {probe['empty_rate']*100:.0f}% "
-            f"> 門檻 {MAX_EMPTY*100:.0f}%（可能被限流或查詢被擋）"
+            f"> 門檻 {MAX_EMPTY*100:.0f}%（查詢被擋或大量標的無新聞）"
         )
     if cache["cache_age_days"] is not None and cache["cache_age_days"] > CACHE_DAYS:
         out.append(
@@ -181,10 +209,12 @@ def _line(msg: str):
 def do_snapshot(db, n: int, alert: bool):
     probe = _probe(db, n)
     cache = _cache_health(db)
+    intl = _probe_international(db)
     day = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     snap = {
         "date": day,
         "probe": probe,
+        "intl": intl,
         "cache": cache,
         "created_at": datetime.now(),
     }
@@ -199,9 +229,10 @@ def do_snapshot(db, n: int, alert: bool):
     print(
         f"  Google News：抽 {probe['sample']} 檔  成功 {probe['ok']}"
         f"（{probe['success_rate']*100:.0f}%） 空回 {probe['empty']}"
-        f"（{probe['empty_rate']*100:.0f}%） 失敗 {probe['fail']}"
-        f"（{probe['fail_rate']*100:.0f}%）  延遲 p50={probe['lat_p50']}s p95={probe['lat_p95']}s"
+        f"（{probe['empty_rate']*100:.0f}%） 被擋 {probe['blocked']} 逾時 {probe['timeout']} 錯 {probe['error']}"
+        f"  延遲 p50={probe['lat_p50']}s p95={probe['lat_p95']}s"
     )
+    print(f"  國際英文路徑(RAG web_search)：抽 {intl['sample']} 檔  成功 {intl['ok']}（{intl['success_rate']*100:.0f}%）")
     print(
         f"  快取：media_news {cache['media_fresh']}/{cache['media_total']} 新鮮"
         f"（{cache['media_fresh_rate']*100:.0f}%，最新 {cache['cache_age_days']} 天前）"
@@ -248,12 +279,13 @@ def do_report(db):
         print("尚無新聞健康快照")
         return
     print("日期        成功%  空回%  失敗%  p95(s)  快取新鮮%  官方14d")
+    print("日期        成功%  空回%  被擋%  p95(s)  快取新鮮%  官方14d")
     for h in reversed(hist):
         p = h["probe"]
         c = h["cache"]
         print(
             f"{h['date'].date()}  {p['success_rate']*100:>5.0f}  {p['empty_rate']*100:>5.0f}"
-            f"  {p['fail_rate']*100:>5.0f}  {str(p.get('lat_p95','-')):>6}"
+            f"  {p.get('blocked_rate',0)*100:>5.0f}  {str(p.get('lat_p95','-')):>6}"
             f"  {c['media_fresh_rate']*100:>8.0f}  {c['major_news_14d']:>6}"
         )
 

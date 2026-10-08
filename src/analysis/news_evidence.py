@@ -57,28 +57,59 @@ def major_news_for(code: str, days: int = 14, limit: int = 5) -> list[str]:
     return out
 
 
-def google_titles(name: str, max_items: int = 4, timeout: int = 6) -> list[str]:
-    """Google News RSS 原始標題（無前綴）。best-effort：任何錯誤/逾時回空。
-    供 media_news_sync 預抓存純標題；一般查詢用 google_news_for。"""
+def fetch_google_news(name: str, max_items: int = 4, timeout: int = 6) -> tuple[list[str], str, float]:
+    """抓 Google News RSS，回 (titles, status, latency_sec)。供健康監控精確分類用。
+    status ∈ {ok, empty, no_name, timeout, blocked, http_error, conn_error, error}。
+    注：本函式「不」吞例外——讓呼叫端得以區分「真空回」vs「被擋/逾時」。
+    一般分析請用 fail-open 的 google_titles()。"""
+    import time
     if not name:
-        return []
+        return [], "no_name", 0.0
+    t0 = time.time()
     try:
         q = requests.utils.quote(f"{name} 股")
         url = (f"https://news.google.com/rss/search?q={q}"
                f"&hl=zh-TW&gl=TW&ceid=TW:zh-Hant")
         r = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0 (X11; Linux) Chrome/120"})
+        dt = time.time() - t0
+        if r.status_code in (429, 403):        # 被限流/擋
+            return [], "blocked", dt
         r.raise_for_status()
         # 用 regex 抽 <item> 內的 <title>，不進 XML parser → 避開 XXE/billion-laughs
         out = []
-        for it in re.findall(r"<item>(.*?)</item>", r.text, re.DOTALL)[:max_items]:
+        seen = set()
+        for it in re.findall(r"<item>(.*?)</item>", r.text, re.DOTALL):
             m = re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", it, re.DOTALL)
-            if m:
-                title = re.sub(r"\s+", " ", m.group(1)).strip()
-                if title:
-                    out.append(title)
-        return out
+            if not m:
+                continue
+            title = re.sub(r"\s+", " ", m.group(1)).strip()
+            if not title:
+                continue
+            # 輕量去重：多家媒體轉載同一標題會洗版，以「去掉「 - 來源」後的正文」為 key。
+            key = re.sub(r"\s*-\s*[^-]+$", "", title)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(title)
+            if len(out) >= max_items:
+                break
+        return out, ("ok" if out else "empty"), dt
+    except requests.exceptions.Timeout:
+        return [], "timeout", time.time() - t0
+    except requests.exceptions.ConnectionError:
+        return [], "conn_error", time.time() - t0
+    except requests.exceptions.HTTPError:
+        return [], "http_error", time.time() - t0
     except Exception:
-        return []      # fail-open：新聞抓不到就當沒有，分析照常
+        return [], "error", time.time() - t0
+
+
+def google_titles(name: str, max_items: int = 4, timeout: int = 6) -> list[str]:
+    """Google News RSS 原始標題（無前綴）。best-effort：任何錯誤/逾時回空。
+    供 media_news_sync 預抓存純標題；一般查詢用 google_news_for。
+    fail-open 薄包裝；要狀態分類請用 fetch_google_news()。"""
+    titles, _status, _dt = fetch_google_news(name, max_items, timeout)
+    return titles      # fail-open：新聞抓不到就當沒有，分析照常
 
 
 def google_news_for(name: str, max_items: int = 4, timeout: int = 6) -> list[str]:
