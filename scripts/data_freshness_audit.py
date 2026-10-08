@@ -116,6 +116,8 @@ EXEMPT = {
     "system_heartbeat": "心跳,由 watchdog 監控",
     "data_continuity_alerted": "去重用的告警記錄",
     "data_health_history": "健康快照歷史",
+    "news_health_history": "新聞抓取健康快照歷史,job 死活由 watchdog(news_health 心跳)監控",
+    "news_value_backtest": "新聞價值回測快照,非時序資料源(按需重跨)",
     "digest_history": "推播歷史",
     # 靜態 / 低頻參考資料
     "taiwan_stock_info": "股票清單,每日由 info sync 更新但非時序資料",
