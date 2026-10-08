@@ -278,7 +278,6 @@ def do_report(db):
     if not hist:
         print("尚無新聞健康快照")
         return
-    print("日期        成功%  空回%  失敗%  p95(s)  快取新鮮%  官方14d")
     print("日期        成功%  空回%  被擋%  p95(s)  快取新鮮%  官方14d")
     for h in reversed(hist):
         p = h["probe"]
