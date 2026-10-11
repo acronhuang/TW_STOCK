@@ -57,6 +57,17 @@ log = logging.getLogger(__name__)
 BASE = "https://openapi.twse.com.tw/v1"
 NOW = datetime.now(timezone.utc)
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.data_gap.stamp import stamp_day  # noqa: E402
+
+
+def _stamp_day(db) -> datetime:
+    """OpenAPI 只給最新已公布交易日；假日/週末抓到的是前一交易日的資料，不能標成抓取日。"""
+    now = datetime.now()
+    recent = [d["date"] for d in db["trading_dates"].find(
+        {"date": {"$lte": now.strftime("%Y-%m-%d")}}, {"date": 1}).sort("date", -1).limit(15)]
+    return stamp_day(now, recent)
+
 
 def fetch(path: str) -> list[dict]:
     url = f"{BASE}{path}"
@@ -168,7 +179,7 @@ def sync_securities_lending(db):
         return 0
     col = db["securities_lending"]
     col.create_index([("twse_code", ASCENDING), ("date", DESCENDING)])
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _stamp_day(db)
     inserted = 0
     for row in data:
         doc = {
@@ -333,7 +344,7 @@ def sync_foreign_top20(db):
     if not data:
         return 0
     col = db["foreign_top20"]
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _stamp_day(db)
     col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
     inserted = 0
     for row in data:
@@ -361,7 +372,7 @@ def sync_after_hours(db):
         return 0
     col = db["after_hours_trading"]
     col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _stamp_day(db)
     inserted = 0
     for row in data:
         code = row.get("Code", row.get("股票代號", "")).strip()
@@ -407,7 +418,7 @@ def sync_etf_rank(db):
     if not data:
         return 0
     col = db["etf_dca_rank"]
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _stamp_day(db)
     col.create_index([("date", DESCENDING)])
     inserted = 0
     for row in data:
@@ -436,7 +447,7 @@ def sync_odd_lot(db):
         return 0
     col = db["odd_lot_trading"]
     col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _stamp_day(db)
     inserted = 0
     for row in data:
         code = row.get("Code", row.get("股票代號", "")).strip()
@@ -512,7 +523,7 @@ def sync_margin_suspension(db):
         return 0
     col = db["margin_suspension"]
     col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _stamp_day(db)
     inserted = 0
     for row in data:
         code = row.get("Code", row.get("股票代號", "")).strip()
@@ -539,7 +550,7 @@ def sync_margin_trading(db):
         return 0
     col = db["margin_purchase_short_sale"]
     col.create_index([("code", ASCENDING), ("date", DESCENDING)])
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _stamp_day(db)
     inserted = 0
     for row in data:
         code = row.get("股票代號", "").strip()
