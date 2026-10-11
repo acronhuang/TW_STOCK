@@ -8,7 +8,7 @@ import argparse
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -93,9 +93,13 @@ def repair() -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="只顯示判定的停機時間與將執行的動作，不執行也不通知")
+    parser.add_argument("--drill", action="store_true",
+                        help="演練：假設停機 30 分鐘，真的執行補抓與缺口回補，結果只印出（不發 LINE、不寫告警）")
     args = parser.parse_args(argv)
 
     start, previous = boot_start(), previous_boot_end()
+    if args.drill:
+        previous = start - timedelta(minutes=30)
     gap = downtime.gap(previous, start)
     if args.dry_run:
         will_run = gap is None or gap >= boot_catchup.SHORT_REBOOT
@@ -105,8 +109,8 @@ def main(argv: list[str] | None = None) -> int:
             print("將執行：" + "、".join(c[0] for c in boot_catchup.CATCH_UP_COMMANDS) + "、data_gap_repair --apply")
         return 0
 
-    boot_catchup.run(wait_mongo=wait_mongo, notify=notify, execute=execute, repair=repair,
-                     boot_start=start, previous_boot_end=previous)
+    boot_catchup.run(wait_mongo=wait_mongo, notify=(lambda m: print("【演練】" + m, flush=True)) if args.drill else notify,
+                     execute=execute, repair=repair, boot_start=start, previous_boot_end=previous)
     return 0
 
 

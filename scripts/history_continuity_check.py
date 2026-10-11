@@ -47,10 +47,14 @@ CHECKED = [
     "institutional_flow", "stock_factors", "margin_purchase_short_sale",
     "day_trading_targets", "securities_lending", "after_hours_trading",
     "odd_lot_trading",
+    "foreign_holding",     # 2026-10-11 納入：MI_QFIIS 有按日期端點，可自動回補
+    "risk_analysis",       # 2026-10-11 納入：持倉風控決策快照，漏掉的日子登記但不可事後重建
 ]
 # 筆數殘缺偵測對象＝上述 + stock_price 自己（stock_price 亦納入缺日檢查，因日曆已改用
 # trading_dates 這個外部錨，不再由 stock_price 自我推導）。
 CHECKED_COUNTS = ["stock_price"] + CHECKED
+# 只在報告列出、不發 LINE：決策快照事後補不回，推播只是噪音（data_gap_register 另有登記）。
+RECORD_ONLY = {"risk_analysis"}
 
 # ── 收集範圍宣告（完整性的定義）────────────────────────────────────────────
 # 「完整」是相對於**宣告過的範圍**，不是相對於市場上存在的一切。沒有宣告範圍，
@@ -307,10 +311,11 @@ def main():
 
     # 去重：只報「新出現」的問題（缺日與缺量各自的 key，互不干擾）
     alerted = {d["_id"] for d in db.data_continuity_alerted.find({}, {"_id": 1})}
-    new_gaps = {c: [g for g in gs if f"{c}:{g}" not in alerted] for c, gs in gap_report.items()}
+    new_gaps = {c: [g for g in gs if f"{c}:{g}" not in alerted] for c, gs in gap_report.items()
+                if c not in RECORD_ONLY}
     new_gaps = {c: gs for c, gs in new_gaps.items() if gs}
     new_thin = {c: [(d, n, m) for d, n, m in th if f"{c}:{d}:thin" not in alerted]
-                for c, th in thin_report.items()}
+                for c, th in thin_report.items() if c not in RECORD_ONLY}
     new_thin = {c: v for c, v in new_thin.items() if v}
     # date 欄位異常：key 含「筆數」→ 數量變動會重新告警，維持原狀則靜默。
     # 這類是「當下狀態」而非「某天的事件」，故不能只用 collection 當 key。

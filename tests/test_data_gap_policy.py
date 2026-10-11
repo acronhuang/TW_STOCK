@@ -48,6 +48,20 @@ def test_an_unknown_collection_needs_review_instead_of_guessing():
     assert policy.recovery_for("something_new", "20260917").mode == "review"
 
 
+def test_foreign_holding_is_refetched_for_the_single_day_from_the_by_date_endpoint():
+    recovery = policy.recovery_for("foreign_holding", "20260916")
+
+    assert recovery.mode == "backfill"
+    assert recovery.commands == (("twse_foreign_holding_sync.py", "--date", "20260916"),)
+
+
+def test_risk_analysis_is_a_decision_snapshot_that_cannot_be_recreated_after_the_fact():
+    recovery = policy.recovery_for("risk_analysis", "20260916")
+
+    assert recovery.mode == "snapshot" and recovery.commands == ()
+    assert "快照" in recovery.reason
+
+
 def test_the_price_calendar_is_repaired_before_tables_that_depend_on_it():
     assert policy.priority("stock_price") < policy.priority("institutional_flow")
     assert policy.priority("stock_price") < policy.priority("margin_purchase_short_sale")

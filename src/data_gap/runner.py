@@ -7,7 +7,8 @@ from src.data_gap.models import Gap
 from src.data_gap.policy import priority, recovery_for
 
 ALERT_STATUSES = ("unrecoverable", "derived", "needs_review", "failed")
-_MODE_STATUS = {"unrecoverable": "unrecoverable", "derived": "derived", "review": "needs_review"}
+_MODE_STATUS = {"unrecoverable": "unrecoverable", "derived": "derived", "review": "needs_review",
+                "snapshot": "snapshot_lost"}   # snapshot_lost 不在 ALERT_STATUSES：已登記可查，但不反覆提醒
 _CLOSED = ("resolved", "repaired")
 
 

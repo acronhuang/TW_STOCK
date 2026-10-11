@@ -102,6 +102,16 @@ def test_unrecoverable_gaps_are_registered_and_alerted_but_never_executed():
     assert commands == [] and len(alerts.messages) == 1
 
 
+def test_a_lost_decision_snapshot_is_registered_for_the_record_but_never_alerted_or_retried():
+    register, alerts, commands, kwargs = make([([gap("risk_analysis", "20260916")], frozenset())])
+
+    summary = runner.run(apply=True, **kwargs)
+
+    doc = register.docs["risk_analysis:20260916:gap"]
+    assert doc["status"] == "snapshot_lost" and "快照" in doc["reason"]
+    assert commands == [] and alerts.messages == [] and summary["unrecoverable"] == 0
+
+
 def test_derived_tables_are_registered_for_a_human_not_backfilled():
     register, alerts, commands, kwargs = make([([gap("stock_factors", "20260916")], frozenset())])
 

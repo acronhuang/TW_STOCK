@@ -36,6 +36,10 @@ def recovery_for(collection: str, day: str) -> Recovery:
         return Recovery("backfill", commands=(("sync_revenue_openapi.py",),))
     if collection in _UNRECOVERABLE:
         return Recovery("unrecoverable", reason=_LATEST_ONLY)
+    if collection == "foreign_holding":
+        return Recovery("backfill", commands=(("twse_foreign_holding_sync.py", "--date", day),))
+    if collection == "risk_analysis":
+        return Recovery("snapshot", reason="持倉風控合議是當日決策快照（含當時持倉與模型判斷），不能事後重建")
     if collection == "stock_factors":
         return Recovery("derived", reason="由 stock_price 等原始表計算的衍生表，請在原始表補齊後重算因子，不在此直接回補")
     return Recovery("review", reason="政策表沒有這個集合，需人工判斷能否回補")

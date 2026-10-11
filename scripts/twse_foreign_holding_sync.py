@@ -63,6 +63,7 @@ def fetch_day(d: datetime):
 def main():
     ap = argparse.ArgumentParser(description="外資及陸資持股比例同步（TWSE）")
     ap.add_argument('--days', type=int, default=1, help='回補近 N 個交易日（含最新）')
+    ap.add_argument('--date', help='只抓指定日 YYYYMMDD（缺口回補用）')
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--db-uri', default=os.getenv('MONGODB_URI', 'mongodb://localhost:27017'))
     args = ap.parse_args()
@@ -72,9 +73,9 @@ def main():
         db.foreign_holding.create_index([('stock_id', ASCENDING), ('date', DESCENDING)], unique=True)
 
     got = 0
-    probe = datetime.now()
+    probe = datetime.strptime(args.date, '%Y%m%d') if args.date else datetime.now()
     tries = 0
-    while got < args.days and tries < args.days + 12:   # 往回找交易日（跳過假日）
+    while got < (1 if args.date else args.days) and tries < (1 if args.date else args.days + 12):   # 往回找交易日（跳過假日）
         tries += 1
         try:
             rows = fetch_day(probe)
