@@ -99,6 +99,14 @@ COLL_PUNISHED_STOCKS = "punished_stocks"
 COLL_ETF_DCA_RANK = "etf_dca_rank"
 COLL_VCP_CANDIDATES = "vcp_candidates"
 
+# ── 研究訊號成效帳本 ───────────────────────────────────────────────────
+COLL_RESEARCH_SIGNAL_SNAPSHOTS = "research_signal_snapshots"
+COLL_RESEARCH_BENCHMARK_SNAPSHOTS = "research_benchmark_snapshots"
+COLL_RESEARCH_SIGNAL_OUTCOMES = "research_signal_outcomes"
+COLL_RESEARCH_SIGNAL_CAPTURE_RUNS = "research_signal_capture_runs"
+COLL_RESEARCH_METHOD_STATUS = "research_method_status"
+COLL_RESEARCH_METHOD_STATUS_HISTORY = "research_method_status_history"
+
 
 def all_collections() -> dict[str, str]:
     """回傳 {常數名: 集合名}，供稽核/測試使用。"""
