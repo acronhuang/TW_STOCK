@@ -107,7 +107,7 @@ def main() -> None:
 
     days = find_incomplete_days(db, args.lookback)
     if not days:
-        print("  ✅ 近期無缺漏交易日，無需回補")
+        print("  ✅ 近期無缺漏交易日，無需回補（範圍限近 N 天、已有股價的日子；整天缺股價或更早的缺口請見 data_gap_register）")
         return
 
     if args.dry_run:

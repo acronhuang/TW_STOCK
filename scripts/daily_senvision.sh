@@ -87,6 +87,13 @@ echo "[1.5/4] 回補近期缺漏交易日（法人 / PE-PB，T+1 延遲）..."
 "$PYTHON" "$SCRIPT_DIR/backfill_recent_gaps.py" --lookback 7 || \
     echo "  ⚠️ 缺漏回補腳本執行失敗（不影響後續步驟）"
 
+# 上一步只看近 7 天、且「已有股價」的日子，而且對股價與上櫃法人無法回補歷史日。
+# 完整的缺口偵測、按日期回補、登記未補項由 data_gap_repair 負責。
+echo ""
+echo "[1.6/4] 資料缺口偵測與回補（data_gap_repair）..."
+"$PYTHON" "$SCRIPT_DIR/data_gap_repair.py" --apply || \
+    echo "  ⚠️ data_gap_repair 執行失敗（不影響後續步驟）"
+
 # ── [2/4] 季報即時同步（申報季期間每日增量收集）──────────────
 echo ""
 echo "[2/4] 同步最新季報（TWSE + TPEX OpenAPI）..."

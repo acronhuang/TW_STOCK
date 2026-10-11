@@ -60,6 +60,9 @@ SPEC = {
         "total_margin": ("date", "daily"),
         "etf_dca_rank": ("date", "daily"),
         "gold_price": ("date", "daily"),
+        "emerging_price": ("date", "daily"),       # 2026-10-11 新增：興櫃每日行情（TPEX ESB）
+        "news_sentiment": ("date", "daily"),       # 2026-10-11 新增：重點個股每日、全市場每週五
+        "social_buzz": ("date", "daily"),          # 2026-10-11 新增：PTT 每日討論熱度
     },
     "分析產出": {
         # 2026-08-13 納管:pipeline 產物,停更代表 pipeline 出事
@@ -115,6 +118,8 @@ EXEMPT = {
     "schedule_alerts": "排程告警佇列",
     "system_heartbeat": "心跳,由 watchdog 監控",
     "data_continuity_alerted": "去重用的告警記錄",
+    "data_gap_register": "資料缺口登記簿（事件驅動，無固定節奏）；腳本是否如期執行由 system_heartbeat 'data_gap_repair' 與其告警監控",
+    "quarterly_earnings_versions": "財報重編版本歷史（事件驅動，數字被改動才有新版）；快照腳本是否執行由 system_heartbeat 'financial_versions' 監控",
     "data_health_history": "健康快照歷史",
     "news_health_history": "新聞抓取健康快照歷史,job 死活由 watchdog(news_health 心跳)監控",
     "news_value_backtest": "新聞價值回測快照,非時序資料源(按需重跨)",

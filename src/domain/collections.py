@@ -10,6 +10,7 @@ from __future__ import annotations
 
 # ── 價格 / 因子 ────────────────────────────────────────────────────────
 COLL_STOCK_PRICE = "stock_price"
+COLL_EMERGING_PRICE = "emerging_price"
 COLL_STOCK_FACTORS = "stock_factors"
 COLL_FUNDAMENTAL_FACTORS = "fundamental_factors"
 COLL_TECHNICAL_INDICATORS = "technical_indicators"
@@ -22,6 +23,7 @@ COLL_FINANCIAL_STATEMENTS = "financial_statements"
 COLL_FINANCIAL_STATEMENT_DETAIL = "financial_statement_detail"
 COLL_BALANCE_SHEET_DETAIL = "balance_sheet_detail"
 COLL_QUARTERLY_EARNINGS = "quarterly_earnings"
+COLL_QUARTERLY_EARNINGS_VERSIONS = "quarterly_earnings_versions"
 COLL_MONTHLY_REVENUE = "monthly_revenue"
 COLL_FINMIND_FINANCIALS = "finmind_financials"
 COLL_YAHOO_FINANCIALS = "yahoo_financials"
@@ -68,6 +70,8 @@ COLL_MACRO_INDICATORS = "macro_indicators"
 COLL_BULL_BEAR_INDICATORS = "bull_bear_indicators"
 COLL_MAJOR_NEWS = "major_news"
 COLL_MEDIA_NEWS = "media_news"
+COLL_NEWS_SENTIMENT = "news_sentiment"
+COLL_SOCIAL_BUZZ = "social_buzz"
 
 # ── 投組 ───────────────────────────────────────────────────────────────
 COLL_PORTFOLIO_LOTS = "portfolio_lots"
@@ -86,6 +90,7 @@ COLL_ALERT_HISTORY = "alert_history"
 COLL_SYSTEM_HEARTBEAT = "system_heartbeat"
 COLL_DATA_HEALTH_HISTORY = "data_health_history"
 COLL_DATA_CONTINUITY_ALERTED = "data_continuity_alerted"
+COLL_DATA_GAP_REGISTER = "data_gap_register"
 COLL_INSTITUTIONAL_REBUILD_PROGRESS = "institutional_rebuild_progress"
 
 # ── 分析 / 名單 ────────────────────────────────────────────────────────
