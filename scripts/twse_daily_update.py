@@ -45,6 +45,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT / 'src'))
+sys.path.insert(0, str(_PROJECT_ROOT))
+
+from src.chip_analysis import inst_buysell  # noqa: E402
 
 
 # ── ROC 日期轉換 ────────────────────────────────────────────────────────────────
@@ -278,6 +281,7 @@ def fetch_twse_institutional(date_str: Optional[str] = None) -> List[Dict]:
             'foreign_dealer_self_net': _to_dec(row[7]),
             'dealer_self_net':         _to_dec(row[14]),
             'dealer_hedging_net':      _to_dec(row[17]),
+            **inst_buysell.from_t86(row),
             'data_source': 'TWSE_T86',
             'updated_at':  datetime.now(),
         })
@@ -347,6 +351,7 @@ def fetch_tpex_institutional() -> List[Dict]:
             'trust_net':   trust_net,
             'dealer_net':  dealer_net,
             'total_net':   total_net,
+            **inst_buysell.from_tpex_openapi(row),
             'data_source': 'TPEX_3INSTI',
             'updated_at':  datetime.now(),
         })

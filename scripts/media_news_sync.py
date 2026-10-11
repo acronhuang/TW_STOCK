@@ -30,6 +30,7 @@ from pymongo import MongoClient
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.analysis.news_evidence import google_titles   # 共用抓取＋regex 解析（避 XXE）
+from src.ingest import news_sentiment                  # 情緒分數持久化（每檔每日一筆）
 
 DB = MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017"))["tw_stock_analysis"]
 
@@ -59,6 +60,7 @@ def main():
 
     DB.media_news.create_index("stock_id", unique=True)
     DB.media_news.create_index("fetched_at")
+    DB.news_sentiment.create_index([("stock_id", 1), ("date", 1), ("source", 1)], unique=True, name="uq_stock_date_source")
 
     targets = universe()
     if args.limit:
@@ -85,6 +87,10 @@ def main():
         if titles:
             got += 1
             fails = 0
+            try:
+                news_sentiment.upsert(DB.news_sentiment, [news_sentiment.build_doc(code, name, titles, datetime.now(), datetime.now())])
+            except Exception as e:     # 情緒入庫失敗不影響既有快取
+                print(f"  ⚠️ {code} 情緒入庫失敗: {e}", flush=True)
         else:
             empty += 1
             fails += 1

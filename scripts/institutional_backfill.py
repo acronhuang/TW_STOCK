@@ -44,6 +44,7 @@ from pymongo import ASCENDING, MongoClient, UpdateOne
 
 sys.path.insert(0, str(Path(__file__).parent))
 from twse_daily_update import _to_dec, fetch_twse_institutional   # noqa: E402
+from src.chip_analysis import inst_buysell   # noqa: E402
 
 TPEX_URL = "https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php"
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
@@ -110,6 +111,7 @@ def fetch_tpex_dated(d) -> list[dict]:
             "stock_id": sid, "date": datetime(d.year, d.month, d.day),
             "foreign_net": _to_dec(str(f)), "trust_net": _to_dec(str(t)),
             "dealer_net": _to_dec(str(dl)), "total_net": _to_dec(str(tot)),
+            **inst_buysell.from_tpex_dated(row),
             "data_source": "TPEX_3INSTI", "updated_at": datetime.now(),
         })
     if bad and bad > len(out) * 0.01:
