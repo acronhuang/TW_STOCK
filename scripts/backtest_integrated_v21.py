@@ -15,7 +15,11 @@ v2.1 整合策略回測腳本
 """
 
 import sys
-sys.path.append('/home/mdsadmin/Stock/tw-stock-analysis/src')
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
 import argparse
 from datetime import datetime, timedelta
@@ -28,6 +32,7 @@ from tqdm import tqdm
 
 from strategy.integrated_strategy_v21 import IntegratedStrategyV21
 from strategy.multi_factor_strategy import MultiFactorStrategy
+from src.backtesting.slippage import execution_price
 
 
 def _q(date) -> datetime:
@@ -57,6 +62,7 @@ class BacktestV21:
         fee_discount: float = 0.6,
         tax_rate: float = 0.003,
         min_fee: float = 20.0,
+        slippage_bps: float = 0.0,
         quality_source: str = 'fundamental',   # none / fundamental / legacy(對齊 production MFS)
         entry_lag: int = 1,
         stale_exit_days: int = 20
@@ -98,6 +104,7 @@ class BacktestV21:
         self.fee_discount = fee_discount
         self.tax_rate = tax_rate
         self.min_fee = min_fee
+        self.slippage_bps = slippage_bps
         self.total_fees = 0.0
         self.total_taxes = 0.0
 
@@ -249,9 +256,10 @@ class BacktestV21:
             if qty <= 0:
                 continue
             # 整張化與價格變動可能造成微幅超支，以現有現金為上限截斷
+            buy_price = execution_price(t['price'], 'buy', self.slippage_bps)
             cost_mult = 1.0 + self.fee_rate * self.fee_discount
-            if qty * t['price'] * cost_mult > self.capital:
-                qty = int(self.capital / (t['price'] * cost_mult) / 1000) * 1000
+            if qty * buy_price * cost_mult > self.capital:
+                qty = int(self.capital / (buy_price * cost_mult) / 1000) * 1000
             if qty > 0:
                 self._execute_buy(stock_id, date, t['price'], qty, t['weight'])
 
@@ -259,10 +267,19 @@ class BacktestV21:
         """手續費:價金 × 費率 × 折扣,不低於最低收費。"""
         return max(self.min_fee, value * self.fee_rate * self.fee_discount)
 
-    def _execute_sell(self, stock_id: str, date: str, price: float, shares: int):
+    def _execute_sell(
+        self,
+        stock_id: str,
+        date: str,
+        price: float,
+        shares: int,
+        exit_reason: str | None = None,
+        return_pct: float | None = None,
+    ):
         """賣出指定股數（可為部分減碼）。"""
         position = self.positions[stock_id]
         entry = position['entry_price']
+        price = execution_price(price, 'sell', self.slippage_bps)
         value = shares * price
         fee = self._fee(value)
         tax = value * self.tax_rate          # 證交稅只在賣出課徵
@@ -270,7 +287,7 @@ class BacktestV21:
         self.total_fees += fee
         self.total_taxes += tax
 
-        self.trades.append({
+        trade = {
             'date': date,
             'stock_id': stock_id,
             'action': 'sell',
@@ -280,7 +297,12 @@ class BacktestV21:
             'fee': fee,
             'tax': tax,
             'return_pct': (price - entry) / entry if entry else 0.0,
-        })
+        }
+        if exit_reason is not None:
+            trade['exit_reason'] = exit_reason
+        if return_pct is not None:
+            trade['return_pct'] = return_pct
+        self.trades.append(trade)
 
         remaining = position['shares'] - shares
         if remaining > 0:
@@ -291,6 +313,7 @@ class BacktestV21:
     def _execute_buy(self, stock_id: str, date: str, price: float,
                      shares: int, weight: float):
         """買進指定股數（可為加碼），成本基礎以加權平均更新。"""
+        price = execution_price(price, 'buy', self.slippage_bps)
         value = shares * price
         fee = self._fee(value)
         self.capital -= value + fee
@@ -348,23 +371,14 @@ class BacktestV21:
             if signal.should_exit:
                 stock_id = signal.stock_id
                 position = self.positions[stock_id]
-                
-                sell_value = position['shares'] * signal.current_price
-                self.capital += sell_value
-                
-                # 記錄交易
-                self.trades.append({
-                    'date': date,
-                    'stock_id': stock_id,
-                    'action': 'sell',
-                    'price': signal.current_price,
-                    'shares': position['shares'],
-                    'value': sell_value,
-                    'return_pct': signal.return_pct,
-                    'exit_reason': signal.exit_reason
-                })
-                
-                del self.positions[stock_id]
+                self._execute_sell(
+                    stock_id,
+                    date,
+                    signal.current_price,
+                    position['shares'],
+                    exit_reason=signal.exit_reason,
+                    return_pct=signal.return_pct,
+                )
     
     def _handle_stale_positions(self, date: str):
         """連續無報價超過門檻者,以最後已知價強制出場並計入交易紀錄。"""
@@ -649,6 +663,7 @@ def main():
     parser.add_argument('--fee-rate', type=float, default=0.001425, help='手續費率(公定 0.1425%%)')
     parser.add_argument('--fee-discount', type=float, default=0.6, help='手續費折扣(6 折=0.6)')
     parser.add_argument('--tax-rate', type=float, default=0.003, help='證交稅率(賣出 0.3%%)')
+    parser.add_argument('--slippage-bps', type=float, default=0.0, help='單邊滑價 bps（研究壓力條件）')
     parser.add_argument('--no-cost', action='store_true', help='關閉所有交易成本(對照用)')
     parser.add_argument('--quality-source', choices=['none', 'fundamental', 'legacy'],
                         default='fundamental',
@@ -694,6 +709,7 @@ def main():
 
     cost_kw = dict(fee_rate=args.fee_rate, fee_discount=args.fee_discount,
                    tax_rate=args.tax_rate,
+                   slippage_bps=args.slippage_bps,
                    quality_source=args.quality_source,
                    entry_lag=args.entry_lag,
                    stale_exit_days=args.stale_exit_days)
@@ -737,7 +753,8 @@ def main():
             'start_date': args.start_date,
             'end_date': args.end_date,
             'initial_capital': args.initial_capital,
-            'rebalance_frequency': args.rebalance_frequency
+            'rebalance_frequency': args.rebalance_frequency,
+            'slippage_bps': args.slippage_bps,
         },
         'v2.0': results_v20,
         'v2.1': results_v21

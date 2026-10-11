@@ -13,6 +13,9 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 
+from src.backtesting.slippage import execution_price
+from src.backtesting.tw_costs import FEE, TAX
+
 
 @dataclass
 class Position:
@@ -65,13 +68,22 @@ class Portfolio:
     
     參數:
         initial_cash: 初始資金
-        commission_rate: 手續費率（default: 0.001425，台股證交稅+手續費約 0.3%）
+        commission_rate: 單邊手續費率（default: 0.1425%）
+        tax_rate: 賣出證交稅率（default: 0.3%）
     """
     
-    def __init__(self, initial_cash: float = 1_000_000, commission_rate: float = 0.003):
+    def __init__(
+        self,
+        initial_cash: float = 1_000_000,
+        commission_rate: float = FEE,
+        tax_rate: float = TAX,
+        slippage_bps: float = 0.0,
+    ):
         self.initial_cash = initial_cash
         self.cash = initial_cash
         self.commission_rate = commission_rate
+        self.tax_rate = tax_rate
+        self.slippage_bps = slippage_bps
         
         # 持倉
         self.positions: dict[str, Position] = {}
@@ -91,6 +103,7 @@ class Portfolio:
         Returns:
             bool: 是否成功執行
         """
+        price = execution_price(price, "buy", self.slippage_bps)
         cost = shares * price
         commission = cost * self.commission_rate
         total_cost = cost + commission
@@ -108,7 +121,7 @@ class Portfolio:
             # 已有持倉，計算平均成本
             old_pos = self.positions[symbol]
             total_shares = old_pos.shares + shares
-            total_cost_basis = old_pos.cost + cost
+            total_cost_basis = old_pos.cost + total_cost
             avg_price = total_cost_basis / total_shares
             
             self.positions[symbol] = Position(
@@ -122,7 +135,7 @@ class Portfolio:
             self.positions[symbol] = Position(
                 symbol=symbol,
                 shares=shares,
-                avg_price=price,
+                avg_price=total_cost / shares,
                 entry_date=date
             )
         
@@ -147,6 +160,8 @@ class Portfolio:
         Returns:
             bool: 是否成功執行
         """
+        price = execution_price(price, "sell", self.slippage_bps)
+
         # 檢查持倉
         if symbol not in self.positions:
             self.logger.warning(f"{date} 無持倉: {symbol}")
@@ -159,7 +174,7 @@ class Portfolio:
         
         # 計算收入
         revenue = shares * price
-        commission = revenue * self.commission_rate
+        commission = revenue * (self.commission_rate + self.tax_rate)
         net_revenue = revenue - commission
         
         # 增加現金

@@ -44,13 +44,13 @@ MIN_D, MAX_D = date(2021, 3, 1), date(2026, 7, 9)
 
 
 @st.cache_data(show_spinner=False)
-def run_backtest(strat_name, params, symbols, start, end, cash, commission):
+def run_backtest(strat_name, params, symbols, start, end, cash, commission, slippage_bps):
     """跑回測，回可快取的純資料（metrics dict / equity df / trades df）。"""
     cfg = STRATEGIES[strat_name]
     strat = cfg["cls"]()
     strat.setup(**dict(params))
     bt = Backtest(strategy=strat, symbols=list(symbols), start_date=start, end_date=end,
-                  initial_cash=cash, commission_rate=commission)
+                  initial_cash=cash, commission_rate=commission, slippage_bps=slippage_bps)
     res = bt.run()
     trades = pd.DataFrame([{
         "日期": str(t.date)[:10], "代號": t.symbol, "動作": t.action,
@@ -82,7 +82,8 @@ def show():
         start = c1.date_input("開始", value=date(2023, 1, 1), min_value=MIN_D, max_value=MAX_D)
         end = c2.date_input("結束", value=date(2024, 12, 31), min_value=MIN_D, max_value=MAX_D)
         cash = st.number_input("初始資金", value=1000000, step=100000)
-        commission = st.number_input("手續費率", value=0.003, min_value=0.0, max_value=0.02, format="%.4f")
+        commission = st.number_input("單邊手續費率", value=0.001425, min_value=0.0, max_value=0.02, format="%.4f")
+        slippage_bps = st.number_input("單邊滑價 bps", value=0.0, min_value=0.0, max_value=500.0, step=1.0)
         run = st.button("🚀 執行回測", type="primary", width='stretch')
 
     # 驗證
@@ -103,7 +104,7 @@ def show():
         try:
             metrics, equity, trades = run_backtest(
                 strat_name, tuple(params), symbols,
-                start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), int(cash), float(commission))
+                start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), int(cash), float(commission), float(slippage_bps))
         except Exception as e:
             st.error(f"回測失敗：{type(e).__name__}: {e}"); return
 

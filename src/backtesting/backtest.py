@@ -24,6 +24,7 @@ sys.path.insert(0, str(project_root))  # 標準執行需 python -m；此保留�
 from src.backtesting.performance import PerformanceCalculator
 from src.backtesting.portfolio import Portfolio
 from src.backtesting.strategy import Strategy
+from src.backtesting.tw_costs import FEE, TAX
 from src.domain.collections import (
     COLL_STOCK_PRICE,
 )
@@ -63,7 +64,9 @@ class Backtest:
                  end_date: str,
                  initial_cash: float = 1_000_000,
                  position_size: float = 0.2,
-                 commission_rate: float = 0.003,
+                 commission_rate: float = FEE,
+                 tax_rate: float = TAX,
+                 slippage_bps: float = 0.0,
                  mongo_uri: str = "mongodb://localhost:27017/",
                  db_name: str = "tw_stock_analysis"):
         """
@@ -76,7 +79,9 @@ class Backtest:
             end_date: 結束日期 (YYYY-MM-DD)
             initial_cash: 初始資金
             position_size: 單筆倉位大小（佔總資金比例，0.2 = 20%）
-            commission_rate: 手續費率
+            commission_rate: 單邊手續費率
+            tax_rate: 賣出證交稅率
+            slippage_bps: 單邊滑價（basis points）
             mongo_uri: MongoDB 連接字串
             db_name: 資料庫名稱
         """
@@ -87,13 +92,20 @@ class Backtest:
         self.initial_cash = initial_cash
         self.position_size = position_size
         self.commission_rate = commission_rate
+        self.tax_rate = tax_rate
+        self.slippage_bps = slippage_bps
         
         # MongoDB
         self.client = MongoClient(mongo_uri)
         self.db = self.client[db_name]
         
         # 投資組合
-        self.portfolio = Portfolio(initial_cash=initial_cash, commission_rate=commission_rate)
+        self.portfolio = Portfolio(
+            initial_cash=initial_cash,
+            commission_rate=commission_rate,
+            tax_rate=tax_rate,
+            slippage_bps=slippage_bps,
+        )
         
         # 數據
         self.data = None
