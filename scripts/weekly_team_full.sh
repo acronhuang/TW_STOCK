@@ -27,6 +27,8 @@ DATE="${WEEKLY_DATE:-$(date +%Y%m%d)}"
 UNIVERSE="${WEEKLY_UNIVERSE:-all}"          # 測試時可設 industry50 等小 universe
 POLL_SEC="${WEEKLY_POLL_SEC:-300}"          # phase2 找不到待辦時的輪詢間隔
 JSON="results/team_analysis/team_${DATE}.json"
+# Ollama 是硬性前提：節點掉了就等（預設 48 × 30 分 = 24 小時），不等就不會寫出降級結果。
+export TEAM_PREFLIGHT_RETRIES="${WEEKLY_PREFLIGHT_RETRIES:-48}"
 
 echo "════════ 週末全市場團隊分析 開始 $(date '+%F %T %Z') · date=${DATE} universe=${UNIVERSE} ════════"
 
@@ -84,6 +86,10 @@ echo "── phase2 收尾輪（phase1 已結束，排乾剩餘）──"
 CONSENSUS_MODE=discuss $PY -u scripts/team_daily_verified.py \
     --phase2 --no-line --date "$DATE"
 echo "phase2 結束 $(date '+%F %T')"
+
+echo "── 補跑失敗項 + 完成度檢查 ──"
+CONSENSUS_MODE=discuss $PY -u scripts/team_daily_verified.py --retry-failed --no-line --date "$DATE"
+$PY -u scripts/team_daily_verified.py --completion-check --date "$DATE"
 
 if [ ! -s "$JSON" ]; then
   echo "⚠️ 找不到 phase1 存檔 ${JSON}（DB 應已有資料，僅影響 JSON→DB 補同步）"

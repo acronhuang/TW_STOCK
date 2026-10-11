@@ -18,6 +18,8 @@ from __future__ import annotations
 FAIL_PREFIX = "分析失敗"
 # 顧問整合失敗前綴（供其他守門判斷共用）。
 _INTEGRATION_FAIL_PREFIX = "整合失敗"
+# 角色報告全數失敗時 run_advisor 回的訊息；它也不是顧問意見。
+_INTEGRATION_SKIP_PREFIX = "整合略過"
 
 
 def is_failed_report(value) -> bool:
@@ -28,7 +30,8 @@ def is_failed_report(value) -> bool:
     if not isinstance(value, str):
         return False
     text = value.lstrip()
-    return text.startswith(FAIL_PREFIX) or text.startswith(_INTEGRATION_FAIL_PREFIX)
+    return (text.startswith(FAIL_PREFIX) or text.startswith(_INTEGRATION_FAIL_PREFIX)
+            or text.startswith(_INTEGRATION_SKIP_PREFIX))
 
 
 def usable_reports(reports: dict | None) -> dict:

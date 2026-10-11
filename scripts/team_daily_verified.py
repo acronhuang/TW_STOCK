@@ -745,7 +745,7 @@ _FAIL_PREFIX = '分析失敗'
 # usable_reports 已集中化至 src.moe.guard（原為本檔區域函式，team_analyze 無法共用）。
 # 保留同名重導以不動本檔其他呼叫點：濾掉「內容其實是錯誤訊息」的角色報告，
 # 全部失敗時回空 dict，由呼叫端決定略過整合。
-from src.moe.guard import usable_reports  # noqa: E402
+from src.moe.guard import is_failed_report, usable_reports  # noqa: E402
 
 
 def run_advisor(symbol: str, reports: dict) -> str:
@@ -764,7 +764,7 @@ def run_advisor(symbol: str, reports: dict) -> str:
 def _consensus_for(a: dict, meta: dict = None):
     """對顧問草案跑 .27 合議投票(完整模式與 phase2 共用)。無顧問/整合失敗回 None。"""
     advisor = a.get('advisor')
-    if not advisor or advisor.startswith('整合失敗'):
+    if not advisor or is_failed_report(advisor):
         return None
     from src.moe.consensus import deliberate, discuss
     ev_txt = '; '.join(f"{e.get('metric')}={e.get('db')}" for e in (a.get('evidence') or [])
@@ -996,6 +996,67 @@ def _send_line(msg: str):
         print(f"⚠️ LINE 失敗: {e}")
 
 
+def _require_ollama(roles: list[str], include_consensus: bool, alert: bool):
+    """Ollama 是硬性前提：節點或模型缺席就等待重試，用完額度仍不通就不開跑，而不是逐檔寫出降級結果。
+
+    TEAM_PREFLIGHT_RETRIES(預設 0=不等)、TEAM_PREFLIGHT_INTERVAL_SEC(預設 1800)；TEAM_SKIP_PREFLIGHT=1 可略過。
+    """
+    if os.getenv('TEAM_SKIP_PREFLIGHT') == '1':
+        return
+    from src.moe.preflight import OllamaNotReady, required_models, wait_until_ready
+    try:
+        wait_until_ready(
+            required_models(roles, include_consensus),
+            retries=int(os.getenv('TEAM_PREFLIGHT_RETRIES', '0')),
+            interval_sec=int(os.getenv('TEAM_PREFLIGHT_INTERVAL_SEC', '1800')),
+            on_wait=lambda m: print(f"⏳ {m}", flush=True),
+        )
+    except OllamaNotReady as e:
+        msg = f"🔴 Ollama 前置檢查失敗，本次分析不執行：{e}"
+        print(msg)
+        if alert:
+            _send_line(msg)
+        sys.exit(2)
+
+
+def _completion_check(day, alert: bool = True):
+    """批次完成度：有 Ollama 產出(模型紀錄、結論、≥ 2 票)的比例，低於門檻寫 schedule_alerts。"""
+    from src.moe.completion import alert_if_low, batch_stats
+    from src.moe.team_store import get_db
+    db = get_db()
+    stats = batch_stats(db.team_analysis, day)
+    print(f"📊 {day.isoformat()} 完成度 {stats['complete']}/{stats['total']} ({stats['ratio']:.0%})")
+    if alert and alert_if_low(db.schedule_alerts, stats, day, datetime.now()):
+        print("🔴 完成度低於門檻，已寫 schedule_alerts")
+    return stats
+
+
+def _run_retry_failed(only_date, days: int):
+    """重跑角色報告或顧問整合為錯誤訊息的文件（只寫 DB，不碰 JSON 整檔重寫）。
+
+    重跑用的是重跑當下的資料，所以文件會標 retried_at，price_at_analysis 也是重跑當下的收盤。
+    """
+    global _DATE_OVERRIDE
+    from src.moe.retry import find_retry_targets
+    from src.moe.team_store import get_db
+    db = get_db()
+    targets = find_retry_targets(db.team_analysis, datetime.now().date(), days, only_date)
+    if not targets:
+        print("無需補跑的失敗項")
+        return
+    print(f"補跑失敗項：{ {d.isoformat(): len(v) for d, v in targets.items()} }")
+    for day, items in targets.items():
+        _DATE_OVERRIDE = day.strftime('%Y%m%d')
+        meta = {t['symbol']: {**t, 'action': '(retry)'} for t in items}
+        for i, t in enumerate(items, 1):
+            print(f"\n🔁 [{i}/{len(items)}] {day} {t['symbol']} {t['name']} 補跑...")
+            res = analyze_symbol(t['symbol'], False)
+            db_upsert_one(res, meta)
+            db.team_analysis.update_one(
+                {'symbol': t['symbol'], 'date': _current_date()}, {'$set': {'retried_at': datetime.now()}})
+        _completion_check(day)
+
+
 def main():
     ap = argparse.ArgumentParser(description='每日已查證角色團隊分析')
     ap.add_argument('--top', type=int, default=2, help='Tier1/2 取前幾檔')
@@ -1013,6 +1074,11 @@ def main():
                          'save_results 整檔重寫會互相覆蓋')
     ap.add_argument('--date', help='存讀檔日期 YYYYMMDD（預設今天）；phase1 跨午夜或 phase2 補跑舊存檔時指定')
     ap.add_argument('--no-line', action='store_true', help='不發 LINE')
+    ap.add_argument('--retry-failed', action='store_true',
+                    help='補跑角色報告或顧問整合為錯誤訊息的文件；無 --date 時只看最近 --retry-days 天')
+    ap.add_argument('--retry-days', type=int, default=2, help='--retry-failed 的回看天數(預設 2)')
+    ap.add_argument('--completion-check', action='store_true',
+                    help='只算指定分析日(--date，預設今天)的 Ollama 完成度並在偏低時告警')
     args = ap.parse_args()
 
     # 調參（實測）：序列討論 ≈ 31s/檔，daily industry50(~50) 合議步 ≈ 26 分可接受；
@@ -1028,6 +1094,21 @@ def main():
     if args.date:
         global _DATE_OVERRIDE
         _DATE_OVERRIDE = args.date
+
+    if args.completion_check:
+        _completion_check(_current_date().date())
+        return
+
+    if args.retry_failed:
+        import subprocess
+        if subprocess.run(['pgrep', '-f', r'team_daily_verified\.py --universe all'],
+                          capture_output=True).returncode == 0:
+            print("⏭ 全市場週跑進行中，跳過補跑（避免與週跑搶 GPU）"); return
+        _require_ollama(ANALYST_ROLES, True, not args.no_line)
+        _run_retry_failed(_current_date().date() if args.date else None, args.retry_days)
+        return
+
+    _require_ollama([] if args.phase2 else ANALYST_ROLES, not args.quick, not args.no_line)
 
     # ── 第二階段：只補顧問整合 ──────────────────────────────────────────
     # 預設從 DB 取待辦（可與 phase1 同時跑，見 load_pending_from_db 的說明）。

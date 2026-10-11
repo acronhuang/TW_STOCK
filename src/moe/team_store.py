@@ -46,7 +46,8 @@ def _evidence_close(analysis: dict):
 def _final_verdict(analysis: dict):
     """定案：優先合議 final，其次顧問草案『評級：X』，皆無則 None。"""
     c = analysis.get("consensus")
-    if c and c.get("final"):
+    # n==0 是沒有任何有效票，final 只是退回的預設，不是合議結論；舊資料沒有 n 則照舊行為。
+    if c and c.get("final") and c.get("n") != 0:
         return c["final"]
     adv = analysis.get("advisor") or ""
     import re
