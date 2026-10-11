@@ -33,6 +33,9 @@ bash scripts/daily_senvision.sh || echo "  senvision 失敗（續）"
 step "3b PE/PB/EY 回填（因子重算後補上,修每日缺口）"
 $PY scripts/backfill_pe_pb_factors.py || echo "  pe/pb 回填失敗（續）"
 
+step "3b2 券資比因子（融券餘額/融資餘額）"
+$PY scripts/backfill_margin_ratio.py --apply || echo "  券資比失敗（續）"
+
 step "3c 估值因子（DCF合理價/安全邊際）"
 $PY scripts/backfill_valuation_factors.py || echo "  估值因子失敗（續）"
 

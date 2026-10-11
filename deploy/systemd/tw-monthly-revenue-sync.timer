@@ -2,9 +2,8 @@
 Description=Timer: tw-stock monthly_revenue_sync
 
 [Timer]
-OnCalendar=*-*-12 02:00:00
-OnCalendar=*-*-15 02:00:00
-OnCalendar=*-*-18 02:00:00
+# 公告期限為次月 10 日；10~20 日每日抓，OpenAPI 只給最新月，同月重抓為冪等 upsert。
+OnCalendar=*-*-10..20 02:00:00
 Persistent=true
 RandomizedDelaySec=120
 

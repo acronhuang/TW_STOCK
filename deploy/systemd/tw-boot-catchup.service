@@ -1,0 +1,15 @@
+[Unit]
+Description=tw-stock 開機補跑（停機期間錯過的最新日資料與缺口）
+After=network-online.target
+Wants=network-online.target
+OnFailure=tw-alert@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/mdsadmin/Stock/tw-stock-analysis
+# user 單元無法對系統層 mongod 排序；先等網路與服務穩定，腳本自己再等 MongoDB。
+ExecStartPre=/usr/bin/sleep 60
+ExecStart=/usr/bin/bash -c '/home/mdsadmin/Stock/.venv/bin/python3 scripts/boot_catchup.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_boot_catchup.log 2>&1'
+
+[Install]
+WantedBy=default.target
