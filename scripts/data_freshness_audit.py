@@ -9,9 +9,13 @@
 """
 import sys
 import argparse
+import os
 from datetime import datetime, timedelta
 
 from pymongo import MongoClient
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.ops.alert_dedup import insert_once  # noqa: E402
 
 # (日期欄位種類, 更新頻率)。種類: date | event_date | year_month | year_season | fiscal
 # 頻率決定落後門檻(天): daily=4(含週末) weekly=9 monthly=45 quarterly=135 event=一律OK(可未來日)
@@ -319,13 +323,13 @@ def main():
     if args.alert:
         if unregistered:
             try:
-                db.schedule_alerts.insert_one({
+                written = insert_once(db.schedule_alerts, {
                     "ts": datetime.now(), "level": "warn", "source": "freshness_audit",
                     "message": (f"⚠️ {len(unregistered)} 個 collection 未納管新鮮度監控:"
                                 + ", ".join(unregistered[:10])
                                 + ("…" if len(unregistered) > 10 else "")),
                     "resolved": False})
-                print(f"[alert] 未納管清單已寫入 schedule_alerts({len(unregistered)} 個)")
+                print(f"[alert] 未納管清單{'已寫入' if written else '已有相同未處理告警，略過'} schedule_alerts({len(unregistered)} 個)")
             except Exception as e:
                 print(f"[alert] 未納管告警寫入失敗:{e!r}")
         if worst:
@@ -335,10 +339,10 @@ def main():
             msg = f"⚠️ 資料新鮮度:{len(worst)} 個表超出更新頻率門檻{chr(10)}{detail}"
             try:
                 db.schedule_alerts.create_index([("ts", -1)])
-                db.schedule_alerts.insert_one({
+                written = insert_once(db.schedule_alerts, {
                     "ts": datetime.now(), "level": "error", "source": "freshness_audit",
                     "message": msg, "resolved": False})
-                print(f"[alert] 已寫入 schedule_alerts({len(worst)} 個表)")
+                print(f"[alert] {'已寫入' if written else '已有相同未處理告警，略過'} schedule_alerts({len(worst)} 個表)")
             except Exception as e:
                 print(f"[alert] schedule_alerts 寫入失敗:{e!r}")
         else:

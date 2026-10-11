@@ -258,35 +258,35 @@ main() {
     generate_summary "$SUCCESS_COUNT" "$FAILED_COUNT" "$TOTAL_DURATION"
 
     # 最終狀態
+    GATE_FILE="$LOG_BASE/.hourly_alert_gate.json"
     if [ $FAILED_COUNT -eq 0 ]; then
         log_success "所有類別下載完成！"
+        python3 "$SCRIPT_DIR/hourly_alert_gate.py" "$GATE_FILE" >/dev/null 2>&1 || true
         rm -f "$STATE_FILE"
         exit 0
     else
         log_warn "部分類別下載失敗，請檢查日誌"
 
-        # 通知節流（2026-07-19 加）。
-        # 背景：download_data() 先前因 `| head` 遮蔽結束碼而恆回成功，失敗從不通知；
-        # 修好之後若照原樣每次都發，會變成「每小時一則 LINE」的噪音
-        # （見記憶 evening-digest-noise-reduction：曾特意把 ~15 則降到 2-3 則）。
-        # 規則：同一組失敗類別，每 12 小時最多通知一次；失敗組合改變則立即通知。
-        local sig="${FAILED_COUNT}:${FAILED_LIST}"
-        local now_ts=$(date +%s)
-        local last_sig="" last_ts=0
-        if [ -f "$STATE_FILE" ]; then
-            last_sig=$(sed -n 1p "$STATE_FILE")
-            last_ts=$(sed -n 2p "$STATE_FILE")
+        # 通知節流（2026-10-11 改）：同一類別連續失敗 3 輪才告警，同一組合每 24 小時最多一次。
+        # 舊規則「單次成功就清狀態、失敗組合一變就立刻再發」讓抖動的失敗變成每天多則
+        # （2026-07 起累積 294 則 scheduler 告警）。
+        local gate verdict persistent streak
+        gate=$(python3 "$SCRIPT_DIR/hourly_alert_gate.py" "$GATE_FILE" $FAILED_LIST 2>/dev/null) || gate=""
+        verdict=$(printf '%s\n' "$gate" | sed -n 1p)
+        persistent=$(printf '%s\n' "$gate" | sed -n 2p)
+        streak=$(printf '%s\n' "$gate" | sed -n 3p)
+        if [ -z "$verdict" ]; then       # 閘門本身壞掉時寧可多報，也不要靜默
+            verdict="ALERT"; persistent="$FAILED_LIST"; streak="?"
         fi
 
-        if [ "$sig" != "$last_sig" ] || [ $((now_ts - last_ts)) -ge 43200 ]; then
+        if [ "$verdict" = "ALERT" ]; then
             bash "$SCRIPT_DIR/notify_failure.sh" \
-                "⚠️ 每小時資料更新：${FAILED_COUNT}/${TOTAL_CATEGORIES} 類別失敗（成功 ${SUCCESS_COUNT}）
-失敗類別：${FAILED_LIST}
-（相同失敗每 12 小時最多通知一次）"
-            printf '%s\n%s\n' "$sig" "$now_ts" > "$STATE_FILE"
+                "⚠️ 每小時資料更新：${persistent} 連續 ${streak} 輪失敗
+本輪 ${FAILED_COUNT}/${TOTAL_CATEGORIES} 類別失敗（成功 ${SUCCESS_COUNT}）：${FAILED_LIST}
+（連續失敗才告警；相同組合每 24 小時最多通知一次）"
             log_info "已發送失敗通知"
         else
-            log_info "失敗組合與上次相同且未逾 12 小時，略過通知（sig=$sig）"
+            log_info "失敗尚未連續達門檻或已通知過，略過通知（本輪失敗：${FAILED_LIST}）"
         fi
         exit 1
     fi
