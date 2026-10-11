@@ -134,6 +134,15 @@ EXEMPT = {
     "price_history_backfill_state": "續跑進度表",
     # 使用者持倉:有交易才變動,無更新是正常狀態,不該報警
     "portfolio_positions": "使用者持倉,有交易才變動",
+    # 模擬盤(2026-10-02 新增,paper_trading_page 專用):使用者狀態,有下單才變動,
+    # 目前為 0 筆;無更新是正常狀態,不該報警。同 portfolio_positions 的判準。
+    "paper_accounts": "模擬盤帳戶,使用者狀態,有操作才變動",
+    "paper_orders": "模擬盤委託,同上",
+    "paper_positions": "模擬盤持倉,同上",
+    "paper_trades": "模擬盤成交,同上",
+    # VCP 候選是 vcp_scan.py 每日產出,依 ADR-0012 歸 FR-OUT-001(output_freshness),
+    # 且本審核只認 `date` 欄,它用的是 scan_date。
+    "vcp_candidates": "對外產出,改由 FR-OUT-001 檢查(欄位為 scan_date)",
     "portfolio_lots": "使用者持倉批次,同上",
     # 2026-08-17 凍結為歷史快照:tracker.py(唯一寫入者)已刪除,不會再有新資料。
     # **不刪表** —— 六查第 3 步證明它不是 portfolio_lots 的子集:
@@ -160,6 +169,17 @@ EXEMPT = {
                              "(負債比/速動比/未分配盈餘三門檻),經 API server 使用;"
                              "刪掉會讓那三項靜默不加分。2026-08-13 六查後刻意保留"),
     "system.views": "MongoDB 系統表",
+    # ── 研究訊號成效帳本(2026-10-10):不看 `date` 欄,新鮮度模型表達不了 ─────────
+    # 快照/基準/capture run 用 analysis_date、as_of(ISO 字串);outcome 要等 5/10/20 個
+    # 交易日成熟,前幾天必然沒有資料,納管會誤報。如期產生改由 capture_research_signals
+    # 的來源失敗告警(source=research_signal_ledger)與 FR-OUT-001(output_freshness,
+    # 登記 research_signal_snapshots)負責；後者能抓到「cron 根本沒跑」。
+    "research_signal_snapshots": "研究訊號帳本快照,append-only;如期產生由 FR-OUT-001 與 capture 失敗告警監控",
+    "research_benchmark_snapshots": "研究訊號帳本基準成員,append-only;同上",
+    "research_signal_capture_runs": "研究訊號帳本 capture 稽核紀錄;同上",
+    "research_signal_outcomes": "研究訊號成熟結果,需 5/10/20 交易日成熟,前期必然為空",
+    "research_method_status": "研究方法治理目前狀態,非時序資料源",
+    "research_method_status_history": "研究方法治理歷程,事件型(需 20 日 outcome 成熟後才會有)",
 }
 
 

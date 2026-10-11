@@ -62,6 +62,15 @@ OUTPUTS = [
     dict(id="requirement_status", name="需求狀態板", coll="requirement_status",
          field="checked_at", lag_trading=0, tol_days=2,
          why="每日 07:47；它自己遲到代表整個需求體系失明"),
+    dict(id="vcp_candidates", name="VCP 波動收縮候選", coll="vcp_candidates",
+         field="scan_date", lag_trading=0, tol_days=4,
+         why="平日 20:00 evening_pipeline 步驟 6 產出，scan_date 為 stock_price 最新日；"
+             "週末與連假不產生，故容許跨週末"),
+    dict(id="research_signal_snapshots", name="研究訊號成效帳本快照", coll="research_signal_snapshots",
+         field="captured_at", lag_trading=0, tol_days=4,
+         why="平日 22:50 capture；週末與連假不產生，故容許跨週末。帳本不在 data_freshness_audit，"
+             "此項是它唯一的如期產生監控。outcomes 要等首批 5 日成熟(約 2026-10-20)才有資料，"
+             "之後再登記，否則會讓本檢查憑空變成 ⚪"),
 ]
 
 

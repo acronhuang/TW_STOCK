@@ -43,6 +43,19 @@ def _signals(db, sym):
     return entry, warn
 
 
+def _persist_for_ledger(db, rows):
+    # 研究訊號成效帳本的資料來源；失敗不得影響原有告警流程。
+    try:
+        from src.config import RESULTS_DIR
+        from src.domain.collections import COLL_STOCK_PRICE
+        from src.research_signal_ledger.persistence import write_daily_signals
+        latest = db[COLL_STOCK_PRICE].find_one({}, {'date': 1}, sort=[('date', -1)])
+        if latest:
+            write_daily_signals(RESULTS_DIR, 'core_signals', latest['date'], rows)
+    except Exception as e:
+        print(f"⚠️ 訊號落地失敗(不影響告警): {e}")
+
+
 def main():
     now = datetime.now()
     db = MongoClient(os.getenv("MONGODB_URI", "mongodb://localhost:27017"))["tw_stock_analysis"]
@@ -57,15 +70,18 @@ def main():
                   "stocks": core[["代號", "名稱", "綜合分", "外資10日淨買(張)"]].to_dict("records")}},
         upsert=True)
 
-    entries, warns = [], []
+    entries, warns, signal_rows = [], [], []
     for _, r in core.iterrows():
         e, w = _signals(db, r["代號"])
         tag = f"{r['代號']}{r['名稱']}"
+        if e or w:
+            signal_rows.append({"symbol": r["代號"], "entry": e, "warn": w})
         if e:
             entries.append(f"{tag}:{'/'.join(e)}")
         if w:
             warns.append(f"{tag}:{'/'.join(w)}")
     print(f"核心池 {meta['n_core']} 檔(合議 {meta['buy_date']});進場訊號 {len(entries)} · 警示 {len(warns)}")
+    _persist_for_ledger(db, signal_rows)
 
     lines = []
     if entries:

@@ -106,12 +106,23 @@ def build_line(latest, hits, top=15):
     return '\n'.join(L)
 
 
+def _persist_for_ledger(latest, hits):
+    # 研究訊號成效帳本的資料來源；失敗不得影響掃描與推播。
+    try:
+        from src.config import RESULTS_DIR
+        from src.research_signal_ledger.persistence import write_daily_signals
+        write_daily_signals(RESULTS_DIR, 'obv_bottom', latest, hits)
+    except Exception as e:
+        print(f"⚠️ 訊號落地失敗(不影響掃描): {e}")
+
+
 def main():
     no_line = '--no-line' in sys.argv
     db = MongoClient('localhost', 27017)['tw_stock_analysis']
     latest, hits = scan(db)
     msg = build_line(latest, hits)
     print(msg)
+    _persist_for_ledger(latest, hits)
     if not no_line:
         try:
             # cron 不帶 .env → 少了這行 LineNotifier 拿不到 token、enabled=False，
