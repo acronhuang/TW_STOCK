@@ -80,13 +80,14 @@ def generate(question, hits, model=MODEL, num_predict=700, timeout=600):
 def main():
     import argparse
     sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis/scripts")
-    from stockrag_search import load, search
+    from stockrag_search import load, parse_as_of, search
 
     ap = argparse.ArgumentParser()
     ap.add_argument("question")
     ap.add_argument("-k", type=int, default=6)
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--no-decay", action="store_true")
+    ap.add_argument("--as-of", help="知識截止時點，晚於此時的文件不會被檢索")
     a = ap.parse_args()
 
     docs, mat = load()
@@ -94,7 +95,8 @@ def main():
         print("語料庫是空的")
         return
     hits = search(a.question, docs, mat, k=a.k,
-                  half_life=10**9 if a.no_decay else 180)
+                  half_life=10**9 if a.no_decay else 180,
+                  as_of=parse_as_of(a.as_of) if a.as_of else None)
     ans, el = generate(a.question, hits, a.model)
 
     print(f"\n{ans}\n")

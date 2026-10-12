@@ -5,6 +5,9 @@
   ① 當日整體決策(team_analysis)
   ② 問到的個股：歷史 verdict + 即時 DB(收盤/factor/法人/財報)—全市場任一檔皆可
   ③ 專案知識庫 RAG(報告/文件/回測結論)
+  ④ 新聞與重大訊息 RAG(僅在上線門檻通過時啟用)
+所有市場資訊類檢索以「決策產出時點」為截止，晚於此時的一律不可見。
+答案中的數字必須是程式帶入的原文，找不到出處的會列出請使用者核對。
 LLM = Ollama .28 qwen2.5-14b;明令只據檢索到的資料回答、不編造。網頁無 LINE 額度限制。
 """
 import glob
@@ -13,6 +16,8 @@ import os
 import re
 import sys
 from collections import Counter
+from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -26,6 +31,8 @@ sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis")
 OLLAMA = os.getenv("OLLAMA_URL", "http://172.16.9.28:11434")
 MODEL = "qwen2.5-14b:latest"
 ROOT = "/home/mdsadmin/Stock/tw-stock-analysis"
+NEWS_GATE = Path(ROOT) / "logs" / "rag_news_gate.json"
+DOC_KINDS = ("doc", "report")
 
 
 def _db():
@@ -48,7 +55,7 @@ def load_today():
     docs = list(db.team_analysis.find(
         {"date": d},
         {"symbol": 1, "name": 1, "final_verdict": 1, "consensus.tally": 1,
-         "advisor": 1, "evidence": 1}))
+         "advisor": 1, "evidence": 1, "created_at": 1}))
     return d, docs
 
 
@@ -155,13 +162,14 @@ def _rag_corpus():
     return load()
 
 
-def rag_hits(question, k=4):
+def rag_hits(question, k=4, as_of=None):
     try:
         from stockrag_search import search
         docs, mat = _rag_corpus()
         if not docs:
             return []
-        rows = search(question, docs, mat, k=k)
+        # 技術文件修改時間晚不代表是未來資訊，豁免；選股/合議結果檔等其他種類一律受決策時點限制
+        rows = search(question, docs, mat, k=k, as_of=as_of, as_of_exempt_kinds=DOC_KINDS)
         out = []
         for r in rows:
             title = str(r.get("title", ""))[:50]
@@ -173,14 +181,51 @@ def rag_hits(question, k=4):
         return [f"(知識庫檢索略過: {e})"]
 
 
-def answer_question(question, today_docs):
+@st.cache_resource(ttl=3600, show_spinner="載入新聞向量…")
+def _news_corpus():
+    from stockrag_news import load
+    return load()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _known_names():
+    return {d["stock_id"]: d.get("stock_name") or ""
+            for d in _db().taiwan_stock_info.find({}, {"stock_id": 1, "stock_name": 1})}
+
+
+def news_hits(question, cutoff, k=5):
+    """新聞與重大訊息檢索：限決策時點前，且僅在查詢集門檻近期通過時啟用。回 (文字列表, 未啟用說明)。"""
+    try:
+        from stockrag_news import extract_symbols, gate_open, search
+        if not gate_open(NEWS_GATE, datetime.now()):
+            return [], "新聞檢索未啟用：上線門檻未通過或已過期（請先跑 scripts/stockrag_news_eval.py）"
+        docs, mat = _news_corpus()
+        if not docs:
+            return [], "新聞語料尚未建立"
+        symbols = extract_symbols(question, _known_names())
+        rows = search(question, docs, mat, k=k, symbols=symbols or None, as_of=cutoff)
+        out = []
+        for r in rows:
+            kind = "重大訊息" if r.get("kind") == "announcement" else "媒體標題"
+            out.append(f"[{kind} {r['doc_date']:%m/%d %H:%M} {r.get('name', '')}({r['symbol']})] "
+                       + " ".join(str(r.get("content", "")).split())[:300])
+        return out, ""
+    except Exception as e:
+        return [], f"新聞檢索略過: {e}"
+
+
+def answer_question(question, today_docs, decision_date=None):
+    from src.analysis.answer_guard import unsupported_numbers
+    from stockrag_news import decision_cutoff
     db = _db()
+    cutoff = decision_cutoff(today_docs, decision_date or datetime.now())
     lines = []
     for d in today_docs:
         t = (d.get("consensus") or {}).get("tally") or {}
         lines.append(f"{d.get('symbol')} {d.get('name')}:{d.get('final_verdict') or '—'}"
                      f"(買{t.get('買進', 0)}/持{t.get('持有', 0)}/賣{t.get('賣出', 0)})")
-    ctx = ["【今日整體決策 %d 檔】" % len(today_docs), "\n".join(lines)]
+    ctx = ["【今日整體決策 %d 檔】" % len(today_docs), "\n".join(lines),
+           f"\n【決策時點】{cutoff:%Y-%m-%d %H:%M}（以下新聞、重大訊息與結果檔皆不晚於此時）"]
     codes = []
     for c in re.findall(r"\d{4}", question):
         if c not in codes:
@@ -189,16 +234,23 @@ def answer_question(question, today_docs):
         ctx.append("\n【問到的個股詳情】")
         for c in codes[:6]:
             ctx.append("▼ " + stock_snapshot(db, c))
-    hits = rag_hits(question)
+    news, news_note = news_hits(question, cutoff)
+    if news:
+        ctx.append("\n【新聞與重大訊息（決策時點前）】")
+        ctx.append("\n".join(news))
+    elif news_note:
+        ctx.append(f"\n【新聞檢索】{news_note}")
+    hits = rag_hits(question, as_of=cutoff)
     if hits:
         ctx.append("\n【知識庫相關段落】")
         ctx.append("\n".join(hits))
     context = "\n".join(ctx)
 
     prompt = (
-        "你是台股投資決策助理。以下是多來源檢索到的資料(今日團隊決策、問到個股的歷史與即時數據、"
+        "你是台股投資決策助理。以下是多來源檢索到的資料(今日團隊決策、問到個股的歷史與即時數據、新聞與重大訊息、"
         "知識庫段落)。**只根據這些資料回答**,不要編造;資料沒有的就明說沒有。注意 ⚠️背離 與"
-        "『當日因子未算』等提示。用繁體中文簡潔作答,涉及個股標代號。\n\n" + context +
+        "『當日因子未算』等提示。**數字一律逐字引用資料原文,不得自行計算、換算或推估**;引用新聞或重大訊息時註明日期。"
+        "用繁體中文簡潔作答,涉及個股標代號。\n\n" + context +
         "\n\n【使用者問題】\n" + question + "\n\n【回答】\n")
     r = requests.post(
         f"{OLLAMA}/api/generate",
@@ -206,7 +258,11 @@ def answer_question(question, today_docs):
               "options": {"num_predict": 800, "temperature": 0.3, "num_ctx": 8192}},
         timeout=600)
     r.raise_for_status()
-    return r.json().get("response", "").strip(), context
+    answer = r.json().get("response", "").strip()
+    unsupported = unsupported_numbers(answer, context + "\n" + question)
+    if unsupported:
+        answer += "\n\n⚠️ 下列數字在檢索資料中找不到出處，請自行核對後再採用：" + "、".join(unsupported)
+    return answer, context
 
 
 def show():
@@ -245,7 +301,7 @@ def show():
     if st.button("詢問", key="dq_ask", type="primary") and q.strip():
         with st.spinner(f"{MODEL} 檢索+作答中…（首次載知識庫較久）"):
             try:
-                ans, ctx = answer_question(q.strip(), docs)
+                ans, ctx = answer_question(q.strip(), docs, date_d)
                 st.markdown(ans or "(無回應)")
                 with st.expander("🔍 這次檢索到的資料(佐證)"):
                     st.text(ctx[:6000])

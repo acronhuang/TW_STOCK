@@ -66,13 +66,31 @@ def literal_scores(query, docs):
                     dtype=np.float32)
 
 
-def search(query, docs, mat, k=5, kind=None, half_life=HALF_LIFE, pool=60):
+def parse_as_of(text):
+    """'2026-09-20' = 當天收盤後（含當天產出的文件）；'2026-09-20 08:30' = 精確時點。解析不了就報錯，不可默默關掉防護。"""
+    for fmt, end_of_day in (("%Y-%m-%d", True), ("%Y-%m-%d %H:%M", False), ("%Y-%m-%d %H:%M:%S", False)):
+        try:
+            parsed = datetime.strptime(text.strip(), fmt)
+        except ValueError:
+            continue
+        return parsed.replace(hour=23, minute=59, second=59, microsecond=999999) if end_of_day else parsed
+    raise ValueError(f"無法解析的 as_of: {text!r}（格式 YYYY-MM-DD 或 YYYY-MM-DD HH:MM）")
+
+
+def search(query, docs, mat, k=5, kind=None, half_life=HALF_LIFE, pool=60, as_of=None, as_of_exempt_kinds=()):
+    """as_of：知識截止時點。doc_date 晚於它的文件、以及沒有可驗證日期的文件一律排除（失敗即拒絕），
+    文件年齡也改從 as_of 起算。doc_date 是檔案修改時間，紀錄的是「最晚什麼時候內容已存在」，對截止比較是保守上界。
+    as_of_exempt_kinds：這些種類不受截止限制（例如仍在維護的技術文件，修改時間晚不代表內容是「未來資訊」）。"""
     qv = np.array(embed(query), dtype=np.float32)
     qv /= (np.linalg.norm(qv) + 1e-9)
 
     mask = np.ones(len(docs), dtype=bool)
     if kind:
         mask = np.array([d.get("kind") == kind for d in docs])
+    if as_of is not None:
+        exempt = set(as_of_exempt_kinds)
+        mask &= np.array([d.get("kind") in exempt or (isinstance(d.get("doc_date"), datetime) and d["doc_date"] <= as_of)
+                          for d in docs])
     idx_all = np.where(mask)[0]
     if idx_all.size == 0:
         return []
@@ -86,14 +104,14 @@ def search(query, docs, mat, k=5, kind=None, half_life=HALF_LIFE, pool=60):
     rank_v = {gi: r + 1 for r, gi in enumerate(top_v)}
     rank_l = {gi: r + 1 for r, gi in enumerate(top_l)}
 
-    now = datetime.now()
+    now = as_of if as_of is not None else datetime.now()
     fused = []
     for gi in set(rank_v) | set(rank_l):
         rrf = (1.0 / (RRF_K + rank_v[gi]) if gi in rank_v else 0.0) + \
               (1.0 / (RRF_K + rank_l[gi]) if gi in rank_l else 0.0)
         d = docs[gi]
         dd = d.get("doc_date")
-        age = (now - dd).days if isinstance(dd, datetime) else 0
+        age = max((now - dd).days, 0) if isinstance(dd, datetime) else 0
         decay = 0.5 ** (age / float(half_life)) if half_life < 10**8 else 1.0
         fused.append({**d, "rrf": rrf, "age_days": age,
                       "vec_sim": float(vec[np.where(idx_all == gi)[0][0]]),
@@ -110,6 +128,7 @@ def main():
     ap.add_argument("--kind", choices=["report", "doc", "result"])
     ap.add_argument("--half-life", type=int, default=HALF_LIFE)
     ap.add_argument("--no-decay", action="store_true", help="關閉時間加權(對照用)")
+    ap.add_argument("--as-of", help="知識截止時點 YYYY-MM-DD(含當天)或 'YYYY-MM-DD HH:MM'；晚於此時的文件不會被檢索")
     a = ap.parse_args()
 
     docs, mat = load()
@@ -117,7 +136,8 @@ def main():
         print("語料庫是空的,請先跑 stockrag_ingest.py")
         return
     hl = 10**9 if a.no_decay else a.half_life
-    for i, r in enumerate(search(a.query, docs, mat, a.k, a.kind, hl), 1):
+    as_of = parse_as_of(a.as_of) if a.as_of else None
+    for i, r in enumerate(search(a.query, docs, mat, a.k, a.kind, hl, as_of=as_of), 1):
         dd = r.get("doc_date")
         ds = dd.strftime("%Y-%m-%d") if isinstance(dd, datetime) else "?"
         print(f"\n[{i}] {r['title']}  ({r['kind']}, {ds}, {r['age_days']} 天前)")
