@@ -153,6 +153,24 @@ def fetch_twse() -> List[Dict]:
 
 # ── TPEX（上櫃）────────────────────────────────────────────────────────────────
 
+def _get_tpex_json(url: str, attempts: int = 4, wait: int = 45):
+    """TPEX 大檔在檔案剛重新產生時會被截斷（2026-10-12 20:00 實例），驗證長度與 JSON 後重試。"""
+    import time
+    for i in range(1, attempts + 1):
+        try:
+            r = requests.get(url, timeout=30, verify=False)
+            r.raise_for_status()
+            expected = r.headers.get('Content-Length')
+            if expected and int(expected) != len(r.content):
+                raise ValueError(f"內容不完整 {len(r.content)}/{expected}")
+            return r.json()
+        except (ValueError, requests.RequestException) as e:
+            if i == attempts:
+                raise
+            print(f"  TPEX 下載第 {i} 次失敗（{e}），{wait} 秒後重試")
+            time.sleep(wait)
+
+
 def fetch_tpex() -> List[Dict]:
     """
     下載 TPEX 全市場當日收盤行情（上櫃股票）
@@ -161,9 +179,7 @@ def fetch_tpex() -> List[Dict]:
         same schema as fetch_twse()
     """
     url = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes'
-    r = requests.get(url, timeout=20, verify=False)
-    r.raise_for_status()
-    raw = r.json()
+    raw = _get_tpex_json(url)
 
     records = []
     for row in raw:
