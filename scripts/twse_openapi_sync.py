@@ -58,7 +58,7 @@ BASE = "https://openapi.twse.com.tw/v1"
 NOW = datetime.now(timezone.utc)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.data_gap import official_day  # noqa: E402
+from src.data_gap import mops_major, official_day  # noqa: E402
 from src.data_gap.stamp import applicable_day  # noqa: E402
 
 
@@ -284,33 +284,44 @@ def sync_notice(db):
 
 
 def sync_major_news(db):
-    """重大訊息 — ap04_L"""
+    """重大訊息 — ap04_L（上市）。同一公司同日同主旨但不同時間的公告要分成兩筆，故經 save_new 以發言時間比對。"""
     log.info("[5/13] 重大訊息 (ap04_L)...")
     data = fetch("/opendata/t187ap04_L")
     if not data:
         return 0
     col = db["major_news"]
     col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
-    inserted = 0
+    docs = []
     for row in data:
         dt = roc_to_date(row.get("發言日期", ""))
+        raw_time = row.get("發言時間", "")
         doc = {
             "stock_id": row.get("公司代號", ""),
             "name": row.get("公司名稱", ""),
             "date": dt,
-            "time": row.get("發言時間", ""),
+            "time": mops_major.clock(raw_time) or raw_time,
             "subject": row.get("主旨 ", row.get("主旨", "")),
             "clause": row.get("符合條款", ""),
             "fact_date": roc_to_date(row.get("事實發生日", "")),
             "detail": row.get("說明", ""),
+            "market": "sii",
+            "source": "twse_openapi",
             "updated_at": NOW,
         }
-        if doc["stock_id"]:
-            col.update_one({"stock_id": doc["stock_id"], "date": dt, "subject": doc["subject"]},
-                           {"$set": doc}, upsert=True)
-            inserted += 1
-    log.info(f"  筆數: {inserted}")
-    return inserted
+        if doc["stock_id"] and dt is not None:
+            docs.append(doc)
+    saved = mops_major.save_new(col, docs)
+    log.info(f"  筆數: {saved}（官方 {len(docs)}）")
+    return saved
+
+
+def sync_major_news_otc(db):
+    """上櫃重大訊息 — TPEX mopsfin_t187ap04_O（只回最新一個發言日，必須每天抓；歷史與漏抓由 mops_major_sync.py 對帳補）。"""
+    log.info("[5b] 上櫃重大訊息 (mopsfin_t187ap04_O)...")
+    docs = [d for d in (mops_major.tpex_doc(r, NOW) for r in fetch_tpex("mopsfin_t187ap04_O")) if d]
+    saved = mops_major.save_new(db["major_news"], docs)
+    log.info(f"  筆數: {saved}（官方 {len(docs)}）")
+    return saved
 
 
 def sync_major_shareholders(db):
@@ -479,6 +490,7 @@ ALL_SYNCS = {
     "punish": sync_punish,
     "notice": sync_notice,
     "major_news": sync_major_news,
+    "major_news_otc": sync_major_news_otc,
     "major_shareholders": sync_major_shareholders,
     "foreign_top20": sync_foreign_top20,
     "after_hours": sync_after_hours,
