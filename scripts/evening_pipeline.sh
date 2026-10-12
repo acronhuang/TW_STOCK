@@ -23,6 +23,9 @@ step(){ echo "--- [$(date +%H:%M:%S)] $1 ---"; }
 # 拿昨天(完整)比對 → 誤判「全部正常」→ heal 空轉，當日缺價全部沿用舊值。
 step "1/9 下載當日股價（stock_price）"
 $PY scripts/twse_daily_update.py || echo "  twse_daily_update 失敗（續）"
+# OpenAPI「最新日」端點晚間仍可能給前一交易日、TPEX 大檔偶爆截斷（實例 2026-10-12），
+# 改用官方「按日期」端點補當日；非交易日沒有資料就不寫。失敗仍交給下一步 heal。
+$PY scripts/backfill_by_date.py --date "$(date +%Y%m%d)" --apply || echo "  backfill_by_date 失敗（續，交給 heal）"
 
 step "2/9 完整度自癒 heal（補齊當日缺漏）"
 $PY scripts/twse_openapi_sync.py --heal || echo "  heal 非零退出（續）"

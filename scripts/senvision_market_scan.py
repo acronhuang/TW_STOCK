@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 # ── 路徑設定 ───────────────────────────────────────────────────────────────────
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))   # scanner.py 已改 from src.domain... 匯入，需要專案根目錄
 sys.path.insert(0, str(_PROJECT_ROOT / 'src'))
 
 from senvision import TIMEFRAME_CONFIG
