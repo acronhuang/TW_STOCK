@@ -29,7 +29,7 @@ def test_margin_runs_both_markets_because_a_thin_day_does_not_say_which_side_is_
     assert all("--apply" in c for c in recovery.commands if c[0] == "backfill_margin_by_date.py")
 
 
-@pytest.mark.parametrize("collection", ["day_trading_targets", "securities_lending", "after_hours_trading", "odd_lot_trading"])
+@pytest.mark.parametrize("collection", ["day_trading_targets", "securities_lending"])
 def test_latest_day_only_sources_are_unrecoverable_with_a_reason(collection):
     recovery = policy.recovery_for(collection, "20260917")
 
@@ -42,6 +42,14 @@ def test_derived_factors_are_not_backfilled_here():
     recovery = policy.recovery_for("stock_factors", "20260917")
 
     assert recovery.mode == "derived" and recovery.commands == ()
+
+
+@pytest.mark.parametrize("collection,kind", [("after_hours_trading", "after_hours"), ("odd_lot_trading", "odd")])
+def test_after_hours_and_odd_lot_are_refetched_from_the_official_by_date_endpoints(collection, kind):
+    recovery = policy.recovery_for(collection, "20260917")
+
+    assert recovery.mode == "backfill"
+    assert recovery.commands == (("official_day_sync.py", "--kinds", kind, "--date", "20260917", "--apply"),)
 
 
 def test_an_unknown_collection_needs_review_instead_of_guessing():

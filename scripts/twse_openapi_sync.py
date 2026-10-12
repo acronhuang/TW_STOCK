@@ -58,15 +58,16 @@ BASE = "https://openapi.twse.com.tw/v1"
 NOW = datetime.now(timezone.utc)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.data_gap.stamp import stamp_day  # noqa: E402
+from src.data_gap import official_day  # noqa: E402
+from src.data_gap.stamp import applicable_day  # noqa: E402
 
 
-def _stamp_day(db) -> datetime:
-    """OpenAPI 只給最新已公布交易日；假日/週末抓到的是前一交易日的資料，不能標成抓取日。"""
+def _applicable_day(db) -> datetime:
+    """公告型資料（借券可賣出股數、ETF 排行、停資券預告）標適用日：交易日當天，假日/週末抓到的是下一個交易日的公告。"""
     now = datetime.now()
-    recent = [d["date"] for d in db["trading_dates"].find(
-        {"date": {"$lte": now.strftime("%Y-%m-%d")}}, {"date": 1}).sort("date", -1).limit(15)]
-    return stamp_day(now, recent)
+    upcoming = [d["date"] for d in db["trading_dates"].find(
+        {"date": {"$gte": now.strftime("%Y-%m-%d")}}, {"date": 1}).sort("date", 1).limit(15)]
+    return applicable_day(now, upcoming)
 
 
 def fetch(path: str) -> list[dict]:
@@ -179,7 +180,7 @@ def sync_securities_lending(db):
         return 0
     col = db["securities_lending"]
     col.create_index([("twse_code", ASCENDING), ("date", DESCENDING)])
-    today = _stamp_day(db)
+    today = _applicable_day(db)
     inserted = 0
     for row in data:
         doc = {
@@ -338,75 +339,18 @@ def sync_major_shareholders(db):
 
 
 def sync_foreign_top20(db):
-    """外資持股 Top20 — MI_QFIIS_sort_20"""
+    """外資持股 Top20 — 官方按日期端點（OpenAPI 無資料日，且交易日 17:30 抓到的是前一交易日）"""
     log.info("[7/13] 外資持股 Top20 (MI_QFIIS_sort_20)...")
-    data = fetch("/fund/MI_QFIIS_sort_20")
-    if not data:
-        return 0
-    col = db["foreign_top20"]
-    today = _stamp_day(db)
-    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
-    inserted = 0
-    for row in data:
-        doc = {
-            "rank": safe_int(row.get("Rank", "0")),
-            "stock_id": row.get("Code", ""),
-            "name": row.get("Name", ""),
-            "shares_held": safe_int(row.get("SharesHeld", "0")),
-            "shares_held_pct": safe_float(row.get("SharesHeldPer", "0")),
-            "upper_limit": safe_float(row.get("Upperlimit", "0")),
-            "date": today,
-            "updated_at": NOW,
-        }
-        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
-        inserted += 1
+    inserted = official_day.sync_latest(db, "foreign_top20", NOW)
     log.info(f"  筆數: {inserted}")
     return inserted
 
 
 def sync_after_hours(db):
-    """盤後定價交易 — BFT41U"""
-    log.info("[8/13] 盤後定價交易 (BFT41U)...")
-    data = fetch("/exchangeReport/BFT41U")
-    if not data:
-        return 0
-    col = db["after_hours_trading"]
-    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
-    today = _stamp_day(db)
-    inserted = 0
-    for row in data:
-        code = row.get("Code", row.get("股票代號", "")).strip()
-        if not code:
-            continue
-        doc = {
-            "stock_id": code,
-            "name": row.get("Name", row.get("股票名稱", "")),
-            "volume": safe_int(row.get("TradeVolume", row.get("成交股數", "0"))),
-            "value": safe_int(row.get("TradeValue", row.get("成交金額", "0"))),
-            "close": safe_float(row.get("ClosingPrice", row.get("成交價格", "0"))),
-            "date": today,
-            "updated_at": NOW,
-            "market": "TWSE",
-        }
-        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
-        inserted += 1
-    # ── 上櫃盤後定價行情(TPEX tpex_off_market)────────────────
-    for row in fetch_tpex("tpex_off_market"):
-        code = str(row.get("SecuritiesCompanyCode", "")).strip()
-        if not code:
-            continue
-        doc = {
-            "stock_id": code,
-            "name": row.get("CompanyName", ""),
-            "volume": safe_int(row.get("TradeVolume", "0")),
-            "value": safe_int(row.get("TradeAmount", "0")),
-            "close": safe_float(row.get("Close", "0")),
-            "date": today,
-            "updated_at": NOW,
-            "market": "TPEX",
-        }
-        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
-        inserted += 1
+    """盤後定價交易 — 官方按日期端點（上市 BFT41U＋上櫃 fixPricing）"""
+    log.info("[8/13] 盤後定價交易 (BFT41U + TPEX fixPricing)...")
+    db["after_hours_trading"].create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
+    inserted = official_day.sync_latest(db, "after_hours", NOW)
     log.info(f"  筆數: {inserted}")
     return inserted
 
@@ -418,7 +362,7 @@ def sync_etf_rank(db):
     if not data:
         return 0
     col = db["etf_dca_rank"]
-    today = _stamp_day(db)
+    today = _applicable_day(db)
     col.create_index([("date", DESCENDING)])
     inserted = 0
     for row in data:
@@ -440,48 +384,10 @@ def sync_etf_rank(db):
 
 
 def sync_odd_lot(db):
-    """零股交易行情 — TWT53U"""
-    log.info("[10/13] 零股交易行情 (TWT53U)...")
-    data = fetch("/exchangeReport/TWT53U")
-    if not data:
-        return 0
-    col = db["odd_lot_trading"]
-    col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
-    today = _stamp_day(db)
-    inserted = 0
-    for row in data:
-        code = row.get("Code", row.get("股票代號", "")).strip()
-        if not code:
-            continue
-        doc = {
-            "stock_id": code,
-            "name": row.get("Name", row.get("股票名稱", "")),
-            "volume": safe_int(row.get("TradeVolume", row.get("成交股數", "0"))),
-            "value": safe_int(row.get("TradeValue", row.get("成交金額", "0"))),
-            "close": safe_float(row.get("ClosingPrice", row.get("收盤價", "0"))),
-            "date": today,
-            "updated_at": NOW,
-            "market": "TWSE",
-        }
-        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
-        inserted += 1
-    # ── 上櫃零股交易(TPEX tpex_odd_stock;close←Price)──────────
-    for row in fetch_tpex("tpex_odd_stock"):
-        code = str(row.get("SecuritiesCompanyCode", "")).strip()
-        if not code:
-            continue
-        doc = {
-            "stock_id": code,
-            "name": row.get("CompanyName", ""),
-            "volume": safe_int(row.get("TradeVolume", "0")),
-            "value": safe_int(row.get("TradeAmount", "0")),
-            "close": safe_float(row.get("Price", "0")),
-            "date": today,
-            "updated_at": NOW,
-            "market": "TPEX",
-        }
-        col.update_one({"stock_id": doc["stock_id"], "date": today}, {"$set": doc}, upsert=True)
-        inserted += 1
+    """零股交易行情 — 官方按日期端點（上市 TWT53U＋上櫃 odd）"""
+    log.info("[10/13] 零股交易行情 (TWT53U + TPEX odd)...")
+    db["odd_lot_trading"].create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
+    inserted = official_day.sync_latest(db, "odd", NOW)
     log.info(f"  筆數: {inserted}")
     return inserted
 
@@ -523,7 +429,7 @@ def sync_margin_suspension(db):
         return 0
     col = db["margin_suspension"]
     col.create_index([("stock_id", ASCENDING), ("date", DESCENDING)])
-    today = _stamp_day(db)
+    today = _applicable_day(db)
     inserted = 0
     for row in data:
         code = row.get("Code", row.get("股票代號", "")).strip()
@@ -543,43 +449,26 @@ def sync_margin_suspension(db):
 
 
 def sync_margin_trading(db):
-    """融資融券餘額 — MI_MARGN (更新既有)"""
-    log.info("[13/13] 融資融券餘額 (MI_MARGN)...")
-    data = fetch("/exchangeReport/MI_MARGN")
-    if not data:
+    """融資融券餘額（上市）— 官方按日期端點；資料日取官方最新一天。
+    OpenAPI MI_MARGN 沒有資料日，交易日 17:30 抓到的又是前一交易日的餘額，標成當天會讓整張表落後一天。"""
+    log.info("[13/13] 融資融券餘額 (MI_MARGN 按日期)...")
+    import backfill_margin_by_date as margin_day
+    try:
+        r = requests.get("https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json&selectType=ALL",
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        latest = r.json().get("date")
+        rows = margin_day.fetch(latest) if latest else []
+    except Exception as e:
+        log.error(f"  融資融券官方資料下載失敗: {e}")
+        return 0
+    if not rows:
         return 0
     col = db["margin_purchase_short_sale"]
     col.create_index([("code", ASCENDING), ("date", DESCENDING)])
-    today = _stamp_day(db)
-    inserted = 0
-    for row in data:
-        code = row.get("股票代號", "").strip()
-        if not code:
-            continue
-        doc = {
-            "code": code,
-            "name": row.get("股票名稱", ""),
-            "date": today,
-            "margin_buy": safe_int(row.get("融資買進", "0")),
-            "margin_sell": safe_int(row.get("融資賣出", "0")),
-            "margin_cash_repay": safe_int(row.get("融資現金償還", "0")),
-            "margin_prev_balance": safe_int(row.get("融資前日餘額", "0")),
-            "margin_balance": safe_int(row.get("融資今日餘額", "0")),
-            "margin_limit": safe_int(row.get("融資限額", "0")),
-            "short_buy": safe_int(row.get("融券買進", "0")),
-            "short_sell": safe_int(row.get("融券賣出", "0")),
-            "short_cash_repay": safe_int(row.get("融券現券償還", "0")),
-            "short_prev_balance": safe_int(row.get("融券前日餘額", "0")),
-            "short_balance": safe_int(row.get("融券今日餘額", "0")),
-            "short_limit": safe_int(row.get("融券限額", "0")),
-            "offset": safe_int(row.get("資券互抵", "0")),
-            "note": row.get("註記", ""),
-            "updated_at": NOW,
-        }
-        col.update_one({"code": code, "date": today}, {"$set": doc}, upsert=True)
-        inserted += 1
-    log.info(f"  筆數: {inserted}")
-    return inserted
+    for doc in rows:
+        col.update_one({"code": doc["code"], "date": doc["date"]}, {"$set": doc}, upsert=True)
+    log.info(f"  日期: {latest}  筆數: {len(rows)}")
+    return len(rows)
 
 
 # ─── 主程式 ─────────────────────────────────────
@@ -616,14 +505,14 @@ TABLE_CHECKS = {
     "stock_price":                 (4000, 0),
     "stock_factors":               (1800, 0),
     "institutional_flow":          ( 800, 1),   # T86 法人 T+1 公布，允許落後 1 個交易日
-    "margin_purchase_short_sale":  (1100, 0),   # 上市完整水位(上櫃允許T+1晚到,不進自適應)
+    "margin_purchase_short_sale":  (1100, 1),   # 上市完整水位；資料日語意，官方晚間才公布當日餐額
     "day_trading_targets":         ( 800, 0),
     "securities_lending":          ( 800, 0),
-    "after_hours_trading":         (1000, 0),
-    "odd_lot_trading":             ( 800, 0),
+    "after_hours_trading":         (1000, 1),   # 資料日語意：官方晚間才公布當日資料
+    "odd_lot_trading":             ( 800, 1),
     "major_news":                  (   1, 4),   # 重大訊息非每交易日皆有
     "punished_stocks":             (   0, 5),   # 處置股偶發，可能無資料
-    "foreign_top20":               (  20, 0),
+    "foreign_top20":               (  20, 1),
     "etf_dca_rank":                (  10, 0),
     "margin_suspension":           (  10, 4),
 }
@@ -833,11 +722,17 @@ def _check_weekly_tables(db, today: _date) -> tuple[list[str], list[str]]:
     return ok, fail
 
 
-def check_integrity(db) -> tuple[list[str], list[str]]:
+def deferred_tables(now: datetime) -> tuple[str, ...]:
+    """20:00 晚間管線才載入當日股價與因子；在此之前的報告對它們落後 1 個交易日是正常（每天 17:30 都誤報過）。"""
+    return ("stock_price", "stock_factors") if now.hour < 20 else ()
+
+
+def check_integrity(db, defer_lag: tuple[str, ...] = ()) -> tuple[list[str], list[str]]:
     """
     檢查各資料表的完整度，回傳 (ok_list, fail_list)。
     每張表同時驗「最新日期是否落後」與「最新日筆數是否足夠」，兩者互補。
     每日表走 TABLE_CHECKS（交易日 lag）；每週表走 WEEKLY_TABLE_CHECKS（日曆天 lag）。
+    defer_lag：這些表超過容許落後恰 1 個交易日時不算異常（即將由晚間管線載入），落後 2 日以上仍照報。
     """
     ok_list = []
     fail_list = []
@@ -916,10 +811,14 @@ def check_integrity(db) -> tuple[list[str], list[str]]:
             eff_min, median = min_count, None
 
         problems = []
+        deferred = False
         if latest is not None:
             lag = _trading_day_lag(latest)
             if lag > max_lag:
-                problems.append(f"最新 {latest} 落後參考日 {ref_day} {lag} 個交易日 (容許 ≤{max_lag})")
+                if col_name in defer_lag and lag == max_lag + 1:
+                    deferred = True
+                else:
+                    problems.append(f"最新 {latest} 落後參考日 {ref_day} {lag} 個交易日 (容許 ≤{max_lag})")
         # 值合理性（正確錨）：僅對 stock_price 驗 OHLC 自洽。與筆數同屬一行 →
         # 走同一條 backfill 自癒路徑（重抓可修復來源暫時錯批；系統性 bug 則複檢仍紅→升級）。
         val_bad = None
@@ -939,6 +838,8 @@ def check_integrity(db) -> tuple[list[str], list[str]]:
             hint = f"（門檻{eff_min}｜中位{median}）" if median is not None else ""
             if val_bad is not None:
                 hint += f" 值檢✓（{val_bad} 異常）" if val_bad else " 值檢✓"
+            if deferred:
+                hint += " （當日資料待晚間管線載入）"
             ok_list.append(f"✅ {col_name}: {check_count} 筆 @ {check_date} {hint}".rstrip())
 
     # 每週更新的表（日曆天 lag，見 WEEKLY_TABLE_CHECKS）
@@ -1333,10 +1234,10 @@ def main():
     print(f"  完成！成功: {success}/{len(targets)}  總筆數: {total}")
     print("=" * 60)
 
-    # 下載完成後自動做完整度檢查
+    # 下載完成後自動做完整度檢查（晚間 20:00 才載入的股價/因子在此之前不算落後）
     print()
     log.info("執行資料完整度檢查...")
-    ok_list, fail_list = check_integrity(db)
+    ok_list, fail_list = check_integrity(db, defer_lag=deferred_tables(datetime.now()))
     for item in ok_list + fail_list:
         log.info(f"  {item}")
 

@@ -1,12 +1,12 @@
-"""整合測試（真實 MongoDB，專用測試庫）：缺口回補的失敗路徑與假日列清理動作。"""
+"""整合測試（真實 MongoDB，專用測試庫）：缺口回補的失敗路徑與快照表依真實日期重建。"""
 
 from datetime import datetime, timedelta
 
 import pytest
 
-from scripts import fix_phantom_dates
+from scripts import redate_snapshot_tables
 from scripts.data_gap_repair import MongoRegister
-from src.data_gap import runner
+from src.data_gap import redate, runner
 from src.data_gap.models import Gap
 
 pytestmark = pytest.mark.integration
@@ -45,24 +45,28 @@ def test_a_repair_that_keeps_failing_ends_as_failed_with_one_alert_and_stays_fai
     assert len(attempts) == 3 and write_db["schedule_alerts"].count_documents({}) == 1
 
 
-def test_phantom_actions_relabel_merge_and_delete_rows_in_real_collections(write_db):
-    lending, after_hours = write_db["securities_lending"], write_db["after_hours_trading"]
-    lending.delete_many({})
-    after_hours.delete_many({})
-    d18, d20, d24 = datetime(2026, 9, 18), datetime(2026, 9, 20), datetime(2026, 9, 24)
-    after_hours.insert_many([{"stock_id": "2330", "date": d20, "close": 1.0}, {"stock_id": "2317", "date": d20, "close": 2.0}])
-    lending.insert_many([{"twse_code": "2330", "date": d24, "twse_volume": 1}, {"twse_code": "2330", "date": datetime(2026, 9, 25), "twse_volume": 9},
-                         {"twse_code": "2317", "date": datetime(2026, 9, 25), "twse_volume": 7}])
+def test_rebuild_moves_stamps_to_their_true_day_and_collapses_holiday_duplicates(write_db):
+    source, destination = write_db["rd_source"], write_db["rd_destination"]
+    source.delete_many({})
+    destination.drop()
+    calendar = ["2026-09-17", "2026-09-18", "2026-09-21", "2026-09-22"]
+    for day, volume in (("2026-09-20", 5), ("2026-09-21", 5), ("2026-09-22", 7)):
+        source.insert_one({"stock_id": "2330", "date": datetime.strptime(day, "%Y-%m-%d"), "volume": volume})
 
-    relabelled = fix_phantom_dates.apply_action(after_hours, {"op": "relabel", "collection": "after_hours_trading",
-                                                              "from": "2026-09-20", "to": "2026-09-18"})
-    merged = fix_phantom_dates.apply_action(lending, {"op": "merge", "collection": "securities_lending", "from": "2026-09-25",
-                                                      "to": "2026-09-24", "key": "twse_code"})
+    mapping = redate.day_map(["2026-09-20", "2026-09-21", "2026-09-22"], calendar, "data")
+    stats = redate_snapshot_tables.rebuild(source, destination, "stock_id", mapping)
 
-    assert relabelled == 2 and after_hours.count_documents({"date": d18}) == 2 and after_hours.count_documents({"date": d20}) == 0
-    assert merged == 2 and lending.count_documents({"date": datetime(2026, 9, 25)}) == 0
-    assert {d["twse_code"]: d["twse_volume"] for d in lending.find({"date": d24})} == {"2330": 9, "2317": 7}
+    assert stats["copied"] == 2
+    assert {d["date"].strftime("%Y-%m-%d"): d["volume"] for d in destination.find({})} == {"2026-09-18": 5, "2026-09-21": 7}
+    assert "uq_build" not in destination.index_information()
 
-    deleted = fix_phantom_dates.apply_action(after_hours, {"op": "delete", "collection": "after_hours_trading", "from": "2026-09-18"})
 
-    assert deleted == 2 and after_hours.count_documents({}) == 0
+def test_rebuild_reports_rows_whose_stamp_has_no_true_day(write_db):
+    source, destination = write_db["rd_source2"], write_db["rd_destination2"]
+    source.delete_many({})
+    destination.drop()
+    source.insert_one({"stock_id": "2330", "date": datetime(2026, 9, 1), "volume": 1})
+
+    stats = redate_snapshot_tables.rebuild(source, destination, "stock_id", {"2026-09-01": None})
+
+    assert stats == {"copied": 0, "skipped_no_target": 1, "days": 0}

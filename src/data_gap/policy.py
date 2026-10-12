@@ -11,7 +11,8 @@ class Recovery:
     commands: tuple[tuple[str, ...], ...] = ()
 
 
-_UNRECOVERABLE = ("day_trading_targets", "securities_lending", "after_hours_trading", "odd_lot_trading")
+_UNRECOVERABLE = ("day_trading_targets", "securities_lending")
+_OFFICIAL_DAY = {"after_hours_trading": "after_hours", "odd_lot_trading": "odd"}   # TWSE rwd＋TPEX www 有按日期端點
 _PRIORITY = {"stock_price": 0}   # 其他表的回補以 stock_price 的交易日曆為基準，必須先補價格
 
 
@@ -36,6 +37,8 @@ def recovery_for(collection: str, day: str) -> Recovery:
         return Recovery("backfill", commands=(("sync_revenue_openapi.py",),))
     if collection in _UNRECOVERABLE:
         return Recovery("unrecoverable", reason=_LATEST_ONLY)
+    if collection in _OFFICIAL_DAY:
+        return Recovery("backfill", commands=(("official_day_sync.py", "--kinds", _OFFICIAL_DAY[collection], "--date", day, "--apply"),))
     if collection == "foreign_holding":
         return Recovery("backfill", commands=(("twse_foreign_holding_sync.py", "--date", day),))
     if collection == "risk_analysis":
