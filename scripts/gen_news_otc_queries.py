@@ -30,9 +30,10 @@ def short_name(name: str) -> str:
 
 def clean_subject(subject: str, name: str) -> str:
     s = re.sub(r"\s+", " ", subject or "").strip()
-    for n in {name, short_name(name)}:
-        if n:
-            s = s.replace(n, "").strip()
+    for n in sorted({name, short_name(name)}, key=len, reverse=True):
+        if n and s.startswith(n):
+            s = s[len(n):].strip()
+            break
     s = re.sub(r"^[\s:：,，、]+", "", s)
     return s[:SUBJECT_MAX].strip()
 
