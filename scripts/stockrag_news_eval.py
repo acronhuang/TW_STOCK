@@ -3,7 +3,7 @@
 
 在 .166 執行（需要 Ollama bge-m3 與 stockrag.news_docs）。門檻檔給 dashboard 判斷新聞檢索可否啟用：
 通過且不超過 14 天才開放；未通過、過期或壞檔一律關閉。
-用法：python scripts/stockrag_news_eval.py [--queries tests/rag_eval/news_queries.json tests/rag_eval/news_holdout.json] [--no-gate-file] [-v]
+用法：python scripts/stockrag_news_eval.py [--queries tests/rag_eval/news_queries.json tests/rag_eval/news_holdout.json tests/rag_eval/news_queries_otc.json] [--no-gate-file] [-v]
 """
 import argparse
 import json
@@ -16,7 +16,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 ROOT = HERE.parent
-DEFAULT_QUERIES = [str(ROOT / "tests" / "rag_eval" / name) for name in ("news_queries.json", "news_holdout.json")]
+DEFAULT_QUERIES = [str(ROOT / "tests" / "rag_eval" / name) for name in ("news_queries.json", "news_holdout.json", "news_queries_otc.json")]
 GATE_FILE = ROOT / "logs" / "rag_news_gate.json"
 
 
