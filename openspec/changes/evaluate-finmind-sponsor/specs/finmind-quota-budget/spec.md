@@ -59,7 +59,7 @@ FinMind 回 HTTP 402 時，下載客戶端 MUST NOT 重試；同一程序內連�
 ### Requirement: Each hourly run records the server-side usage
 每小時下載 SHALL 在開始與結束時記錄 FinMind 伺服器端回報的已用量與上限；取不到時 SHALL 記為「無資料」，不得記成 0。
 
-驗證：尚無檢查（tasks 2.1）。
+驗證：`tests/test_finmind_usage.py`（真實的 0 照實記錄；逾時、連線失敗、非 200、body 狀態非 200、非 JSON、欄位缺漏或型別不符一律記「無資料」）；記錄點為 `scripts/hourly_data_update.sh` 的 `log_finmind_usage`。
 
 #### Scenario: The server reports usage
 - **WHEN** 伺服器回報已用 301、上限 600

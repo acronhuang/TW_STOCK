@@ -177,6 +177,13 @@ cleanup_old_logs() {
     log_info "日誌輪替完成: 刪除 $deleted 個, 剩餘 $remaining 個"
 }
 
+# 函數：記錄 FinMind 伺服器端用量（查不到記「無資料」，不影響下載流程）
+log_finmind_usage() {
+    local line
+    line=$(python3 "$SCRIPT_DIR/log_finmind_usage.py" "$1" 2>/dev/null) || line="FinMind 伺服器端用量無資料（$1）"
+    log_info "$line"
+}
+
 # 函數：確保 MongoDB 運行
 ensure_mongodb() {
     if mongosh --eval "db.runCommand('ping').ok" --quiet 2>/dev/null | grep -q "1"; then
@@ -213,6 +220,8 @@ main() {
 
     # 檢查 API Token
     check_api_token
+
+    log_finmind_usage 開始
 
     # 開始時間
     TOTAL_START=$(date +%s)
@@ -253,6 +262,7 @@ main() {
     # 結束時間
     TOTAL_END=$(date +%s)
     TOTAL_DURATION=$((TOTAL_END - TOTAL_START))
+    log_finmind_usage 結束
 
     # 生成總結
     generate_summary "$SUCCESS_COUNT" "$FAILED_COUNT" "$TOTAL_DURATION"
