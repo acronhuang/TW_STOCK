@@ -10,9 +10,21 @@ class OllamaNotReady(RuntimeError):
     pass
 
 
-def required_models(roles: list[str], include_consensus: bool = True) -> dict[str, set[str]]:
+def _canon(name: str) -> str:
+    return name if ":" in name else f"{name}:latest"  # Ollama 把沒寫標籤的模型名視為 :latest
+
+
+def _registered(table: dict[str, str], model: str) -> str:
+    url = table.get(model)
+    if url is None:
+        raise OllamaNotReady(f"模型 {model} 沒有登記節點（src/moe/model_nodes.py）")
+    return url
+
+
+def required_models(roles: list[str], include_consensus: bool = True,
+                    include_aux: bool = False) -> dict[str, set[str]]:
     """節點 -> 該節點必須有的模型；節點對應與 ask_role／合議實際使用的是同一份表。"""
-    from src.moe import consensus, role_router
+    from src.moe import consensus, model_nodes, role_router
 
     required: dict[str, set[str]] = {}
 
@@ -21,11 +33,14 @@ def required_models(roles: list[str], include_consensus: bool = True) -> dict[st
 
     for role in [*roles, "investment-advisor"]:
         model = role_router.ROLE_TO_MODEL[role]
-        need(role_router.MODEL_TO_URL.get(model, role_router.OLLAMA_URL), model)
+        need(_registered(role_router.MODEL_TO_URL, model), model)
     if include_consensus:
         for model in consensus.COMMITTEE:
-            need(consensus.COMMITTEE_MODEL_URL.get(model, consensus.CONSENSUS_URL), model)
+            need(_registered(consensus.COMMITTEE_MODEL_URL, model), model)
         need(consensus.FACILITATOR_URL, consensus.FACILITATOR_MODEL)
+    if include_aux:
+        need(model_nodes.answer_url(), model_nodes.ANSWER_MODEL)
+        need(model_nodes.embed_url(), model_nodes.EMBED_MODEL)
     return required
 
 
@@ -39,7 +54,8 @@ def check_ollama(required: dict[str, set[str]], get=requests.get, timeout: int =
         except Exception as error:  # noqa: BLE001 - any failure means the node cannot serve.
             problems.append(f"{url} 無法連線：{error}")
             continue
-        missing = sorted(models - have)
+        have_canon = {_canon(name) for name in have if name}
+        missing = sorted(model for model in models if _canon(model) not in have_canon)
         if missing:
             problems.append(f"{url} 缺少模型：{', '.join(missing)}")
     return problems

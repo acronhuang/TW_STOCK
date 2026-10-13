@@ -14,7 +14,7 @@
   合議委員(consensus.COMMITTEE) → gemma2:9b(.28) / qwen2.5-14b(.27) / llama3.1:8b(.27)
   facilitator                   → qwen3-14b (@ .28)
   型態/看圖 → SenVision 蔡森演算法(非 LLM，精準型態/頸線)，結果餵 technical-analyst
-  工具型   → embed(nomic-embed-text) / tw-polish(llama3.1:8b@.27)
+  工具型   → （已移除：embed、tw-polish 沒有呼叫端）
   env 覆寫 → TWSTOCK_MAIN_LLM / TWSTOCK_VIEW_LLM / CONSENSUS_MODELS / CONSENSUS_FACILITATOR
 """
 
@@ -27,6 +27,8 @@ import time
 
 import requests
 
+from src.moe import model_nodes
+
 logging.basicConfig(level=logging.INFO,
                     format='[%(asctime)s] %(message)s',
                     datefmt='%H:%M:%S')
@@ -37,9 +39,9 @@ logger = logging.getLogger(__name__)
 #  角色 → 模型 映射
 # ─────────────────────────────────────────────────────────
 # 台股主力 14b:env TWSTOCK_MAIN_LLM 可覆寫(回退設 qwen2.5-14b:latest)。2026-08 由使用者決定切 qwen3。
-MAIN_14B = os.getenv('TWSTOCK_MAIN_LLM', 'qwen3-14b:latest')
+MAIN_14B = os.getenv('TWSTOCK_MAIN_LLM', model_nodes.DEFAULT_MAIN)
 # 換視角模型(value/chip 角色):env TWSTOCK_VIEW_LLM 可覆寫;預設 gemma2:9b(2026-08 由 hermes3→gemma2)。
-VIEW_MODEL = os.getenv('TWSTOCK_VIEW_LLM', 'gemma2:9b')
+VIEW_MODEL = os.getenv('TWSTOCK_VIEW_LLM', model_nodes.DEFAULT_VIEW)
 
 ROLE_TO_MODEL = {
     # 推理 / 整合（主力 14b @ .28）
@@ -60,7 +62,7 @@ ROLE_TO_MODEL = {
     # ⚠️ 這組數字混淆了「模型能力」與「節點負載」:.28 的 237.9s 多數是排隊。
     #    引用正確性只是最低門檻,真正的品質答案要看 verdict_detail 的事後超額報酬,
     #    換前/換後各累積一段再比。TECH_MODEL=qwen3-14b:latest 可立即還原。
-    'technical-analyst':        os.getenv('TECH_MODEL', 'llama3.1:8b'),
+    'technical-analyst':        os.getenv('TECH_MODEL', model_nodes.DEFAULT_TECH),
     'fundamental-analyst':      MAIN_14B,
 
     # 換視角（gemma2:9b @ .27 合議節點）
@@ -69,14 +71,13 @@ ROLE_TO_MODEL = {
 
     # 風控 2026-08-20 由 qwen2.5:7b(@.27) 改走 qwen2.5-14b(@.28)。
     # qwen2.5-14b 同家族升級(3b→7b→14b),財經推理更強。
-    'risk-manager':             os.getenv('RISK_MODEL', 'qwen2.5-14b:latest'),
+    'risk-manager':             os.getenv('RISK_MODEL', model_nodes.DEFAULT_RISK),
     'macro-analyst':            MAIN_14B,  # 2026-08-01 3b→14b:3b會捏造指標(把VIX chg%貼成券資報酬率)+讀反大盤
 
     # 工具型（按需）
     # 註：原 'vision'(看圖 LLM) 已移除——「看圖/型態」改用 SenVision 蔡森演算法(精準、不幻覺)，
     #     型態結果直接餵 technical-analyst（見 team_daily_verified.senvision_text）。
-    'embed':                    'nomic-embed-text',
-    'tw-polish':                'llama3.1:8b',
+    # embed、tw-polish 角色已移除：沒有任何呼叫端，嵌入改走 model_nodes.embed_url()
 }
 
 
@@ -115,14 +116,10 @@ OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')       # 主力 
 OLLAMA_URL_27 = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議 .27
 OLLAMA_ALTOS_URL = os.getenv('OLLAMA_ALTOS_URL', '').rstrip('/')
 
-# 模型 → 主機：qwen2.5-14b/llama3.1 在 .27;qwen3/gemma2 在 .28。未列者走 OLLAMA_URL(.28)。
-MODEL_TO_URL = {
-    'qwen2.5-14b:latest':    OLLAMA_URL_27,
-    'gemma2:9b':             OLLAMA_URL,
-    'llama3.1:8b':           OLLAMA_URL_27,
-}
+# 模型 → 主機：唯一來源是 src/moe/model_nodes.py（env MODEL_NODES 可擴充）；換模型時改那裡。
+MODEL_TO_URL = dict(model_nodes.MODEL_NODES)
 if OLLAMA_ALTOS_URL:
-    MODEL_TO_URL['qwen3:30b'] = OLLAMA_ALTOS_URL
+    MODEL_TO_URL[model_nodes.ALTOS_MODEL] = OLLAMA_ALTOS_URL
 
 
 def ask_role(role: str,

@@ -18,6 +18,7 @@ import requests
 from src.domain.collections import (
     COLL_SCHEDULE_ALERTS,
 )
+from src.moe import model_nodes
 
 CONSENSUS_URL = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # .27
 OLLAMA_URL_28 = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')           # .28
@@ -35,19 +36,17 @@ OLLAMA_URL_28 = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')           # 
 #   2026-08-20 qwen2.5:7b → deepseek-coder-v2:16b → qwen2.5-14b:latest
 #   ⚠️ llama3.1:8b 偏多(70% 買進),若 > 75% 應告警。hermes3:8b 前例 84.7%。
 COMMITTEE = [m.strip() for m in
-             os.getenv('CONSENSUS_MODELS', 'gemma2:9b,qwen2.5-14b:latest,llama3.1:8b').split(',')
+             os.getenv('CONSENSUS_MODELS', ','.join(model_nodes.DEFAULT_COMMITTEE)).split(',')
              if m.strip()]
 VOTES = ('買進', '持有', '賣出')
 # 主持人（③）：讀完討論逐字稿做綜合定案，取代純多數決。走 .28 主力節點的 14B 通才。
-FACILITATOR_URL = os.getenv('OLLAMA_FACILITATOR_URL', OLLAMA_URL_28)
-FACILITATOR_MODEL = os.getenv('CONSENSUS_FACILITATOR', 'qwen3-14b:latest')
+FACILITATOR_MODEL = os.getenv('CONSENSUS_FACILITATOR', model_nodes.DEFAULT_MAIN)
+FACILITATOR_URL = os.getenv('OLLAMA_FACILITATOR_URL') or model_nodes.MODEL_NODES.get(FACILITATOR_MODEL, OLLAMA_URL_28)
 # 空方委員(devil's advocate):env CONSENSUS_DEVIL=1 啟用(default off)。
 DEVIL_ENABLED = os.getenv('CONSENSUS_DEVIL', '0') == '1'
-DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', 'qwen2.5-14b:latest')
-# 委員 → 節點：qwen2.5-14b/llama3.1 在 .27，gemma2 在 .28。未列者走 CONSENSUS_URL(.27)。
-COMMITTEE_MODEL_URL = {
-    'gemma2:9b': OLLAMA_URL_28,
-}
+DEVIL_MODEL = os.getenv('CONSENSUS_DEVIL_MODEL', model_nodes.DEFAULT_DEVIL)
+# 委員 → 節點：來自 src/moe/model_nodes.py；未登記者走 CONSENSUS_URL(.27)，開跑前由 preflight 擋下。
+COMMITTEE_MODEL_URL = {m: model_nodes.MODEL_NODES[m] for m in (*COMMITTEE, DEVIL_MODEL) if m in model_nodes.MODEL_NODES}
 
 
 def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:

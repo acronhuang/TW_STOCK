@@ -346,7 +346,7 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
         prompt += EVIDENCE_SUFFIX
         prompts[role] = prompt
 
-    # timeout 放寬：deepseek-r1:14b 等模型在角色迴圈中『第一次呼叫』需冷載(9GB)+thinking，
+    # timeout 放寬：模型在角色迴圈中『第一次呼叫』需冷載(約 9GB)，開思考模式更慢，
     # 易破 180s（後續同模型 warm 則快）。給 300s 吸收冷啟動。
     def _run(role):
         return role, ask_role(role, prompts[role], include_role_prompt=True, timeout=300)
@@ -427,7 +427,7 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
         prompt = build_expert_prompt('investment-advisor', symbol, data)
         if news_txt:                              # 顧問整合時也看得到原始新聞事件
             prompt += "\n\n" + news_txt
-        # 顧問 qwen3.6:27b(17GB) 冷載 + 整合6份報告，給 600s
+        # 顧問模型冷載 + 整合 6 份報告，給 600s
         r = ask_role('investment-advisor', prompt, include_role_prompt=True, timeout=600)
         advisor = r.get('response', f"整合失敗: {r.get('error')}")
         if '</think>' in advisor:

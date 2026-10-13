@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 import time
 import urllib.request
 from datetime import datetime
@@ -24,8 +25,11 @@ from pathlib import Path
 from pymongo import MongoClient, UpdateOne
 
 ROOT = Path("/home/mdsadmin/Stock/tw-stock-analysis")
-OLLAMA = "http://172.16.9.28:11434"
-MODEL = "bge-m3"
+sys.path.insert(0, str(ROOT))
+from src.moe import model_nodes  # noqa: E402
+
+OLLAMA = model_nodes.embed_url()
+MODEL = model_nodes.EMBED_MODEL
 DIM = 1024
 CHUNK, OVERLAP = 800, 150
 MAX_CHUNKS_PER_DOC = 120     # 單檔塊數上限:防止一份大檔淹沒整個語料

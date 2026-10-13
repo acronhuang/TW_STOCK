@@ -8,7 +8,7 @@
   ④ 新聞與重大訊息 RAG(僅在上線門檻通過時啟用)
 所有市場資訊類檢索以「決策產出時點」為截止，晚於此時的一律不可見。
 答案中的數字必須是程式帶入的原文，找不到出處的會列出請使用者核對。
-LLM = Ollama .28 qwen2.5-14b;明令只據檢索到的資料回答、不編造。網頁無 LINE 額度限制。
+LLM = 見 src/moe/model_nodes.py 的 ANSWER_MODEL;明令只據檢索到的資料回答、不編造。網頁無 LINE 額度限制。
 """
 import glob
 import json
@@ -28,8 +28,10 @@ from pymongo import MongoClient
 sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis/scripts")
 sys.path.insert(0, "/home/mdsadmin/Stock/tw-stock-analysis")
 
-OLLAMA = os.getenv("OLLAMA_URL", "http://172.16.9.28:11434")
-MODEL = "qwen2.5-14b:latest"
+from src.moe import model_nodes  # noqa: E402
+
+MODEL = model_nodes.ANSWER_MODEL
+OLLAMA = model_nodes.answer_url()
 ROOT = "/home/mdsadmin/Stock/tw-stock-analysis"
 NEWS_GATE = Path(ROOT) / "logs" / "rag_news_gate.json"
 DOC_KINDS = ("doc", "report")

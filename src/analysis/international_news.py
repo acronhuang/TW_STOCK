@@ -7,8 +7,10 @@ import time
 import urllib.request
 from urllib.parse import urlparse
 
-OLLAMA = os.getenv("RAG_OLLAMA_URL", "http://172.16.9.27:11434").rstrip("/")  # allow-hardcode: 預設節點，env 可覆寫；Phase1 收斂 config
-MODEL = "qwen2.5-14b:latest"
+from src.moe import model_nodes  # noqa: E402
+
+OLLAMA = model_nodes.answer_url()
+MODEL = model_nodes.ANSWER_MODEL
 
 # 防提示注入/資源耗用：使用者輸入長度上限。
 MAX_QUESTION_LEN = 500

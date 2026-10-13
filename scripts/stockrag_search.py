@@ -20,8 +20,13 @@ from functools import lru_cache
 import numpy as np
 from pymongo import MongoClient
 
-OLLAMA = "http://172.16.9.28:11434"
-MODEL = "bge-m3"
+import os as _os
+
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+from src.moe import model_nodes  # noqa: E402
+
+OLLAMA = model_nodes.embed_url()
+MODEL = model_nodes.EMBED_MODEL
 RRF_K = 60
 HALF_LIFE = 180        # 天
 

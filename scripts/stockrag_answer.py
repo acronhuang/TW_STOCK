@@ -17,8 +17,11 @@ import sys
 import urllib.request
 from datetime import datetime
 
-OLLAMA = os.getenv("RAG_OLLAMA_URL", "http://172.16.9.27:11434").rstrip("/")
-MODEL = "qwen2.5-14b:latest"
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.moe import model_nodes  # noqa: E402
+
+OLLAMA = model_nodes.answer_url()
+MODEL = model_nodes.ANSWER_MODEL
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")

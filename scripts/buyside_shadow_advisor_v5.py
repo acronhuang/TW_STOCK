@@ -20,8 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.analysis.buyside.regime import classify_regime
 from src.analysis.buyside.advisor_v5 import build_advisor_prompt_v5
 
-OLLAMA_28 = os.getenv("OLLAMA_URL", "http://172.16.9.28:11434")
-MODEL = os.getenv("OLLAMA_FACILITATOR_MODEL", "qwen3-14b:latest")
+from src.moe import model_nodes
+
+MODEL = os.getenv("OLLAMA_FACILITATOR_MODEL", model_nodes.DEFAULT_MAIN)
+OLLAMA_28 = os.getenv("OLLAMA_URL") or model_nodes.node_of(MODEL)
 _ROLE_LABEL = [("macro-analyst", "總經"), ("fundamental-analyst", "基本面"),
                ("value-analyst", "估值"), ("technical-analyst", "技術"),
                ("chip-analyst", "籌碼"), ("risk-manager", "風險")]

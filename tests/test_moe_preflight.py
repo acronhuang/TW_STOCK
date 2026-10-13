@@ -93,3 +93,20 @@ def test_a_model_is_required_on_the_node_that_actually_serves_it():
     node = role_router.MODEL_TO_URL.get(model, role_router.OLLAMA_URL).rstrip("/")
 
     assert model in required[node]
+
+
+def test_a_model_name_without_a_tag_matches_its_latest_tag():
+    required = {N28: {"bge-m3"}}
+
+    assert preflight.check_ollama(required, get=getter({N28: ["bge-m3:latest"]})) == []
+    assert len(preflight.check_ollama(required, get=getter({N28: ["bge-m3-other:latest"]}))) == 1
+
+
+def test_aux_check_covers_the_embedding_model_on_its_node():
+    from src.moe import model_nodes
+
+    without = preflight.required_models(["technical-analyst"])
+    with_aux = preflight.required_models(["technical-analyst"], include_aux=True)
+
+    assert model_nodes.EMBED_MODEL not in set().union(*without.values())
+    assert model_nodes.EMBED_MODEL in with_aux[model_nodes.embed_url().rstrip("/")]
