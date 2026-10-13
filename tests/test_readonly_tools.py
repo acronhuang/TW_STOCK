@@ -1,0 +1,184 @@
+"""TDD: Hermes 的唯讀工具只能對本機 API 發出白名單內的 GET，參數不合法時不發出請求。"""
+
+import io
+import json
+import subprocess
+import sys
+import urllib.error
+from pathlib import Path
+
+import pytest
+
+from src.ops import readonly_tools as ro
+
+pytestmark = pytest.mark.unit
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class Recorder:
+    def __init__(self, status=200, body='{"ok": true}', error=None):
+        self.urls, self.status, self.body, self.error = [], status, body, error
+
+    def __call__(self, url, timeout=30):
+        self.urls.append(url)
+        if self.error:
+            raise self.error
+        return self.status, self.body
+
+
+def test_exactly_three_tools_with_the_allowed_kinds():
+    tools = {t["name"]: t for t in ro.TOOLS}
+    assert set(tools) == {"stock_data", "market_data", "industry_data"}
+    assert tools["stock_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.STOCK_KINDS)
+    assert tools["market_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.MARKET_KINDS)
+
+
+def test_slow_endpoints_are_not_exposed():
+    exposed = set(ro.STOCK_KINDS) | set(ro.MARKET_KINDS)
+    assert not exposed & {"ranking", "scan", "advisor", "hsieh"}
+
+
+def test_endpoints_that_write_files_are_not_exposed():
+    # predict 會重訓並覆寫 models/<代號>_xgb.pkl
+    assert "predict" not in ro.STOCK_KINDS and "predict" not in ro.MARKET_KINDS
+
+
+def test_stock_and_market_calls_hit_the_expected_urls():
+    fetch = Recorder()
+    ro.call_tool("stock_data", {"kind": "valuation", "symbol": "2330"}, fetch)
+    ro.call_tool("market_data", {"kind": "macro"}, fetch)
+    ro.call_tool("industry_data", {"industry": "半導體業"}, fetch)
+    assert fetch.urls == [
+        "http://127.0.0.1:8888/api/valuation/2330",
+        "http://127.0.0.1:8888/api/macro",
+        "http://127.0.0.1:8888/api/industry/%E5%8D%8A%E5%B0%8E%E9%AB%94%E6%A5%AD",
+    ]
+
+
+@pytest.mark.parametrize("kind", ["ranking", "scan", "../admin", "price/../x", "", None, 5])
+def test_unknown_stock_kind_is_rejected_without_a_request(kind):
+    fetch = Recorder()
+    text, is_error = ro.call_tool("stock_data", {"kind": kind, "symbol": "2330"}, fetch)
+    assert is_error and fetch.urls == []
+
+
+@pytest.mark.parametrize("symbol", ["", "23", "2330/../x", "2330?x=1", "2330 ", "../..", "233%2F", None, 2330, "123456789"])
+def test_bad_symbol_is_rejected_without_a_request(symbol):
+    fetch = Recorder()
+    _, is_error = ro.call_tool("stock_data", {"kind": "price", "symbol": symbol}, fetch)
+    assert is_error and fetch.urls == []
+
+
+@pytest.mark.parametrize(
+    "industry", ["", "a/b", "半導體?x=1", "x" * 21, "..", None, "半導體\n", "中学米演览分", "電子工業", "金融保險", ["半導體業"]]
+)
+def test_bad_industry_is_rejected_without_a_request(industry):
+    fetch = Recorder()
+    _, is_error = ro.call_tool("industry_data", {"industry": industry}, fetch)
+    assert is_error and fetch.urls == []
+
+
+def test_industry_schema_lists_exactly_the_accepted_names():
+    schema = {t["name"]: t for t in ro.TOOLS}["industry_data"]["inputSchema"]
+    assert schema["properties"]["industry"]["enum"] == list(ro.INDUSTRIES)
+    assert len(set(ro.INDUSTRIES)) == len(ro.INDUSTRIES) and "其他" not in ro.INDUSTRIES
+
+
+def test_every_listed_industry_builds_a_quoted_local_url():
+    fetch = Recorder()
+    for name in ro.INDUSTRIES:
+        ro.call_tool("industry_data", {"industry": name}, fetch)
+    assert len(fetch.urls) == len(ro.INDUSTRIES)
+    assert all(u.startswith("http://127.0.0.1:8888/api/industry/%") and u.isascii() for u in fetch.urls)
+
+
+def test_unknown_tool_and_non_object_arguments_are_errors():
+    fetch = Recorder()
+    assert ro.call_tool("delete_all", {}, fetch)[1] and ro.call_tool("stock_data", "2330", fetch)[1]
+    assert fetch.urls == []
+
+
+def test_every_allowed_call_stays_under_the_local_api_prefix():
+    fetch = Recorder()
+    for kind in ro.STOCK_KINDS:
+        ro.call_tool("stock_data", {"kind": kind, "symbol": "2330"}, fetch)
+    for kind in ro.MARKET_KINDS:
+        ro.call_tool("market_data", {"kind": kind}, fetch)
+    assert len(fetch.urls) == len(ro.STOCK_KINDS) + len(ro.MARKET_KINDS)
+    assert all(u.startswith("http://127.0.0.1:8888/api/") for u in fetch.urls)
+
+
+def test_long_body_is_truncated_and_says_so():
+    text, is_error = ro.call_tool("market_data", {"kind": "macro"}, Recorder(body="x" * 20000))
+    assert not is_error and text.startswith("x" * ro.MAX_CHARS) and "已截斷，原長 20000 字" in text
+    assert len(text) < ro.MAX_CHARS + 60
+
+
+def test_short_body_is_returned_whole():
+    assert ro.call_tool("market_data", {"kind": "macro"}, Recorder(body="abc")) == ("abc", False)
+
+
+@pytest.mark.parametrize(
+    "fetch, expected",
+    [
+        (Recorder(error=urllib.error.HTTPError("u", 404, "nf", {}, None)), "HTTP 404"),
+        (Recorder(error=urllib.error.URLError("refused")), "無法連線"),
+        (Recorder(error=TimeoutError("slow")), "無法連線"),
+        (Recorder(status=500, body="boom"), "HTTP 500"),
+    ],
+    ids=["http404", "refused", "timeout", "status500"],
+)
+def test_api_failures_become_error_results_not_exceptions(fetch, expected):
+    text, is_error = ro.call_tool("stock_data", {"kind": "price", "symbol": "2330"}, fetch)
+    assert is_error and text.startswith("API ") and expected in text
+
+
+def test_initialize_echoes_the_client_protocol_and_declares_tools():
+    reply = ro.handle_message({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-03-26"}})
+    assert reply["id"] == 0 and reply["result"]["protocolVersion"] == "2025-03-26"
+    assert "tools" in reply["result"]["capabilities"]
+
+
+def test_notifications_get_no_reply_but_id_zero_does():
+    assert ro.handle_message({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
+    assert ro.handle_message({"jsonrpc": "2.0", "id": 0, "method": "ping"})["result"] == {}
+
+
+def test_unknown_method_is_a_json_rpc_error():
+    reply = ro.handle_message({"jsonrpc": "2.0", "id": 7, "method": "resources/list"})
+    assert reply["error"]["code"] == -32601 and reply["id"] == 7
+
+
+def test_tools_call_wraps_the_text_and_error_flag():
+    ok = ro.handle_message(
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "market_data", "arguments": {"kind": "health"}}},
+        Recorder(body="up"),
+    )
+    assert ok["result"] == {"content": [{"type": "text", "text": "up"}], "isError": False}
+    bad = ro.handle_message(
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "market_data", "arguments": {"kind": "scan"}}},
+        Recorder(),
+    )
+    assert bad["result"]["isError"] is True
+
+
+def test_serve_survives_garbage_and_blank_lines():
+    out = []
+    ro.serve(io.StringIO("\nnot json\n" + json.dumps({"jsonrpc": "2.0", "id": 3, "method": "ping"}) + "\n"), out.append)
+    assert out[0]["error"]["code"] == -32700 and out[1]["id"] == 3
+
+
+def test_script_speaks_mcp_over_stdio_without_network():
+    requests = "\n".join(json.dumps(m) for m in [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+    ]) + "\n"
+    done = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "hermes_readonly_mcp.py")],
+        input=requests, capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=30,
+    )
+    replies = [json.loads(line) for line in done.stdout.splitlines()]
+    assert done.returncode == 0 and [r["id"] for r in replies] == [1, 2]
+    assert [t["name"] for t in replies[1]["result"]["tools"]] == ["stock_data", "market_data", "industry_data"]
