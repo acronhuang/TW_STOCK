@@ -87,3 +87,5 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 20 6 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/stockrag_news_eval.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_rag_news_eval.log 2>&1  # rag_news_eval_weekly
 30 23 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/mops_major_sync.py --days 3 --apply >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_mops_major.log 2>&1  # mops_major_reconcile_daily
 15 10 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/check_offsite_backup.py --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_offsite_backup.log 2>&1
+10 23 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/audit_chain.py register >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_audit_chain.log 2>&1
+10 5 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/audit_chain.py verify --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_audit_chain.log 2>&1
