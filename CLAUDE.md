@@ -92,6 +92,14 @@ grep -rn "line_notif\|LineNotif\|send_line\|notifier" <要跑的腳本>
 `brainstorming` 已停用——前兩個假設了這個 repo 沒有的分支流程，後兩個與
 `grill-with-docs` 搶同一個位置。若有 skill 想叫它們，直接跳過那步。
 
+### 功能類變更用 OpenSpec（試辦）
+
+- 新功能或行為變更：`/opsx-propose`（想不清楚先 `/opsx-explore`）→ `/opsx-apply` → `/opsx-archive`。
+  規格在 `openspec/specs/`，進行中的變更在 `openspec/changes/`，規則在 `openspec/config.yaml`。
+- 這類工作用變更資料夾取代 `docs/plans/`；決策理由仍寫 ADR；熱修與資料修補不走。
+- 每條 Requirement 必須列「驗證」（測試或腳本），找不到就寫「尚無檢查」（ADR-0001）。
+- CLI 只裝在開發機（Node 20.19+，設 `OPENSPEC_TELEMETRY=0`），`.166` 不裝。
+
 ---
 
 ## 三、部署迴圈

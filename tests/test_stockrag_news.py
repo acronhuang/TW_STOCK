@@ -263,3 +263,52 @@ def test_a_corrupt_gate_file_keeps_the_gate_closed(tmp_path):
     path.write_text("{not json", encoding="utf-8")
 
     assert news.gate_open(path, datetime(2026, 10, 12)) is False
+
+
+def test_merged_query_files_keep_the_first_files_thresholds_and_chain_every_query_and_case():
+    from scripts import stockrag_news_eval as ev
+    first = {"k": 5, "thresholds": {"recall": 0.9, "mrr": 0.8}, "decision_as_of": "2026-10-11",
+             "pit_sweep_as_of": ["2026-09-15"], "queries": [{"id": "n-1"}], "pit_cases": [{"id": "c1"}]}
+    second = {"k": 3, "thresholds": {"recall": 0.5, "mrr": 0.1}, "decision_as_of": "2026-12-31",
+              "pit_sweep_as_of": [], "queries": [{"id": "n-2"}, {"id": "n-3"}], "pit_cases": []}
+
+    merged = ev.merge_specs([first, second])
+
+    assert merged["k"] == 5 and merged["thresholds"] == first["thresholds"] and merged["decision_as_of"] == "2026-10-11"
+    assert merged["pit_sweep_as_of"] == ["2026-09-15"]
+    assert [q["id"] for q in merged["queries"]] == ["n-1", "n-2", "n-3"]
+    assert [c["id"] for c in merged["pit_cases"]] == ["c1"]
+
+
+def test_no_default_query_file_is_stricter_than_the_first_one_that_sets_the_thresholds():
+    import json
+    from pathlib import Path
+    from scripts import stockrag_news_eval as ev
+    specs = [json.loads(Path(p).read_text(encoding="utf-8")) for p in ev.DEFAULT_QUERIES]
+
+    first = specs[0]["thresholds"]
+    assert all(spec["thresholds"][name] <= first[name] for spec in specs[1:] for name in ("recall", "mrr"))
+
+def test_merged_query_files_keep_the_first_files_thresholds_and_chain_every_query_and_case():
+    from scripts import stockrag_news_eval as ev
+    first = {"k": 5, "thresholds": {"recall": 0.9, "mrr": 0.8}, "decision_as_of": "2026-10-11",
+             "pit_sweep_as_of": ["2026-09-15"], "queries": [{"id": "n-1"}], "pit_cases": [{"id": "c1"}]}
+    second = {"k": 3, "thresholds": {"recall": 0.5, "mrr": 0.1}, "decision_as_of": "2026-12-31",
+              "pit_sweep_as_of": [], "queries": [{"id": "n-2"}, {"id": "n-3"}], "pit_cases": []}
+
+    merged = ev.merge_specs([first, second])
+
+    assert merged["k"] == 5 and merged["thresholds"] == first["thresholds"] and merged["decision_as_of"] == "2026-10-11"
+    assert merged["pit_sweep_as_of"] == ["2026-09-15"]
+    assert [q["id"] for q in merged["queries"]] == ["n-1", "n-2", "n-3"]
+    assert [c["id"] for c in merged["pit_cases"]] == ["c1"]
+
+
+def test_no_default_query_file_is_stricter_than_the_first_one_that_sets_the_thresholds():
+    import json
+    from pathlib import Path
+    from scripts import stockrag_news_eval as ev
+    specs = [json.loads(Path(p).read_text(encoding="utf-8")) for p in ev.DEFAULT_QUERIES]
+
+    first = specs[0]["thresholds"]
+    assert all(spec["thresholds"][name] <= first[name] for spec in specs[1:] for name in ("recall", "mrr"))

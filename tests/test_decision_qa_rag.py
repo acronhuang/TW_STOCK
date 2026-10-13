@@ -73,3 +73,40 @@ def test_a_fully_sourced_answer_is_returned_untouched(wired):
     answer, _ = qa.answer_question("2330 好嗎", DOCS, datetime(2026, 10, 9))
 
     assert answer == "收盤 2425.0，2330 為買進。"
+
+
+def test_a_closed_gate_gives_no_news_and_says_so_with_the_way_to_reopen_it(tmp_path, monkeypatch):
+    gate = tmp_path / "gate.json"
+    gate.write_text('{"passed": false, "k": 5, "recall": 0.5, "mrr": 0.2, "checked_at": "2026-10-12T21:00:00"}', encoding="utf-8")
+    monkeypatch.setattr(qa, "NEWS_GATE", gate)
+
+    hits, note = qa.news_hits("2330 好嗎", CREATED)
+
+    assert hits == [] and "新聞檢索未啟用" in note and "stockrag_news_eval.py" in note
+
+
+def test_the_context_names_the_closed_gate_instead_of_quoting_news(wired, monkeypatch):
+    monkeypatch.setattr(qa, "news_hits", lambda question, cutoff, k=5: ([], "新聞檢索未啟用：上線門檻未通過或已過期"))
+    wired["answer"] = "x"
+
+    _, context = qa.answer_question("2330 好嗎", DOCS, datetime(2026, 10, 9))
+
+    assert "【新聞檢索】新聞檢索未啟用" in context and "【新聞與重大訊息" not in context
+
+def test_a_closed_gate_gives_no_news_and_says_so_with_the_way_to_reopen_it(tmp_path, monkeypatch):
+    gate = tmp_path / "gate.json"
+    gate.write_text('{"passed": false, "k": 5, "recall": 0.5, "mrr": 0.2, "checked_at": "2026-10-12T21:00:00"}', encoding="utf-8")
+    monkeypatch.setattr(qa, "NEWS_GATE", gate)
+
+    hits, note = qa.news_hits("2330 好嗎", CREATED)
+
+    assert hits == [] and "新聞檢索未啟用" in note and "stockrag_news_eval.py" in note
+
+
+def test_the_context_names_the_closed_gate_instead_of_quoting_news(wired, monkeypatch):
+    monkeypatch.setattr(qa, "news_hits", lambda question, cutoff, k=5: ([], "新聞檢索未啟用：上線門檻未通過或已過期"))
+    wired["answer"] = "x"
+
+    _, context = qa.answer_question("2330 好嗎", DOCS, datetime(2026, 10, 9))
+
+    assert "【新聞檢索】新聞檢索未啟用" in context and "【新聞與重大訊息" not in context

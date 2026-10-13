@@ -1,0 +1,35 @@
+schema: spec-driven
+
+context: |
+  Language: zh-TW. All artifacts must be written in zh-TW.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  專案：台股分析系統（Python、MongoDB、Streamlit dashboard、cron）。這是 production，
+  跑在 172.16.9.166；權威程式碼在 .166，本機 Windows 的副本可能落後，檔案改動要部署到 .166 再驗證。
+  Trunk-based：直接 commit 到 main，不建 feature branch、不建 worktree。
+  需求的載體是「可執行的檢查」（docs/adr/0001、0002）：沒有可失敗的檢查就不算需求。
+  動門檻或判準語意必須留 ADR（docs/adr/）。決策理由寫 ADR，不寫進 spec。
+
+rules:
+  proposal:
+    - 必須寫出「不做什麼」（out of scope）。
+    - 若會改動門檻、判準或資料語意，列出要新增的 ADR。
+  specs:
+    - 每個 Requirement 必須在內文列出「驗證」：對應的 pytest 測試名稱或可執行腳本，找不到就明寫「尚無檢查」並在 tasks 補上。
+    - 每個 Scenario 必須舉得出一組會讓它失敗的輸入；查無資料時要寫成「無資料」，不得當成通過（ADR-0002）。
+    - 只寫可觀察的行為，不寫實作細節與數字推導；數字由程式印出，不心算。
+  design:
+    - 只在有取捨時才寫；已有 ADR 的決策只引用編號。
+  tasks:
+    - 先寫會失敗的測試再實作；驗證用 production 的執行參數（pytest -m "not integration and not slow"）。
+    - 跑任何腳本前先 grep LINE 耦合，必要時加 --no-line。
+    - 部署後必須用真實資料驗一次，且對照組要雙向。
+
+operations:
+  apply:
+    guidance:
+      - 不得停止或重啟 production 進程（cron、dashboard、api）；需要時先問。
+      - 修改 .sh 或 .service 後檢查並移除 CR 字元。
+  archive:
+    guidance:
+      - 歸檔前確認每條 Requirement 的「驗證」仍然存在且通過。
