@@ -214,7 +214,9 @@ def cmd_report(args):
 
 
 def main():
+    global OUT, SAMPLES, RESULTS
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--dir", help="輸出資料夾（預設 logs/committee_replay）；複驗用新資料夾，避免覆蓋既有樣本與結果")
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("sample")
     s.add_argument("--start", default="2026-08-21")
@@ -231,6 +233,9 @@ def main():
     r = sub.add_parser("report")
     r.add_argument("--top", type=int, default=8)
     args = ap.parse_args()
+    if args.dir:
+        OUT = Path(args.dir)
+        SAMPLES, RESULTS = OUT / "samples.json", OUT / "results.jsonl"
     return {"sample": cmd_sample, "prepare": cmd_prepare, "run": cmd_run, "report": cmd_report}[args.cmd](args)
 
 

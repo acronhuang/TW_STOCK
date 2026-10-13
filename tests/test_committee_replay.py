@@ -138,3 +138,20 @@ def test_agreement_with_no_overlap_or_no_variance():
 def test_parse_vote_flags_hollow_reasons_like_live(response, vote, hollow):
     got_vote, _, got_hollow = cr.parse_vote(response)
     assert (got_vote, got_hollow) == (vote, hollow)
+
+
+def test_dir_option_redirects_report_to_another_folder(tmp_path, monkeypatch, capsys):
+    import json
+
+    from scripts import committee_replay as script
+
+    for name in ("OUT", "SAMPLES", "RESULTS"):
+        monkeypatch.setattr(script, name, getattr(script, name))
+    sample = {"date": "2026-01-02", "symbol": "2330", "name": "x", "advisor": "評級：買進", "reports": {},
+              "advisor_rating": "買進", "live_votes": {}, "excess": 0.01, "fwd_ret": 0.02}
+    (tmp_path / "samples.json").write_text(json.dumps([sample]), encoding="utf-8")
+    record = {"model": "zz-model", "date": "2026-01-02", "symbol": "2330", "vote": "買進", "reason": "r", "hollow": False, "ms": 1000}
+    (tmp_path / "results.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["committee_replay.py", "--dir", str(tmp_path), "report"])
+    script.main()
+    assert "zz-model" in capsys.readouterr().out
