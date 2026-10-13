@@ -10,6 +10,8 @@ from decimal import Decimal
 import requests
 from bson.decimal128 import Decimal128
 
+from src.utils.circuit_breaker import CircuitBreaker
+
 
 class FinMindClient:
     """FinMind API 客戶端"""
@@ -28,6 +30,10 @@ class FinMindClient:
         self.api_quota_per_hour = 600  # 付費版配額
         self.logger = logger or logging.getLogger(__name__)
         
+        # 連續 2 次 402（額度用盡）就略過本程序剩下的請求；額度窗口是滾動 60 分鐘，重試沒有意義
+        self.quota_breaker = CircuitBreaker(failure_threshold=2, cooldown=3600.0)
+        self._quota_skip_logged = False
+
         # 重試設定
         self.max_retries = 3
         self.retry_delay = 2  # 秒
@@ -45,6 +51,12 @@ class FinMindClient:
         Returns:
             資料列表
         """
+        if not self.quota_breaker.allow():
+            if not self._quota_skip_logged:
+                self.logger.warning("⚠️  FinMind 額度用盡（連續 HTTP 402），略過本程序剩下的請求")
+                self._quota_skip_logged = True
+            return []
+
         if self.api_call_count >= self.api_quota_per_hour - 10:
             self.logger.warning(f"⚠️  API 配額接近上限 ({self.api_call_count}/{self.api_quota_per_hour})")
             return []
@@ -64,6 +76,7 @@ class FinMindClient:
                 data = response.json()
                 
                 if data.get('status') == 200:
+                    self.quota_breaker.success()
                     raw_data = data.get('data', [])
                     # 轉換數值為 Decimal128
                     converted_data = self._convert_to_decimal128(raw_data)
@@ -93,6 +106,11 @@ class FinMindClient:
                     self.logger.error(f"HTTP 429: 已達最大重試次數 ({self.max_retries})")
                     return []
             
+            elif response.status_code == 402:  # 額度用盡：不重試（日誌字串維持「HTTP 錯誤: 402」，額度檢查靠它）
+                self.quota_breaker.failure()
+                self.logger.error("HTTP 錯誤: 402（額度用盡，不重試）")
+                return []
+
             elif response.status_code == 400:  # HTTP Bad Request - 不需要重試
                 # 不要猜原因 —— 直接印 FinMind 的回應。
                 # 舊版寫死「可能不支持此股票代碼」,實際上是參數名寫成 stock_id
