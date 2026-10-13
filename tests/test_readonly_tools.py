@@ -27,9 +27,9 @@ class Recorder:
         return self.status, self.body
 
 
-def test_exactly_three_tools_with_the_allowed_kinds():
+def test_exactly_four_tools_with_the_allowed_kinds():
     tools = {t["name"]: t for t in ro.TOOLS}
-    assert set(tools) == {"stock_data", "market_data", "industry_data"}
+    assert set(tools) == {"stock_data", "market_data", "industry_data", "calc", "convert_unit"}
     assert tools["stock_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.STOCK_KINDS)
     assert tools["market_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.MARKET_KINDS)
 
@@ -181,4 +181,98 @@ def test_script_speaks_mcp_over_stdio_without_network():
     )
     replies = [json.loads(line) for line in done.stdout.splitlines()]
     assert done.returncode == 0 and [r["id"] for r in replies] == [1, 2]
-    assert [t["name"] for t in replies[1]["result"]["tools"]] == ["stock_data", "market_data", "industry_data"]
+    assert [t["name"] for t in replies[1]["result"]["tools"]] == ["stock_data", "market_data", "industry_data", "calc", "convert_unit"]
+
+
+@pytest.mark.parametrize(
+    "expression, shown",
+    [
+        ("2540*(1+10%)", "2540*(1+10%) = 2794"),
+        ("2540*1.1-942.5", "2540*1.1-942.5 = 1851.5"),
+        ("-(3+4)*2", "-(3+4)*2 = -14"),
+        ("10/4", "10/4 = 2.5"),
+        ("1/3", "1/3 = 0.333333"),
+        ("1234567.89+1", "1234567.89+1 = 1234568.89"),
+        ("0.1+0.2-0.3", "0.1+0.2-0.3 = 0"),
+        ("0.3-0.1-0.2", "0.3-0.1-0.2 = 0"),
+    ],
+)
+def test_calc_does_plain_arithmetic_and_shows_the_expression(expression, shown):
+    assert ro.calculate(expression) == (shown, False)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    ["__import__('os').system('x')", "2**8", "abs(-1)", "a+1", "1+", "", "   ", "[1]", "1 if 1 else 2", "1e3", "2540 // 3", "7 % 3", None, 5],
+)
+def test_calc_rejects_anything_but_numbers_and_four_operations(expression):
+    text, is_error = ro.calculate(expression)
+    assert is_error is True and "=" not in text
+
+
+def test_calc_division_by_zero_and_huge_results_are_errors():
+    assert ro.calculate("1/0") == ("除數不能為 0", True)
+    assert ro.calculate("99999999*99999999*99999999")[1] is True
+    assert ro.calculate("1+" * 100 + "1")[1] is True
+
+
+def test_calc_is_reachable_through_call_tool_and_the_mcp_message():
+    assert ro.call_tool("calc", {"expression": "2*3"}) == ("2*3 = 6", False)
+    assert ro.call_tool("calc", None)[1] is True
+    reply = ro.handle_message(
+        {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "calc", "arguments": {"expression": "1+1"}}},
+        Recorder(),
+    )
+    assert reply["result"]["content"][0]["text"] == "1+1 = 2" and reply["result"]["isError"] is False
+
+
+@pytest.mark.parametrize(
+    "value, source, target, shown",
+    [
+        ("511857399", "千元", "億元", "511857399 千元 = 5118.57399 億元"),
+        ("511,857,399", "千元", "億元", "511,857,399 千元 = 5118.57399 億元"),
+        ("765000", "股", "張", "765000 股 = 765 張"),
+        ("-19577989", "股", "張", "-19577989 股 = -19577.989 張"),
+        ("1.5", "億元", "元", "1.5 億元 = 150000000 元"),
+        ("1", "萬元", "元", "1 萬元 = 10000 元"),
+        ("100", "百萬元", "億元", "100 百萬元 = 1 億元"),
+        ("0", "元", "億元", "0 元 = 0 億元"),
+        (100, "百萬元", "億元", "100 百萬元 = 1 億元"),
+        ("12", "張", "股", "12 張 = 12000 股"),
+    ],
+)
+def test_convert_unit_is_exact_for_every_unit(value, source, target, shown):
+    assert ro.convert_unit(value, source, target) == (shown, False)
+
+
+@pytest.mark.parametrize(
+    "value, source, target",
+    [
+        ("abc", "千元", "億元"),
+        ("", "千元", "億元"),
+        ("1e9", "千元", "億元"),
+        ("1" * 21, "千元", "億元"),
+        ("1", "元", "股"),
+        ("1", "張", "億元"),
+        ("1", "元", "美元"),
+        ("1", ["元"], "億元"),
+        (True, "元", "億元"),
+        (None, "元", "億元"),
+    ],
+)
+def test_convert_unit_refuses_bad_input_and_cross_family_conversion(value, source, target):
+    text, is_error = ro.convert_unit(value, source, target)
+    assert is_error is True and text
+
+
+def test_convert_unit_is_reachable_through_call_tool_and_the_mcp_message():
+    args = {"value": "511857399", "from_unit": "千元", "to_unit": "億元"}
+    assert ro.call_tool("convert_unit", args) == ("511857399 千元 = 5118.57399 億元", False)
+    assert ro.call_tool("convert_unit", None)[1] is True
+    reply = ro.handle_message({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "convert_unit", "arguments": args}})
+    assert reply["result"]["isError"] is False and "5118.57399" in reply["result"]["content"][0]["text"]
+
+
+def test_convert_unit_schema_offers_exactly_the_units_it_accepts():
+    schema = {t["name"]: t for t in ro.TOOLS}["convert_unit"]["inputSchema"]["properties"]
+    assert set(schema["from_unit"]["enum"]) == set(schema["to_unit"]["enum"]) == set(ro.MONEY_UNITS) | set(ro.SHARE_UNITS)

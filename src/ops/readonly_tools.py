@@ -1,6 +1,9 @@
 """給 Hermes Agent 用的唯讀工具：只能對本機分析 API 發出固定白名單內的 GET。"""
 
+import ast
 import json
+import operator
+from decimal import Decimal, InvalidOperation
 import re
 import urllib.error
 import urllib.parse
@@ -27,6 +30,12 @@ INDUSTRIES = (
     "文化創意業", "汽車工業", "化學工業", "塑膠工業", "數位雲端", "其他電子業", "電器電纜", "運動休閒",
     "金融業", "油電燃氣業", "橡膠工業", "貿易百貨", "居家生活", "造紙工業", "水泥工業", "玻璃陶瓷",
 )
+
+# 金額換成元的倍數、股數換成股的倍數（1 張＝1000 股）；表內的單位就是 convert_unit 接受的單位。
+MONEY_UNITS = {"元": 1, "千元": 1000, "萬元": 10000, "百萬元": 1000000, "億元": 100000000}
+SHARE_UNITS = {"股": 1, "張": 1000}
+MAX_VALUE_CHARS = 20
+_NUMBER_TEXT = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 
 TOOLS = [
     {
@@ -61,7 +70,92 @@ TOOLS = [
             "required": ["industry"],
         },
     },
+    {
+        "name": "calc",
+        "description": "四則運算。expression 只能含數字、+ - * /、括號與百分號，例如 2540*(1+10%) - 942.5。"
+        "數字必須逐字取自工具回傳或使用者問題，不得自己估計；回答只能引用本工具回傳的結果。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"expression": {"type": "string", "description": "算式，例如 2540*(1+10%) - 942.5"}},
+            "required": ["expression"],
+        },
+    },
+    {
+        "name": "convert_unit",
+        "description": "單位換算（精確）：金額在 元、千元、萬元、百萬元、億元 之間，股數在 股、張 之間。"
+        "value 必須逐字取自工具回傳或使用者問題；回答只能引用本工具回傳的結果，不要自己換算。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "value": {"type": "string", "description": "要換算的數字，例如 511857399"},
+                "from_unit": {"type": "string", "enum": list(MONEY_UNITS) + list(SHARE_UNITS)},
+                "to_unit": {"type": "string", "enum": list(MONEY_UNITS) + list(SHARE_UNITS)},
+            },
+            "required": ["value", "from_unit", "to_unit"],
+        },
+    },
 ]
+
+MAX_EXPRESSION = 120
+_ALLOWED = re.compile(r"[0-9+\-*/().%\s]+")
+_PERCENT = re.compile(r"(\d+(?:\.\d+)?)%")
+_BINARY = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
+_UNARY = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+
+
+def _eval(node):
+    if isinstance(node, ast.Expression):
+        return _eval(node.body)
+    if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _BINARY:
+        return _BINARY[type(node.op)](_eval(node.left), _eval(node.right))
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY:
+        return _UNARY[type(node.op)](_eval(node.operand))
+    raise ValueError("算式只能含數字、+ - * /、括號與百分號")
+
+
+def calculate(expression):
+    """回 (文字, 是否錯誤)。百分號先轉成除以 100，再以 AST 白名單運算，不使用 eval。"""
+    if not isinstance(expression, str) or not expression.strip():
+        return "expression 必須是非空字串", True
+    if len(expression) > MAX_EXPRESSION:
+        return f"expression 超過 {MAX_EXPRESSION} 字", True
+    if not _ALLOWED.fullmatch(expression):
+        return "算式只能含數字、+ - * /、括號與百分號", True
+    try:
+        tree = ast.parse(_PERCENT.sub(r"(\1/100)", expression.strip()), mode="eval")
+        value = _eval(tree)
+    except ZeroDivisionError:
+        return "除數不能為 0", True
+    except (SyntaxError, ValueError, RecursionError):
+        return "算式只能含數字、+ - * /、括號與百分號", True
+    if abs(value) >= 1e15:
+        return "結果過大", True
+    shown = f"{value:.6f}".rstrip("0").rstrip(".")
+    return f"{expression.strip()} = {'0' if shown in ('', '-0') else shown}", False
+
+
+def convert_unit(value, from_unit, to_unit):
+    """回 (文字, 是否錯誤)。以 Decimal 精確換算，只在同一類單位間換（金額或股數）。"""
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        return "value 必須是數字", True
+    text = str(value).strip()
+    if len(text) > MAX_VALUE_CHARS or not _NUMBER_TEXT.fullmatch(text):
+        return "value 必須是數字（可含千分位逗號與小數點，最多 20 字）", True
+    if not isinstance(from_unit, str) or not isinstance(to_unit, str):
+        return "from_unit、to_unit 必須是單位名稱", True
+    for table in (MONEY_UNITS, SHARE_UNITS):
+        if from_unit in table and to_unit in table:
+            break
+    else:
+        return "單位只能在金額（元、千元、萬元、百萬元、億元）或股數（股、張）內換算", True
+    try:
+        number = Decimal(text.replace(",", ""))
+    except InvalidOperation:
+        return "value 必須是數字", True
+    shown = format((number * table[from_unit] / table[to_unit]).normalize(), "f")
+    return f"{text} {from_unit} = {shown} {to_unit}", False
 
 
 def default_fetch(url, timeout=30):
@@ -95,6 +189,11 @@ def build_url(name, args):
 
 
 def call_tool(name, args, fetch=default_fetch):
+    if name == "calc":
+        return calculate(args.get("expression") if isinstance(args, dict) else None)
+    if name == "convert_unit":
+        given = args if isinstance(args, dict) else {}
+        return convert_unit(given.get("value"), given.get("from_unit"), given.get("to_unit"))
     url, error = build_url(name, args)
     if url is None:
         return error, True

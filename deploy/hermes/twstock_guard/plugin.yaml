@@ -1,7 +1,8 @@
 name: twstock-guard
-version: 1.0.0
-description: 回答送出前核對數字是否出自本輪問題或工具回傳，找不到出處的列出請使用者核對
+version: 1.1.0
+description: 問題進來時先查工具、核對 calc 輸入數字、回答送出前核對數字出處並在沒查資料時加警語
 provides_hooks:
   - pre_llm_call
+  - pre_tool_call
   - post_tool_call
   - transform_llm_output
