@@ -1,6 +1,7 @@
 """TDD: 公告事件回看的時點判定、累積超額報酬、重複事件、樣本門檻與安慰劑對照。"""
 
 from datetime import datetime, timedelta
+import statistics
 
 import pytest
 
@@ -105,6 +106,35 @@ def test_the_same_seed_gives_the_same_placebo_and_a_different_seed_may_not():
     events = [event(s, 10) for s in stocks]
 
     assert es.study(events, excess, CAL, seed=1) == es.study(events, excess, CAL, seed=1)
+
+
+def test_events_on_the_same_day_count_as_one_day_for_the_t_statistic():
+    stocks = [f"{1000 + n}" for n in range(12)]
+    excess = {s: es.daily_excess(flat(jump_at=11), MARKET, CAL) for s in stocks}
+
+    out = es.study([event(s, 10) for s in stocks], excess, CAL, min_events=1)["第12款"]["windows"]["0..1"]
+
+    assert out["n"] == 12 and out["days"] == 1 and out["t_day"] is None   # 十二家同日，只算一個獨立的日子
+
+
+def test_the_day_level_t_statistic_and_the_gap_against_the_placebo():
+    sizes = [0.08, 0.09, 0.10, 0.11, 0.12, 0.09, 0.10, 0.11, 0.08, 0.12]
+    stocks = [f"{1000 + n}" for n in range(len(sizes))]
+    excess = {s: es.daily_excess(flat(jump_at=11 + n, size=size), MARKET, CAL) for n, (s, size) in enumerate(zip(stocks, sizes))}
+    events = [event(s, 10 + n) for n, s in enumerate(stocks)]       # 每家各自不同天
+
+    out = es.study(events, excess, CAL, min_events=1)["第12款"]
+    expected_t = statistics.fmean(sizes) / (statistics.stdev(sizes) / len(sizes) ** 0.5)
+
+    assert out["windows"]["0..1"]["days"] == len(sizes)
+    assert out["windows"]["0..1"]["t_day"] == pytest.approx(expected_t)
+    assert out["gap"]["0..1"]["gap"] == pytest.approx(statistics.fmean(sizes)) and out["gap"]["0..1"]["t"] > 5
+
+
+def test_no_gap_statistic_when_either_side_is_too_small():
+    excess = {"2330": es.daily_excess(flat(jump_at=11), MARKET, CAL)}
+
+    assert es.study([event("2330", 10)], excess, CAL)["第12款"]["gap"]["0..1"] is None
 
 
 def test_the_equal_weight_index_follows_the_average_stock_and_skips_thin_or_broken_days():

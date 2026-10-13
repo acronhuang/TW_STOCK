@@ -85,6 +85,41 @@ def _cars(excess: list, day0: int) -> dict:
     return {name: car(excess, day0, a, b) for name, (a, b) in WINDOWS.items()}
 
 
+def day_means(pairs: list) -> list[float]:
+    """同一個反應日的事件先平均成一個值：同日公告的公司共享同一天的市場，不能當成互相獨立。"""
+    by_day = {}
+    for idx, value in pairs:
+        by_day.setdefault(idx, []).append(value)
+    return [statistics.fmean(values) for values in by_day.values()]
+
+
+def _t_stat(values: list[float]):
+    if len(values) < 2:
+        return None
+    spread = statistics.stdev(values)
+    return None if spread == 0 else statistics.fmean(values) / (spread / len(values) ** 0.5)
+
+
+def window_stats(pairs: list, min_events: int) -> dict:
+    base = summarize([value for _, value in pairs], min_events)
+    if "mean" in base:
+        daily = day_means(pairs)
+        base |= {"days": len(daily), "t_day": _t_stat(daily)}
+    return base
+
+
+def gap_stats(real: list, fake: list, min_events: int):
+    """事件減對照的日群聚 Welch t；任一邊樣本不足或不足兩個反應日就不給。"""
+    if len(real) < min_events or len(fake) < min_events:
+        return None
+    a, b = day_means(real), day_means(fake)
+    if len(a) < 2 or len(b) < 2:
+        return None
+    gap = statistics.fmean(a) - statistics.fmean(b)
+    se = (statistics.variance(a) / len(a) + statistics.variance(b) / len(b)) ** 0.5
+    return {"gap": gap, "t": gap / se if se else None}
+
+
 def study(events: list[dict], excess_by_stock: dict, calendar: list[datetime], seed: int = 0,
           min_events: int = MIN_EVENTS) -> dict:
     """events: stock_id、day、time、clause。回傳 {clause: {counts, windows, placebo}}。"""
@@ -117,15 +152,16 @@ def study(events: list[dict], excess_by_stock: dict, calendar: list[datetime], s
         for stock, idx, excess in kept:
             for name, value in _cars(excess, idx).items():
                 if value is not None:
-                    real[name].append(value)
+                    real[name].append((idx, value))
             shifted = idx + rng.choice(PLACEBO_OFFSETS)
             if 0 < shifted < len(calendar):
                 for name, value in _cars(excess, shifted).items():
                     if value is not None:
-                        fake[name].append(value)
+                        fake[name].append((shifted, value))
         result[clause] = {
             "counts": {k: bucket[k] for k in ("total", "intraday", "out_of_range", "no_price", "overlap")} | {"kept": len(kept)},
-            "windows": {name: summarize(vals, min_events) for name, vals in real.items()},
-            "placebo": {name: summarize(vals, min_events) for name, vals in fake.items()},
+            "windows": {name: window_stats(pairs, min_events) for name, pairs in real.items()},
+            "placebo": {name: window_stats(pairs, min_events) for name, pairs in fake.items()},
+            "gap": {name: gap_stats(real[name], fake[name], min_events) for name in WINDOWS},
         }
     return result

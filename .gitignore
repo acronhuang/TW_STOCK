@@ -75,3 +75,6 @@ mongodb_backups/
 # 執行期狀態檔(勿入庫)
 download_status.json
 tests/_screenshots/
+
+# 清理腳本產生的回復用備份（含 verdict 內容，不進版控）
+backups/

@@ -40,7 +40,7 @@ def pct(value):
 
 
 def render(result, min_clause_events, samples):
-    lines = []
+    lines, tests, flagged = [], 0, 0
     for clause, item in sorted(result.items(), key=lambda kv: -kv[1]["counts"]["kept"]):
         counts = item["counts"]
         if counts["kept"] < min_clause_events:
@@ -48,15 +48,21 @@ def render(result, min_clause_events, samples):
         lines.append(f"\n{clause}  共 {counts['total']} 則；有效 {counts['kept']}；"
                      f"盤中略過 {counts['intraday']}、重複 {counts['overlap']}、缺價 {counts['no_price']}、窗口未滿 {counts['out_of_range']}")
         lines.append("  例：" + "｜".join(samples.get(clause, [])))
-        lines.append(f"  {'窗口':6} {'n':>5} {'平均':>9} {'中位數':>9} {'上漲占比':>8}   {'對照平均':>9} {'對照n':>5} {'事件減對照':>9}")
+        lines.append(f"  {'窗口':6} {'n':>5} {'反應日':>5} {'平均':>9} {'中位數':>9} {'上漲占比':>8}   {'對照平均':>9} {'事件減對照':>9} {'t(日)':>7}")
         for name in es.WINDOWS:
-            real, fake = item["windows"][name], item["placebo"][name]
+            real, fake, gap = item["windows"][name], item["placebo"][name], item["gap"][name]
             if "mean" not in real:
                 lines.append(f"  {name:6} {real['n']:>5}  樣本不足（少於 {es.MIN_EVENTS}），不給平均")
                 continue
-            gap = real["mean"] - fake["mean"] if "mean" in fake else None
-            lines.append(f"  {name:6} {real['n']:>5} {pct(real['mean']):>9} {pct(real['median']):>9} "
-                         f"{real['share_up'] * 100:>7.0f}%   {pct(fake.get('mean')):>9} {fake['n']:>5} {pct(gap):>9}")
+            t = gap["t"] if gap else None
+            tests += t is not None
+            flagged += t is not None and abs(t) >= 2
+            mark = "*" if t is not None and abs(t) >= 2 else " "
+            t_text = "   —  " if t is None else f"{t:+6.2f}{mark}"
+            lines.append(f"  {name:6} {real['n']:>5} {real['days']:>5} {pct(real['mean']):>9} {pct(real['median']):>9} "
+                         f"{real['share_up'] * 100:>7.0f}%   {pct(fake.get('mean')):>9} {pct(gap['gap'] if gap else None):>9} {t_text:>8}")
+    lines.append(f"\n共 {tests} 個比較，|t|≥2 的有 {flagged} 個（標 *）；純靠機遇大約 5% 即 {tests * 0.05:.0f} 個會超過，"
+                 "所以個別標 * 的結果只能當線索。t 以反應日為單位計算（同日公告先平均），事件前 5 日窗口的 * 多半是反向因果。")
     return "\n".join(lines)
 
 
