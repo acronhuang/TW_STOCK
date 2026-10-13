@@ -4,7 +4,7 @@ TZ=Asia/Taipei
 PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 
 # api_server: 週期常駐(api_server) → 用 systemd service, 不進 cron
-0 1 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/sync_dividend_detail.py --limit 600 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_dividend_sync.log 2>&1  # daily_dividend_sync
+0 1 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/sync_dividend_detail.py --limit 250 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_dividend_sync.log 2>&1  # daily_dividend_sync
 30 1 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/build_adjustment_factors.py --write >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_adjustment_factors.log 2>&1  # daily_adjustment_factors
 0 2 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/backfill_adj_close.py --execute --changed-only >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_adj_close_backfill.log 2>&1  # daily_adj_close_backfill
 10 17 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/macro_sync.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_daily_macro_sync.log 2>&1  # daily_macro_sync
@@ -89,3 +89,5 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 15 10 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/check_offsite_backup.py --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_offsite_backup.log 2>&1
 10 23 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/audit_chain.py register >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_audit_chain.log 2>&1
 10 5 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/audit_chain.py verify --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_audit_chain.log 2>&1
+20 10 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/check_finmind_quota.py --runs 24 --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_finmind_quota.log 2>&1
+50 * * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/measure_hourly_refetch.py snapshot >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_refetch_measure.log 2>&1  # 暫時：量測約 24 小時後移除（OpenSpec evaluate-finmind-sponsor 1.4）
