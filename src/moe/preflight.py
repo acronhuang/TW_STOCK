@@ -5,13 +5,14 @@ import time
 
 import requests
 
+from src.moe import model_nodes
+
 
 class OllamaNotReady(RuntimeError):
     pass
 
 
-def _canon(name: str) -> str:
-    return name if ":" in name else f"{name}:latest"  # Ollama 把沒寫標籤的模型名視為 :latest
+_canon = model_nodes.canonical  # Ollama 把沒寫標籤的模型名視為 :latest
 
 
 def _registered(table: dict[str, str], model: str) -> str:

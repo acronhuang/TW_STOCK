@@ -110,6 +110,23 @@ def _advisor_rating(draft: str):
 _committee_verified = False
 
 
+def missing_models(models, url_of, get=requests.get) -> list:
+    """每個模型只在它自己的節點上找（放錯節點等於不存在）；節點連不上也算缺席。"""
+    tags = {}
+    for model in models:
+        url = url_of(model)
+        if url in tags:
+            continue
+        try:
+            response = get(f'{url}/api/tags', timeout=10)
+            response.raise_for_status()
+            tags[url] = {model_nodes.canonical(m.get('name') or '') for m in response.json().get('models', [])}
+        except Exception as e:
+            print(f"⚠️ [committee] 無法查詢 {url} 的模型清單：{e}")
+            tags[url] = None
+    return [m for m in models if tags[url_of(m)] is None or model_nodes.canonical(m) not in tags[url_of(m)]]
+
+
 def verify_committee(force: bool = False) -> dict:
     """確認 COMMITTEE 每位委員在合議節點上真的存在。首次 deliberate() 時自動跑一次。
 
@@ -125,17 +142,7 @@ def verify_committee(force: bool = False) -> dict:
     if _committee_verified and not force:
         return {}
     _committee_verified = True
-    urls_to_check = {CONSENSUS_URL}
-    urls_to_check.update(COMMITTEE_MODEL_URL.values())
-    have = set()
-    for u in urls_to_check:
-        try:
-            r = requests.get(f'{u}/api/tags', timeout=10)
-            r.raise_for_status()
-            have.update(m.get('name') for m in r.json().get('models', []))
-        except Exception as e:
-            print(f"⚠️ [committee] 無法查詢 {u} 的模型清單：{e}")
-    missing = [m for m in COMMITTEE if m not in have]
+    missing = missing_models(COMMITTEE, lambda m: COMMITTEE_MODEL_URL.get(m, CONSENSUS_URL))
     print(f"🗳️ [committee] 本次合議委員 = {COMMITTEE}"
           + (f"  🔴 節點上不存在：{missing}" if missing else "  ✅ 節點上皆存在"))
     if missing:

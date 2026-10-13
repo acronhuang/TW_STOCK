@@ -157,3 +157,51 @@ def test_model_names_are_only_written_in_model_nodes():
                 if parts and all(_MODEL_NAME.fullmatch(p) for p in parts):
                     offenders.append(f"{path.relative_to(ROOT)}:{node.lineno} {node.value!r}")
     assert not offenders, "模型名只能寫在 src/moe/model_nodes.py：\n" + "\n".join(offenders)
+
+
+class _Tags:
+    def __init__(self, names):
+        self.names = names
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"models": [{"name": n} for n in self.names]}
+
+
+def _get(nodes):
+    def get(url, timeout):
+        base = url.removesuffix("/api/tags")
+        if base not in nodes:
+            raise ConnectionError(f"refused {base}")
+        return _Tags(nodes[base])
+
+    return get
+
+
+def test_canonical_adds_latest_only_when_there_is_no_tag():
+    assert model_nodes.canonical("bge-m3") == "bge-m3:latest"
+    assert model_nodes.canonical("gemma2:9b") == "gemma2:9b"
+
+
+def test_committee_check_matches_an_untagged_name_to_its_latest_tag():
+    nodes = {N27: ["phi4:latest"]}
+    assert consensus.missing_models(["phi4"], lambda m: N27, get=_get(nodes)) == []
+
+
+def test_committee_check_only_looks_on_the_node_that_serves_the_model():
+    nodes = {N27: ["a:1"], N28: ["b:1", "a:1"]}
+    url_of = {"a:1": N27, "b:1": N27}.get
+    assert consensus.missing_models(["a:1", "b:1"], url_of, get=_get(nodes)) == ["b:1"]
+
+
+def test_committee_check_counts_an_unreachable_node_as_absent():
+    url_of = {"a:1": N27, "b:1": N28}.get
+    assert consensus.missing_models(["a:1", "b:1"], url_of, get=_get({N27: ["a:1"]})) == ["b:1"]
+
+
+def test_committee_check_passes_when_everyone_is_where_they_belong():
+    nodes = {N27: ["a:1"], N28: ["b:1"]}
+    url_of = {"a:1": N27, "b:1": N28}.get
+    assert consensus.missing_models(["a:1", "b:1"], url_of, get=_get(nodes)) == []

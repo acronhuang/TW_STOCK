@@ -57,6 +57,11 @@ ANSWER_MODEL = os.getenv("ANSWER_MODEL", DEFAULT_RISK)
 EMBED_MODEL = os.getenv("EMBED_MODEL", DEFAULT_EMBED)
 
 
+def canonical(name):
+    """Ollama 把沒寫標籤的模型名視為 :latest，比對節點清單時要先統一。"""
+    return name if ":" in name else f"{name}:latest"
+
+
 def node_of(model):
     try:
         return MODEL_NODES[model]
