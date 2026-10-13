@@ -253,6 +253,8 @@ def fetch_twse_institutional(date_str: Optional[str] = None) -> List[Dict]:
     if raw.get('stat') != 'OK':
         return []
 
+    inst_buysell.check_t86_fields(raw.get('fields'))  # 下面全靠固定欄位位置，標頭不符就整批不寫
+
     # 從 response 解析日期（格式：西元年 YYYYMMDD）
     resp_date_str = str(raw.get('date', ''))
     try:
