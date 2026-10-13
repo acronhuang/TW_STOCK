@@ -22,6 +22,7 @@ from pymongo import ASCENDING  # noqa: E402
 
 from src.config import get_db  # noqa: E402
 from src.data_gap import mops_major as mm  # noqa: E402
+from src.utils.circuit_breaker import CircuitBreaker, CircuitOpen  # noqa: E402
 
 BASE = "https://mops.twse.com.tw/mops/api"
 HEADERS = {"User-Agent": "Mozilla/5.0", "Referer": "https://mops.twse.com.tw/", "Content-Type": "application/json"}
@@ -31,18 +32,25 @@ class Mops:
     def __init__(self, pause: float):
         self.session = requests.Session()
         self.pause = pause
+        self.breakers = {}  # 每個端點一個斷路器：MOPS 掛掉時不要每筆都等逾時加重試
 
     def post(self, endpoint: str, payload: dict) -> dict:
+        breaker = self.breakers.setdefault(endpoint, CircuitBreaker(failure_threshold=4, cooldown=300.0))
+        if not breaker.allow():
+            raise CircuitOpen(f"{endpoint} 連續失敗，斷路器開啟中，暫不送出")
         last = None
         for attempt in range(3):
             try:
                 response = self.session.post(f"{BASE}/{endpoint}", json=payload, headers=HEADERS, timeout=60)
                 response.raise_for_status()
                 time.sleep(self.pause)
-                return response.json()
+                data = response.json()
+                breaker.success()
+                return data
             except Exception as error:  # noqa: BLE001
                 last = error
                 time.sleep(2 * (attempt + 1))
+        breaker.failure()
         raise RuntimeError(f"{endpoint} 連續失敗: {last}")
 
     def day_list(self, day: datetime) -> dict:
