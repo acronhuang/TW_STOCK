@@ -156,8 +156,12 @@ elif page == "📊 策略研究":
     else:
         from pages import margin_market_page; margin_market_page.show()
 elif page == "📚 知識庫":
-    from pages import rag_page
-    rag_page.show()
+    kb = st.radio("知識庫", ["📚 專案知識庫", "🤖 Hermes 助理"], horizontal=True, key="kb_view", label_visibility="collapsed")
+    if kb == "📚 專案知識庫":
+        from pages import rag_page
+        rag_page.show()
+    else:
+        from pages import hermes_page; hermes_page.show()
 
 # 頁腳
 st.sidebar.markdown("---")

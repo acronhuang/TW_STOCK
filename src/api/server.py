@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv(project_root / '.env')
 
 from bson import Decimal128
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 
@@ -29,6 +29,8 @@ from src.domain.collections import (
     COLL_DIVIDEND_DETAIL,
     COLL_INSTITUTIONAL_FLOW,
     COLL_MONTHLY_REVENUE,
+    COLL_PORTFOLIO_LOTS,
+    COLL_PORTFOLIO_POSITIONS,
     COLL_STOCK_FACTORS,
     COLL_STOCK_PRICE,
     COLL_TEAM_ANALYSIS,
@@ -422,6 +424,34 @@ def health():
         "collections": {name: db[name].estimated_document_count() for name in
                         ['stock_price', 'stock_factors', 'quarterly_earnings', 'dividend_detail', 'monthly_revenue']},
     }
+
+
+# ──────────────────────────────────────────────
+#  持倉（唯讀）
+# ──────────────────────────────────────────────
+PORTFOLIO_SOURCES = {
+    "positions": (COLL_PORTFOLIO_POSITIONS, "symbol", 1),
+    "lots": (COLL_PORTFOLIO_LOTS, "buy_date", -1),
+    "trades": ("portfolio_trades", "date", -1),
+}
+
+
+def _plain(value):
+    if isinstance(value, Decimal128):
+        return float(value.to_decimal())
+    if isinstance(value, datetime):
+        return value.strftime('%Y-%m-%d') if not (value.hour or value.minute or value.second) else value.strftime('%Y-%m-%d %H:%M:%S')
+    return value
+
+
+@app.get("/api/portfolio/{kind}")
+def get_portfolio(kind: str, limit: int = Query(200, ge=1, le=500)):
+    """持倉（只讀）：positions 目前持倉、lots 買進批次、trades 交易紀錄；API 只綁本機。"""
+    if kind not in PORTFOLIO_SOURCES:
+        raise HTTPException(status_code=404, detail=f"kind 必須是 {', '.join(PORTFOLIO_SOURCES)}")
+    collection, key, direction = PORTFOLIO_SOURCES[kind]
+    rows = db[collection].find({}, {'_id': 0}).sort(key, direction).limit(limit)
+    return [{name: _plain(value) for name, value in row.items()} for row in rows]
 
 
 if __name__ == '__main__':

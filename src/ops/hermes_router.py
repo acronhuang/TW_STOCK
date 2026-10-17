@@ -31,6 +31,12 @@ KIND_WORDS = (
     ("team", ("團隊", "研判", "合議")),
 )
 MARKET_WORDS = ("大盤", "總經", "加權", "台股")
+# 持倉類問題先查 portfolio_data；排在前面的優先。
+PORTFOLIO_WORDS = (
+    ("trades", ("交易紀錄", "交易記錄", "買賣紀錄", "成交紀錄")),
+    ("lots", ("買進批次", "買進日")),
+    ("positions", ("持倉", "持股", "庫存", "部位")),
+)
 _CALC_WORDS = re.compile(r"漲|跌|高出|低於|高於|差多少|差距|相差|算|加總|總和|平均|幾倍|百分比")
 _CONVERT_WORDS = re.compile(r"換算|換成|幾億|多少億|幾張|多少張|億元|萬元|千元")
 _CONVERT_HINT = "【本題需要換算單位：上列有「程式已精確換算」的數字就直接引用；沒有的才呼叫 convert_unit 工具，value 逐字取自上列資料，回答只寫工具回傳的結果。】"
@@ -64,7 +70,15 @@ GLOSSARY = {
     "risk": "風險：annual_return＝年化報酬(%)、annual_volatility＝年化波動率(%)、max_drawdown＝最大回撤(%)、sharpe＝夏普比率、beta＝Beta；level＝風險等級。",
 }
 _GLOSSARY_HEAD = "【欄位用語：回答時名稱與單位照下列使用，不要自行翻譯欄位名，也不要寫英文欄位名。】"
-_FIELD_NAMES = tuple(sorted(set(re.findall(r"[a-z]+(?:_[a-z]+)+", " ".join(GLOSSARY.values())))))
+GLOSSARY["portfolio"] = (
+    "持倉：shares＝股數（股）；avg_cost＝均價（元）；total_cost＝總成本（元）；category＝類別；portfolio＝帳戶；"
+    "buy_date＝買進日；price＝買進價（元）；sell_date／sell_price＝賣出日／賣出價（元）；"
+    "action＝BUY 買進、SELL 賣出；commission＝手續費（元）；total＝含手續費總額（元）；note＝備註；"
+    "long_hold＝長期持有；no_stop_loss＝不設停損。"
+)
+# 沒有對應中文名稱的專有名詞，模型照寫英文不算錯，不提醒。
+ALLOWED_ENGLISH_FIELDS = frozenset({"pe_band"})
+_FIELD_NAMES = tuple(sorted(set(re.findall(r"[a-z]+(?:_[a-z]+)+", " ".join(GLOSSARY.values()))) - ALLOWED_ENGLISH_FIELDS))
 _FIELD_REGEX = re.compile(r"(?<![A-Za-z_])(" + "|".join(map(re.escape, _FIELD_NAMES)) + r")(?![A-Za-z_])")
 
 # 只收簡體專用字；與繁體同形的字不列，避免誤判。
@@ -97,6 +111,7 @@ def _word_regex(words):
 
 _KIND_REGEX = tuple((kind, _word_regex(words)) for kind, words in KIND_WORDS)
 _MARKET = _word_regex(MARKET_WORDS)
+_PORTFOLIO_REGEX = tuple((kind, _word_regex(words)) for kind, words in PORTFOLIO_WORDS)
 
 
 def is_order_request(question):
@@ -109,6 +124,10 @@ def needs_conversion(question):
 
 def needs_calculation(question):
     return bool(_CALC_WORDS.search(question or ""))
+
+
+def portfolio_kind(question):
+    return next((kind for kind, rx in _PORTFOLIO_REGEX if rx.search(question or "")), None)
 
 
 def wanted_kinds(question):
@@ -150,21 +169,23 @@ def plan(question, names=None, industries=()):
         return []
     kinds = wanted_kinds(question)
     symbols = find_symbols(question, names)
+    held = portfolio_kind(question)
+    lead = [("portfolio_data", {"kind": held})] if held else []
     calls = []
     if symbols:
-        chosen = (kinds or list(DEFAULT_KINDS))[: max(1, MAX_CALLS // len(symbols))]
+        chosen = (kinds or list(DEFAULT_KINDS))[: max(1, (MAX_CALLS - len(lead)) // len(symbols))]
         for code, _ in symbols:
             for kind in chosen:
                 calls.append(("stock_data", {"kind": kind, "symbol": code}))
-        return calls
+        return lead + calls
     industry = find_industry(question, industries)
     if industry:
-        return [("industry_data", {"industry": industry})]
+        return lead + [("industry_data", {"industry": industry})]
     if "team" in kinds and "全市場" in question:
-        return [("market_data", {"kind": "team"})]
+        return lead + [("market_data", {"kind": "team"})]
     if _MARKET.search(question):
-        return [("market_data", {"kind": "macro"})]
-    return []
+        return lead + [("market_data", {"kind": "macro"})]
+    return lead
 
 
 def prefetch(calls, call_tool, budget_seconds=15.0, clock=time.monotonic):
@@ -249,10 +270,13 @@ def format_context(results, names=None, calc_hint=False, convert_hint=False, con
         label = " ".join(f"{k}={v}" for k, v in args.items())
         title = by_code.get(args.get("symbol"), "")
         lines.append(f"■ {name} {label}" + (f"（{title}）" if title else "") + ("【查詢失敗】" if is_error else ""))
-        lines.append(text)
+        shown = render_portfolio(args.get("kind"), text) if name == "portfolio_data" else None
+        lines.append(shown or text)
     kinds = []
-    for name, args, _, is_error in results:
-        kind = args.get("kind") if name == "stock_data" else None
+    for name, args, text, is_error in results:
+        kind = args.get("kind") if name == "stock_data" else "portfolio" if name == "portfolio_data" else None
+        if kind == "portfolio" and render_portfolio(args.get("kind"), text):
+            continue  # 已改寫成中文逐列，不再附英文欄位術語，避免模型照寫英文
         if kind in GLOSSARY and not is_error and kind not in kinds:
             kinds.append(kind)
     if kinds:
@@ -266,6 +290,41 @@ def format_context(results, names=None, calc_hint=False, convert_hint=False, con
     if convert_hint:
         lines.append(_CONVERT_HINT)
     return "\n".join(lines)
+
+
+_ACTION_ZH = {"BUY": "買進", "SELL": "賣出"}
+
+
+def _part(row, field, label, unit=""):
+    return f"{label} {row[field]}{unit}" if row.get(field) not in (None, "") else ""
+
+
+def _portfolio_line(kind, row):
+    """一列持倉資料改寫成一行中文；數字保持工具回傳的原文，不做任何計算。"""
+    symbol = str(row.get("symbol", ""))
+    if kind == "positions":
+        tag = f"（{row['category']}）" if row.get("category") else ""
+        parts = [_part(row, "shares", "股數", " 股"), _part(row, "avg_cost", "均價", " 元"), _part(row, "total_cost", "總成本", " 元")]
+        parts += ["長期持有" if row.get("long_hold") is True else "", "不設停損" if row.get("no_stop_loss") is True else ""]
+        return f"{symbol}{tag}：" + "，".join(p for p in parts if p)
+    if kind == "lots":
+        sold = "，".join(p for p in (_part(row, "sell_date", "賣出日"), _part(row, "sell_price", "賣出價", " 元")) if p)
+        parts = [_part(row, "shares", "股數", " 股"), _part(row, "price", "買進價", " 元"), sold, _part(row, "note", "備註")]
+        return f"{symbol} 買進日 {row.get('buy_date') or '不詳'}：" + "，".join(p for p in parts if p)
+    action = _ACTION_ZH.get(str(row.get("action")), str(row.get("action", "")))
+    parts = [_part(row, "shares", "股數", " 股"), _part(row, "price", "價格", " 元"), _part(row, "commission", "手續費", " 元"), _part(row, "total", "含手續費總額", " 元"), _part(row, "note", "備註")]
+    return f"{row.get('date', '')} {action} {symbol}：" + "，".join(p for p in parts if p)
+
+
+def render_portfolio(kind, text):
+    """持倉 JSON 改寫成逐列中文；解析不了（格式錯、被截斷、不是列表）回 None，呼叫端改用原文。"""
+    try:
+        rows = json.loads(text, parse_float=str)
+    except ValueError:
+        return None
+    if not isinstance(rows, list) or not rows or not all(isinstance(row, dict) for row in rows) or kind not in ("positions", "lots", "trades"):
+        return None
+    return "\n".join(_portfolio_line(kind, row) for row in rows)
 
 
 def mentions_stock_info(answer):

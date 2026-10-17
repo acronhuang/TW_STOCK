@@ -14,13 +14,16 @@ MAX_CHARS = 6000
 MAX_BYTES = 400_000
 DEFAULT_PROTOCOL = "2025-06-18"
 
-# 耗時 18 秒以上的端點（ranking、scan、advisor、hsieh）不開放，避免對話把正式 API 拖慢。
+# 耗時約 18~24 秒的端點（ranking、scan、advisor、hsieh）依使用者 2026-10-17 的決定開放，逾時放寬到 HEAVY_TIMEOUT。
 # predict 不開放：它每次都重訓並覆寫 models/<代號>_xgb.pkl，不是唯讀。
 STOCK_KINDS = (
     "price", "factors", "valuation", "risk", "peer", "score", "sentiment",
-    "anomaly", "institutional", "revenue", "dividend", "financial", "team",
+    "anomaly", "institutional", "revenue", "dividend", "financial", "team", "hsieh",
 )
-MARKET_KINDS = ("macro", "pku", "stocks", "team", "health")
+MARKET_KINDS = ("macro", "pku", "stocks", "team", "health", "ranking", "scan", "advisor", "hsieh")
+PORTFOLIO_KINDS = ("positions", "lots", "trades")
+HEAVY_TIMEOUT = 120
+HEAVY_PREFIXES = ("/api/ranking", "/api/scan", "/api/advisor", "/api/hsieh")
 
 _SYMBOL = re.compile(r"[0-9A-Za-z]{4,8}")
 # 產業排名 API 實測接受的 industry_category（2026-10-13 逐一測過）；小模型自由輸入時會產出亂碼字。
@@ -40,7 +43,7 @@ _NUMBER_TEXT = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 TOOLS = [
     {
         "name": "stock_data",
-        "description": "查單一個股的資料。kind：price 股價、factors 因子、valuation 估值、risk 風險、peer 同業比較、"
+        "description": "查單一個股的資料（hsieh 是謝富旭研究分析，要 20 秒以上）。kind：price 股價、factors 因子、valuation 估值、risk 風險、peer 同業比較、"
         "score 評分、sentiment 情緒、anomaly 異常、institutional 法人、revenue 月營收、"
         "dividend 股利、financial 財報、team AI 團隊研判。",
         "inputSchema": {
@@ -54,7 +57,7 @@ TOOLS = [
     },
     {
         "name": "market_data",
-        "description": "查全市場資料。kind：macro 總經與大盤、pku 北大風控、stocks 股票清單、team 全市場團隊研判彙總、health 服務狀態。",
+        "description": "查全市場資料（ranking 綜合選股排行、scan 全市場掃描加風險篩選、advisor 策略交易建議、hsieh 存股選股，這四項要 20 秒以上）。kind：macro 總經與大盤、pku 北大風控、stocks 股票清單、team 全市場團隊研判彙總、health 服務狀態。",
         "inputSchema": {
             "type": "object",
             "properties": {"kind": {"type": "string", "enum": list(MARKET_KINDS)}},
@@ -92,6 +95,16 @@ TOOLS = [
                 "to_unit": {"type": "string", "enum": list(MONEY_UNITS) + list(SHARE_UNITS)},
             },
             "required": ["value", "from_unit", "to_unit"],
+        },
+    },
+    {
+        "name": "portfolio_data",
+        "description": "查使用者的持倉（唯讀）。kind：positions 目前持倉（股數、均價、總成本）、lots 買進批次、trades 交易紀錄。"
+        "股數單位是股，價格與成本單位是元；回答只能引用本工具回傳的數字。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"kind": {"type": "string", "enum": list(PORTFOLIO_KINDS)}},
+            "required": ["kind"],
         },
     },
 ]
@@ -158,8 +171,10 @@ def convert_unit(value, from_unit, to_unit):
     return f"{text} {from_unit} = {shown} {to_unit}", False
 
 
-def default_fetch(url, timeout=30):
+def default_fetch(url, timeout=None):
     # URL 一律由 build_url 組出且固定指向本機，不接受外部傳入。
+    if timeout is None:
+        timeout = HEAVY_TIMEOUT if url.startswith(tuple(BASE + p for p in HEAVY_PREFIXES)) else 30
     with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310
         return response.status, response.read(MAX_BYTES).decode("utf-8", "replace")
 
@@ -174,6 +189,8 @@ def build_url(name, args):
             return None, f"kind 不在允許清單：{', '.join(STOCK_KINDS)}"
         if not isinstance(symbol, str) or not _SYMBOL.fullmatch(symbol):
             return None, "symbol 必須是 4 到 8 碼的英數字股票代號"
+        if kind == "hsieh":
+            return f"{BASE}/api/hsieh/research/{symbol}", None
         return f"{BASE}/api/{kind}/{symbol}", None
     if name == "market_data":
         kind = args.get("kind")
@@ -185,6 +202,11 @@ def build_url(name, args):
         if industry not in INDUSTRIES:
             return None, f"industry 不在允許清單：{', '.join(INDUSTRIES)}"
         return f"{BASE}/api/industry/{urllib.parse.quote(industry)}", None
+    if name == "portfolio_data":
+        kind = args.get("kind")
+        if kind not in PORTFOLIO_KINDS:
+            return None, f"kind 不在允許清單：{', '.join(PORTFOLIO_KINDS)}"
+        return f"{BASE}/api/portfolio/{kind}", None
     return None, f"未知的工具：{name}"
 
 

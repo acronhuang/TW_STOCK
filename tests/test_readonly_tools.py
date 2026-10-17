@@ -27,16 +27,16 @@ class Recorder:
         return self.status, self.body
 
 
-def test_exactly_four_tools_with_the_allowed_kinds():
+def test_exactly_these_tools_with_the_allowed_kinds():
     tools = {t["name"]: t for t in ro.TOOLS}
-    assert set(tools) == {"stock_data", "market_data", "industry_data", "calc", "convert_unit"}
+    assert set(tools) == {"stock_data", "market_data", "industry_data", "calc", "convert_unit", "portfolio_data"}
+    assert tools["portfolio_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.PORTFOLIO_KINDS)
     assert tools["stock_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.STOCK_KINDS)
     assert tools["market_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.MARKET_KINDS)
 
 
-def test_slow_endpoints_are_not_exposed():
-    exposed = set(ro.STOCK_KINDS) | set(ro.MARKET_KINDS)
-    assert not exposed & {"ranking", "scan", "advisor", "hsieh"}
+def test_slow_endpoints_are_exposed_by_the_users_decision():
+    assert {"ranking", "scan", "advisor", "hsieh"} <= set(ro.MARKET_KINDS) and "hsieh" in ro.STOCK_KINDS
 
 
 def test_endpoints_that_write_files_are_not_exposed():
@@ -105,7 +105,9 @@ def test_every_allowed_call_stays_under_the_local_api_prefix():
         ro.call_tool("stock_data", {"kind": kind, "symbol": "2330"}, fetch)
     for kind in ro.MARKET_KINDS:
         ro.call_tool("market_data", {"kind": kind}, fetch)
-    assert len(fetch.urls) == len(ro.STOCK_KINDS) + len(ro.MARKET_KINDS)
+    for kind in ro.PORTFOLIO_KINDS:
+        ro.call_tool("portfolio_data", {"kind": kind}, fetch)
+    assert len(fetch.urls) == len(ro.STOCK_KINDS) + len(ro.MARKET_KINDS) + len(ro.PORTFOLIO_KINDS)
     assert all(u.startswith("http://127.0.0.1:8888/api/") for u in fetch.urls)
 
 
@@ -157,7 +159,7 @@ def test_tools_call_wraps_the_text_and_error_flag():
     )
     assert ok["result"] == {"content": [{"type": "text", "text": "up"}], "isError": False}
     bad = ro.handle_message(
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "market_data", "arguments": {"kind": "scan"}}},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "market_data", "arguments": {"kind": "predict"}}},
         Recorder(),
     )
     assert bad["result"]["isError"] is True
@@ -181,7 +183,7 @@ def test_script_speaks_mcp_over_stdio_without_network():
     )
     replies = [json.loads(line) for line in done.stdout.splitlines()]
     assert done.returncode == 0 and [r["id"] for r in replies] == [1, 2]
-    assert [t["name"] for t in replies[1]["result"]["tools"]] == ["stock_data", "market_data", "industry_data", "calc", "convert_unit"]
+    assert [t["name"] for t in replies[1]["result"]["tools"]] == ["stock_data", "market_data", "industry_data", "calc", "convert_unit", "portfolio_data"]
 
 
 @pytest.mark.parametrize(
@@ -276,3 +278,54 @@ def test_convert_unit_is_reachable_through_call_tool_and_the_mcp_message():
 def test_convert_unit_schema_offers_exactly_the_units_it_accepts():
     schema = {t["name"]: t for t in ro.TOOLS}["convert_unit"]["inputSchema"]["properties"]
     assert set(schema["from_unit"]["enum"]) == set(schema["to_unit"]["enum"]) == set(ro.MONEY_UNITS) | set(ro.SHARE_UNITS)
+
+
+def test_heavy_endpoints_build_the_right_urls():
+    fetch = Recorder()
+    for kind in ("ranking", "scan", "advisor", "hsieh"):
+        ro.call_tool("market_data", {"kind": kind}, fetch)
+    ro.call_tool("stock_data", {"kind": "hsieh", "symbol": "2330"}, fetch)
+    base = "http://127.0.0.1:8888/api/"
+    assert fetch.urls == [base + "ranking", base + "scan", base + "advisor", base + "hsieh", base + "hsieh/research/2330"]
+
+
+class _Response:
+    status = 200
+
+    def read(self, size):
+        return b"[]"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_heavy_endpoints_get_a_longer_timeout_and_the_rest_keep_thirty_seconds(monkeypatch):
+    seen = []
+    monkeypatch.setattr(ro.urllib.request, "urlopen", lambda url, timeout: seen.append((url, timeout)) or _Response())
+    for path in ("/api/scan", "/api/hsieh/research/2330", "/api/ranking", "/api/advisor", "/api/price/2330"):
+        ro.default_fetch("http://127.0.0.1:8888" + path)
+    assert [timeout for _, timeout in seen] == [ro.HEAVY_TIMEOUT] * 4 + [30]
+
+
+def test_an_explicit_timeout_is_respected(monkeypatch):
+    seen = []
+    monkeypatch.setattr(ro.urllib.request, "urlopen", lambda url, timeout: seen.append(timeout) or _Response())
+    ro.default_fetch("http://127.0.0.1:8888/api/scan", timeout=5)
+    assert seen == [5]
+
+
+@pytest.mark.parametrize("kind", ["positions", "lots", "trades"])
+def test_portfolio_calls_hit_the_local_read_only_endpoint(kind):
+    fetch = Recorder()
+    ro.call_tool("portfolio_data", {"kind": kind}, fetch)
+    assert fetch.urls == [f"http://127.0.0.1:8888/api/portfolio/{kind}"]
+
+
+@pytest.mark.parametrize("kind", ["../admin", "position", "", None, 5, "positions/x", "trades?limit=1"])
+def test_bad_portfolio_kind_is_rejected_without_a_request(kind):
+    fetch = Recorder()
+    text, is_error = ro.call_tool("portfolio_data", {"kind": kind}, fetch)
+    assert is_error and "允許清單" in text and fetch.urls == []

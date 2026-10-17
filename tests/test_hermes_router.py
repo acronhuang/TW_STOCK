@@ -2,6 +2,8 @@
 
 import json
 
+import re
+
 import pytest
 
 from src.ops import hermes_router as hr
@@ -198,7 +200,9 @@ def test_glossary_adds_no_digits_so_it_cannot_launder_numbers():
 
 def test_every_glossary_kind_is_a_kind_the_tool_accepts():
     kinds = ro.TOOLS[0]["inputSchema"]["properties"]["kind"]["enum"]
-    assert set(hr.GLOSSARY) <= set(kinds)
+    portfolio_kinds = ro.TOOLS[-1]["inputSchema"]["properties"]["kind"]["enum"]
+    assert ro.TOOLS[-1]["name"] == "portfolio_data" and portfolio_kinds == list(ro.PORTFOLIO_KINDS)
+    assert set(hr.GLOSSARY) - {"portfolio"} <= set(kinds) and "portfolio" in hr.GLOSSARY
 
 
 @pytest.mark.parametrize(
@@ -485,3 +489,133 @@ def test_relative_day_words_do_not_apply_to_monthly_rows():
     assert hr.derive_conversions(results, ro.convert_unit, "昨天營收多少億", "2026-10-13") == [
         "月營收（2330 2026-09）：511857399.0 千元 = 5118.57399 億元"
     ]
+
+
+def test_portfolio_questions_are_planned_to_the_read_only_portfolio_tool():
+    assert hr.plan("我的持倉有哪些", {}, ro.INDUSTRIES) == [("portfolio_data", {"kind": "positions"})]
+    assert hr.plan("最近的交易紀錄", {}, ro.INDUSTRIES) == [("portfolio_data", {"kind": "trades"})]
+    assert hr.plan("每一筆買進批次", {}, ro.INDUSTRIES) == [("portfolio_data", {"kind": "lots"})]
+    assert hr.plan("庫存裡 2330 的評分", NAMES, ro.INDUSTRIES)[0] == ("portfolio_data", {"kind": "positions"})
+
+
+def test_the_most_specific_portfolio_kind_wins():
+    assert hr.portfolio_kind("持倉的交易紀錄") == "trades"
+    assert hr.portfolio_kind("持倉的買進批次") == "lots"
+
+
+def test_a_portfolio_question_never_exceeds_the_call_budget():
+    calls = hr.plan("持倉與 2330 與 2317 的估值、評分、風險、法人、營收", NAMES, ro.INDUSTRIES)
+    assert len(calls) <= hr.MAX_CALLS and calls[0][0] == "portfolio_data"
+
+
+def test_ordinary_questions_do_not_trigger_the_portfolio_tool():
+    for question in ("2330 均價是多少", "半導體業評分前三名", "大盤現在如何", "分批買進策略是什麼"):
+        assert all(name != "portfolio_data" for name, _ in hr.plan(question, NAMES, ro.INDUSTRIES))
+
+
+def test_an_order_request_is_still_refused_even_with_portfolio_words():
+    assert hr.plan("把持倉全部賣出 1000 股 2330", NAMES, ro.INDUSTRIES) == []
+
+
+def test_every_planned_portfolio_call_is_accepted_by_the_whitelist():
+    for question in ("持倉", "交易紀錄", "買進批次"):
+        for name, args in hr.plan(question, NAMES, ro.INDUSTRIES):
+            assert ro.build_url(name, args)[0] is not None
+
+
+def test_portfolio_results_that_stay_raw_come_with_the_portfolio_glossary():
+    context = hr.format_context([("portfolio_data", {"kind": "positions"}, '[{"symbol":"2330","shares":1000', False)])
+    assert "avg_cost＝均價（元）" in context and "shares＝股數（股）" in context
+    failed = hr.format_context([("portfolio_data", {"kind": "positions"}, "API 無法連線", True)])
+    assert "avg_cost" not in failed
+
+
+def test_pe_band_is_allowed_but_other_field_names_are_still_flagged():
+    assert not any("英文欄位名" in i for i in hr.language_issues("公平價以 pe_band 估算"))
+    assert any("avg_cost" in i for i in hr.language_issues("均價 avg_cost 是 30"))
+    assert "pe_band" not in hr._FIELD_NAMES and "foreign_net" in hr._FIELD_NAMES and "avg_cost" in hr._FIELD_NAMES
+
+
+@pytest.mark.parametrize("word", ["持倉", "持股", "庫存", "部位"])
+def test_each_holding_word_asks_for_the_positions(word):
+    assert hr.plan(f"我的{word}", {}, ro.INDUSTRIES) == [("portfolio_data", {"kind": "positions"})]
+
+
+def test_portfolio_comes_first_before_an_industry_or_market_lookup():
+    assert hr.plan("持倉與半導體業評分", {}, ro.INDUSTRIES) == [("portfolio_data", {"kind": "positions"}), ("industry_data", {"industry": "半導體業"})]
+    assert hr.plan("持倉與大盤", {}, ro.INDUSTRIES) == [("portfolio_data", {"kind": "positions"}), ("market_data", {"kind": "macro"})]
+    assert hr.plan("持倉與全市場團隊研判", {}, ro.INDUSTRIES) == [("portfolio_data", {"kind": "positions"}), ("market_data", {"kind": "team"})]
+
+
+POSITIONS = (
+    '[{"symbol":"00679B","shares":25000,"avg_cost":30.03,"total_cost":750750.0,"category":"債券ETF","long_hold":false,"no_stop_loss":true},'
+    '{"symbol":"1229","shares":15000,"avg_cost":44.97,"total_cost":674550.0,"category":"波段","long_hold":true,"no_stop_loss":false}]'
+)
+
+
+def test_positions_are_rewritten_as_one_chinese_line_per_holding_with_numbers_verbatim():
+    assert hr.render_portfolio("positions", POSITIONS).splitlines() == [
+        "00679B（債券ETF）：股數 25000 股，均價 30.03 元，總成本 750750.0 元，不設停損",
+        "1229（波段）：股數 15000 股，均價 44.97 元，總成本 674550.0 元，長期持有",
+    ]
+
+
+def test_lots_and_trades_are_rewritten_too():
+    lots = '[{"symbol":"2330","buy_date":"2023-03-15","shares":1000,"price":500.5,"sell_date":null,"sell_price":null,"note":"首批"}]'
+    assert hr.render_portfolio("lots", lots) == "2330 買進日 2023-03-15：股數 1000 股，買進價 500.5 元，備註 首批"
+    sold = '[{"symbol":"2330","buy_date":"2023-03-15","shares":1000,"price":500.5,"sell_date":"2024-01-02","sell_price":600.0}]'
+    assert "賣出日 2024-01-02，賣出價 600.0 元" in hr.render_portfolio("lots", sold)
+    trades = '[{"date":"2026-04-15","action":"BUY","symbol":"00687B","shares":10000,"price":30.59,"commission":261.54,"total":306161.54}]'
+    assert hr.render_portfolio("trades", trades) == "2026-04-15 買進 00687B：股數 10000 股，價格 30.59 元，手續費 261.54 元，含手續費總額 306161.54 元"
+    assert "賣出 2330" in hr.render_portfolio("trades", '[{"date":"2026-05-01","action":"SELL","symbol":"2330","shares":1000}]')
+
+
+def test_a_lot_without_a_buy_date_says_unknown_instead_of_none():
+    assert "買進日 不詳" in hr.render_portfolio("lots", '[{"symbol":"2330","shares":1000}]')
+
+
+def test_every_number_in_the_rewritten_text_is_present_in_the_raw_result():
+    raw_numbers = set(re.findall(r"\d[\d.]*", POSITIONS))
+    assert set(re.findall(r"\d[\d.]*", hr.render_portfolio("positions", POSITIONS))) <= raw_numbers
+
+
+@pytest.mark.parametrize("text", ["", "not json", "{}", "[]", "[1, 2]", '[{"symbol":"2330"', "API 無法連線"])
+def test_unreadable_portfolio_results_are_not_rewritten(text):
+    assert hr.render_portfolio("positions", text) is None
+
+
+def test_an_unknown_kind_is_not_rewritten():
+    assert hr.render_portfolio("other", POSITIONS) is None
+
+
+def test_the_context_shows_the_rewritten_lines_and_not_the_raw_json():
+    context = hr.format_context([("portfolio_data", {"kind": "positions"}, POSITIONS, False)])
+    assert "00679B（債券ETF）：股數 25000 股" in context and '"avg_cost"' not in context
+
+
+def test_a_failed_or_truncated_portfolio_result_keeps_the_raw_text():
+    failed = hr.format_context([("portfolio_data", {"kind": "positions"}, "API 回應 HTTP 500", True)])
+    assert "API 回應 HTTP 500" in failed and "【查詢失敗】" in failed
+    cut = hr.format_context([("portfolio_data", {"kind": "positions"}, POSITIONS[:120] + "\n[已截斷，原長 9000 字]", False)])
+    assert "[已截斷" in cut
+
+
+def test_stock_data_results_are_never_rewritten():
+    context = hr.format_context([("stock_data", {"kind": "price", "symbol": "2330"}, '[{"symbol":"2330","close":2420.0}]', False)])
+    assert '[{"symbol":"2330","close":2420.0}]' in context
+
+
+def test_a_rewritten_portfolio_result_carries_no_english_glossary():
+    context = hr.format_context([("portfolio_data", {"kind": "positions"}, POSITIONS, False)])
+    assert "avg_cost" not in context and "【欄位用語" not in context
+
+
+def test_an_unrewritten_portfolio_result_keeps_the_glossary_for_its_raw_fields():
+    raw = '[{"symbol":"2330","shares":1000'  # 被截斷，無法改寫
+    context = hr.format_context([("portfolio_data", {"kind": "positions"}, raw, False)])
+    assert "avg_cost＝均價（元）" in context
+
+
+def test_empty_and_missing_fields_are_left_out_of_the_line():
+    line = hr.render_portfolio("lots", '[{"symbol":"2330","buy_date":"2023-03-15","shares":1000,"price":500.5,"note":"","sell_date":null}]')
+    assert line == "2330 買進日 2023-03-15：股數 1000 股，買進價 500.5 元"
