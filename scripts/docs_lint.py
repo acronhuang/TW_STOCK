@@ -27,7 +27,7 @@ MODEL = re.compile(
     re.IGNORECASE,
 )
 SIZE_OR_TAG = re.compile(r"\d+(?:\.\d+)?b(?![a-z])|:", re.IGNORECASE)  # 只查寫明大小或標籤的模型名，不查 qwen3 這類系列名
-EXTERNAL_MODELS = ("nomic-embed-text",)  # 別台機器的用戶端在用，登記在編制之外但不算過時
+EXTERNAL_MODELS = ()  # 編制之外但不算過時的模型名（目前沒有）
 
 
 def living_docs(root):

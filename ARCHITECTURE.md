@@ -56,7 +56,7 @@
 | `.28` | 主力推理 + 嵌入 + 主持人 | `OLLAMA_URL` | `qwen3-14b`, `gemma2:9b`, `bge-m3` |
 | `.27` | 風控、技術角色與合議委員 | `OLLAMA_CONSENSUS_URL` | `qwen2.5-14b`, `llama3.1:8b` |
 
-模型到節點的對照只登記在 `src/moe/model_nodes.py`（也可用環境變數 `MODEL_NODES` 覆寫）。`.27` 另有 `nomic-embed-text`，是內網另一台機器的用戶端在用，不屬本系統；Hermes 唯讀助理（不在分析流程內）另用 `.27:11435` 的獨立實例。
+模型到節點的對照只登記在 `src/moe/model_nodes.py`（也可用環境變數 `MODEL_NODES` 覆寫）。Hermes 唯讀助理（不在分析流程內）另用 `.27:11435` 的獨立實例。
 
 **服務管理**：API 與 Dashboard 皆為 systemd 服務（`systemctl {start,stop,restart,status} twstock-api / twstock-dashboard`），開機自啟。排程一律走 `cron`（非 macOS launchctl）。
 

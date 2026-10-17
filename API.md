@@ -43,6 +43,7 @@ Swagger UI: `http://localhost:8888/docs`
 | Method | Path | 說明 |
 |--------|------|------|
 | GET | `/api/advisor?capital=5000000` | 交易建議 |
+| GET | `/api/portfolio/{kind}?limit=200` | 持倉唯讀（kind＝positions 目前持倉、lots 買進批次、trades 交易紀錄）；API 只綁本機 |
 
 ### 回應格式
 所有端點回傳 JSON。數值型欄位已轉為 float（原 Decimal128）。
