@@ -92,3 +92,5 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 20 10 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/check_finmind_quota.py --runs 24 --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_finmind_quota.log 2>&1
 50 * * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/measure_hourly_refetch.py snapshot >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_refetch_measure.log 2>&1  # 暫時：量測約 24 小時後移除（OpenSpec evaluate-finmind-sponsor 1.4）
 0 23 * * 1-5  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/hermes_daily_digest.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_hermes_digest.log 2>&1
+40 6 * * 0  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/docs_lint.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_docs_lint.log 2>&1
+50 23 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/wiki_raw_capture.py capture >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_wiki_raw.log 2>&1
