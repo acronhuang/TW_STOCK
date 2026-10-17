@@ -12,7 +12,7 @@
 1. [部署拓撲](#1-部署拓撲)
 2. [資料流](#2-資料流)
 3. [分層架構](#3-分層架構)
-4. [MoE 團隊分析](#4-moe-團隊分析七角色--27-合議)
+4. [MoE 團隊分析](#4-moe-團隊分析七角色--合議)
 5. [量化四法選股](#5-量化四法選股)
 6. [資料層（MongoDB 集合）](#6-資料層mongodb-集合)
 7. [API 端點總表](#7-api-端點總表)
@@ -40,20 +40,23 @@
                 │ role_router 路由 LLM 角色       │
      ┌──────────▼──────────┐         ┌───────────▼──────────────┐
      │  172.16.9.28         │         │  172.16.9.27              │
-     │  主力推理 (OLLAMA_URL)│         │  合議 (OLLAMA_CONSENSUS)  │
+     │  主力推理 (OLLAMA_URL)│         │  推理 (OLLAMA_CONSENSUS)  │
      │  ─────────────────   │         │  ──────────────────────  │
-     │  qwen2.5-14b         │         │  hermes3:8b              │
-     │    技術/基本面/顧問    │         │    價值/籌碼              │
-     │  qwen2.5-3b          │         │  委員會投票               │
-     │    總經/風險          │         │    hermes3:8b + qwen3b   │
+     │  qwen3-14b           │         │  qwen2.5-14b             │
+     │    總經/基本面/顧問   │         │    風控/委員              │
+     │  gemma2:9b           │         │  llama3.1:8b             │
+     │    價值/籌碼/委員      │         │    技術/委員              │
+     │  bge-m3  向量嵌入     │         │                          │
      └─────────────────────┘         └──────────────────────────┘
 ```
 
 | 節點 | 角色 | 環境變數 | 模型 |
 |------|------|----------|------|
 | `.166` | 主機（資料/儲存/運算/介面/排程） | — | — |
-| `.28` | 主力推理 | `OLLAMA_URL` | `qwen2.5-14b`, `qwen2.5-3b` |
-| `.27` | 合議委員 + 換視角角色 | `OLLAMA_CONSENSUS_URL` | `hermes3:8b`, `qwen2.5-3b` |
+| `.28` | 主力推理 + 嵌入 + 主持人 | `OLLAMA_URL` | `qwen3-14b`, `gemma2:9b`, `bge-m3` |
+| `.27` | 風控、技術角色與合議委員 | `OLLAMA_CONSENSUS_URL` | `qwen2.5-14b`, `llama3.1:8b` |
+
+模型到節點的對照只登記在 `src/moe/model_nodes.py`（也可用環境變數 `MODEL_NODES` 覆寫）。`.27` 另有 `nomic-embed-text`，是內網另一台機器的用戶端在用，不屬本系統；Hermes 唯讀助理（不在分析流程內）另用 `.27:11435` 的獨立實例。
 
 **服務管理**：API 與 Dashboard 皆為 systemd 服務（`systemctl {start,stop,restart,status} twstock-api / twstock-dashboard`），開機自啟。排程一律走 `cron`（非 macOS launchctl）。
 
@@ -85,7 +88,7 @@
                       └────────────────────────────────────────────────────┘
                       ┌──────────────── 決策線 B：AI 團隊 ─────────────────┐
                       │  team_daily_verified.py                            │
-                      │   phase1: 6 分析師角色 → phase2: 顧問整合 + .27合議  │──► team_analysis 集合
+                      │   phase1: 6 分析師角色 → phase2: 顧問整合 + 合議  │──► team_analysis 集合
                       │   verify_metrics: FinMind 複核 DB                   │──► results/team_analysis/*.json
                       └────────────────────────────────────────────────────┘
                                             │
@@ -139,7 +142,7 @@
 
 ### ④ 決策輸出 (`src/strategy`, `scripts/daily_recommendations.py`, `src/moe`)
 
-兩條決策線：量化四法（[§5](#5-量化四法選股)）與 AI 團隊（[§4](#4-moe-團隊分析七角色--27-合議)）。
+兩條決策線：量化四法（[§5](#5-量化四法選股)）與 AI 團隊（[§4](#4-moe-團隊分析七角色--合議)）。
 
 | 策略模組 | 內容 |
 |----------|------|
@@ -158,7 +161,7 @@
 
 ---
 
-## 4. MoE 團隊分析（七角色 + .27 合議）
+## 4. MoE 團隊分析（七角色 + 合議）
 
 由 `scripts/team_daily_verified.py` 驅動，是系統的決策核心。角色到模型的映射在 `src/moe/role_router.py` 的 `ROLE_TO_MODEL`；合議在 `src/moe/consensus.py`。
 
@@ -166,14 +169,17 @@
 
 | 階段 | 角色 | 模型 | 節點 |
 |------|------|------|------|
-| phase1 | 🎯 總經分析師 `macro-analyst` | `qwen2.5-3b` | `.28` |
-| phase1 | 📈 技術分析師 `technical-analyst` | `qwen2.5-14b` | `.28` |
-| phase1 | 💰 基本面分析師 `fundamental-analyst` | `qwen2.5-14b` | `.28` |
-| phase1 | 💎 價值分析師 `value-analyst` | `hermes3:8b` | `.27` |
-| phase1 | 🛡️ 風險管理 `risk-manager` | `qwen2.5-3b` | `.28` |
-| phase1 | 🏦 籌碼分析師 `chip-analyst` | `hermes3:8b` | `.27` |
-| phase2 | 🎩 投資顧問 `investment-advisor` | `qwen2.5-14b` | `.28` |
-| phase2 | 🗳️ 合議委員會 | `hermes3:8b` + `qwen2.5-3b` | `.27` |
+| phase1 | 🎯 總經分析師 `macro-analyst` | `qwen3-14b` | `.28` |
+| phase1 | 📈 技術分析師 `technical-analyst` | `llama3.1:8b` | `.27` |
+| phase1 | 💰 基本面分析師 `fundamental-analyst` | `qwen3-14b` | `.28` |
+| phase1 | 💎 價值分析師 `value-analyst` | `gemma2:9b` | `.28` |
+| phase1 | 🛡️ 風險管理 `risk-manager` | `qwen2.5-14b` | `.27` |
+| phase1 | 🏦 籌碼分析師 `chip-analyst` | `gemma2:9b` | `.28` |
+| phase2 | 🎩 投資顧問 `investment-advisor` | `qwen3-14b` | `.28` |
+| phase2 | 🗳️ 合議委員會（三位） | `gemma2:9b`、`qwen2.5-14b`、`llama3.1:8b` | `.28` / `.27` / `.27` |
+| phase2 | 🎙️ 主持人（定案） | `qwen3-14b` | `.28` |
+
+模型名稱只登記在 `src/moe/model_nodes.py`；`TWSTOCK_MAIN_LLM`、`TWSTOCK_VIEW_LLM`、`CONSENSUS_MODELS`、`CONSENSUS_FACILITATOR` 等環境變數可覆寫。空方委員（魔鬼代言人，`qwen2.5-14b`）預設關閉，設 `CONSENSUS_DEVIL=1` 才啟用。
 
 ### 兩階段流程
 
@@ -184,9 +190,9 @@ phase1  (--quick)                          phase2  (--phase2)
   ↓                                          ↓
 6 角色各出報告 + 引用數值                     🎩 投資顧問整合 6 份報告 → 草案評級
   ↓  (~28 秒/檔)                              ↓
-verify_metrics: FinMind 複核收盤/PE          🗳️ consensus.deliberate()
-  ↓                                          .27 委員會獨立投票 → 多數決定案
-存 JSON + 雙寫 team_analysis                  平手時採顧問草案評級
+verify_metrics: FinMind 複核收盤/PE          🗳️ consensus.discuss()
+  ↓                                          委員兩輪表態 → 主持人定案
+存 JSON + 雙寫 team_analysis                  多數決為備援，平手採顧問草案評級
                                              ↓  (~21–31 秒/檔)
                                             買進 / 持有 / 賣出
                                             雙寫 team_analysis (final_verdict, consensus)
