@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "note": "新舊文件互相矛盾的情境，取自 CURRENT_STATE_2026-07-20 第 5 節「已作廢的舊結論」與 STATUS_2026-08-12。舊文件的語意相似度刻意設得比新文件高（真實語料就是如此：舊報告正是在講同一件事），預設排序必須讓新文件第一；關閉衰減的對照組必須讓舊文件第一，否則這題沒有鑑別力。路徑與日期是情境設定，不要求實際存在。",
+  "as_of": "2026-09-01",
+  "cases": [
+    {
+      "id": "adj-close-coverage",
+      "q": "adj_close 覆蓋率是否正確、資料是否完整",
+      "stale": {"path": "docs/archive/reports/P0_P1_EXECUTION_COMPLETE_REPORT.md", "kind": "doc", "date": "2026-02-21", "text": "adj_close 覆蓋率是否正確 100% 資料完整 驗證完成"},
+      "fresh": {"path": "docs/archive/CURRENT_STATE_2026-07-20.md", "kind": "doc", "date": "2026-07-21", "text": "adj_close 覆蓋率 100% 但內容是 close 的複製，欄位有效性從未被驗證"}
+    },
+    {
+      "id": "dividend-detail-denominator",
+      "q": "dividend_detail 涵蓋多少檔股票",
+      "stale": {"path": "docs/archive/reports/DATA_INVENTORY_REPORT.md", "kind": "doc", "date": "2026-03-02", "text": "dividend_detail 涵蓋多少檔股票 只涵蓋 1,704 檔"},
+      "fresh": {"path": "docs/archive/CURRENT_STATE_2026-07-20.md", "kind": "doc", "date": "2026-07-21", "text": "dividend_detail 分母錯誤，真缺口是 375 檔活躍普通股"}
+    },
+    {
+      "id": "v21-annual-return",
+      "q": "v21 策略回測年化報酬是多少",
+      "stale": {"path": "BACKTEST_V21_REPORT.md", "kind": "report", "date": "2026-03-10", "text": "v21 策略回測年化報酬是多少 年化 39.18%"},
+      "fresh": {"path": "docs/archive/CURRENT_STATE_2026-07-20.md", "kind": "doc", "date": "2026-07-21", "text": "v21 回測年化報酬修正三項偏誤後為 16.64%"}
+    },
+    {
+      "id": "chip-backtest-unadjusted",
+      "q": "籌碼面回測結論可信嗎",
+      "stale": {"path": "docs/reports/CHIP_BACKTEST_REPORT.md", "kind": "doc", "date": "2026-04-05", "text": "籌碼面回測結論可信嗎 回測顯示籌碼面有效"},
+      "fresh": {"path": "docs/archive/CURRENT_STATE_2026-07-20.md", "kind": "doc", "date": "2026-07-21", "text": "籌碼面回測當時吃未還原價，72 檔由假跌翻正，舊結論作廢"}
+    },
+    {
+      "id": "hourly-update-status",
+      "q": "每小時更新是否正常成功",
+      "stale": {"path": "results/system_check_20260301.json", "kind": "result", "date": "2026-03-01", "text": "每小時更新是否正常成功 每小時更新正常 成功"},
+      "fresh": {"path": "docs/archive/CURRENT_STATE_2026-07-20.md", "kind": "doc", "date": "2026-07-21", "text": "每小時更新被管線遮蔽結束碼而恆報成功，實際每次有數百個錯誤"}
+    },
+    {
+      "id": "quality-factor-effective",
+      "q": "quality 因子有沒有效",
+      "stale": {"path": "docs/archive/reports/QUALITY_FACTOR_AB_0722.md", "kind": "doc", "date": "2026-07-22", "text": "quality 因子有沒有效 本質無效 維持 quality=none"},
+      "fresh": {"path": "docs/STATUS_2026-08-12.md", "kind": "doc", "date": "2026-08-13", "text": "覆蓋率閘門通過後重跑，推翻 quality 因子本質無效的結論"}
+    }
+  ],
+  "maintained_cases": [
+    {
+      "id": "old-adr-vs-newer-reports",
+      "q": "超額報酬為什麼要同時用兩種基準儲存",
+      "maintained": {"path": "docs/adr/0003-excess-return-two-baselines.md", "kind": "doc", "date": "2026-01-15", "text": "超額報酬為什麼要同時用兩種基準儲存 分析池與全市場"},
+      "newer": [
+        {"path": "docs/reports/2026-08-20-weekly-note.md", "kind": "doc", "date": "2026-08-20", "text": "超額報酬 基準 週報"},
+        {"path": "REPORT_2026_08.md", "kind": "report", "date": "2026-08-25", "text": "超額報酬 儲存 月報"}
+      ]
+    },
+    {
+      "id": "old-data-dictionary-vs-newer-results",
+      "q": "資料字典裡各欄位代表什麼意思",
+      "maintained": {"path": "docs/data_dictionary.md", "kind": "doc", "date": "2026-02-20", "text": "資料字典裡各欄位代表什麼意思 欄位 說明"},
+      "newer": [
+        {"path": "results/daily_20260830.json", "kind": "result", "date": "2026-08-30", "text": "資料 欄位 輸出"},
+        {"path": "docs/archive/reports/FIELD_NOTE.md", "kind": "doc", "date": "2026-08-10", "text": "資料字典 欄位 備註"}
+      ]
+    }
+  ]
+}

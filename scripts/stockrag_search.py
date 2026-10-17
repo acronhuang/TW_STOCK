@@ -7,6 +7,9 @@
 
     score = RRF(向量排名, 字面排名) × 0.5^(文件年齡 / 半衰期)
 
+衰減只作用在「快照類」文件（根目錄報告、results、docs/archive、docs/reports）：它們的結論會被後來的實測推翻。
+維護中的文件（ADR、指南、資料字典…）不會因為舊就變錯，不衰減，否則一份正確的舊文件會被一堆較新的文件壓到後面。
+
 繁中沒有分詞,MongoDB 文字索引與 PostgreSQL to_tsvector 都切不出詞,
 故「字面」這一路用字元 n-gram 重疊率,不是全文檢索。
 """
@@ -29,6 +32,7 @@ OLLAMA = model_nodes.embed_url()
 MODEL = model_nodes.EMBED_MODEL
 RRF_K = 60
 HALF_LIFE = 180        # 天
+SNAPSHOT_DOC_PREFIXES = ("docs/archive/", "docs/reports/", "docs/chat_history.md")
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -82,6 +86,11 @@ def parse_as_of(text):
     raise ValueError(f"無法解析的 as_of: {text!r}（格式 YYYY-MM-DD 或 YYYY-MM-DD HH:MM）")
 
 
+def decays_with_age(d):
+    """快照類（根目錄報告、results、archive、reports）會隨時間被推翻，需衰減；其餘 docs/ 文件是維護中的，不衰減。"""
+    return d.get("kind") != "doc" or d.get("path", "").startswith(SNAPSHOT_DOC_PREFIXES)
+
+
 def search(query, docs, mat, k=5, kind=None, half_life=HALF_LIFE, pool=60, as_of=None, as_of_exempt_kinds=()):
     """as_of：知識截止時點。doc_date 晚於它的文件、以及沒有可驗證日期的文件一律排除（失敗即拒絕），
     文件年齡也改從 as_of 起算。doc_date 是檔案修改時間，紀錄的是「最晚什麼時候內容已存在」，對截止比較是保守上界。
@@ -117,7 +126,7 @@ def search(query, docs, mat, k=5, kind=None, half_life=HALF_LIFE, pool=60, as_of
         d = docs[gi]
         dd = d.get("doc_date")
         age = max((now - dd).days, 0) if isinstance(dd, datetime) else 0
-        decay = 0.5 ** (age / float(half_life)) if half_life < 10**8 else 1.0
+        decay = 0.5 ** (age / float(half_life)) if half_life < 10**8 and decays_with_age(d) else 1.0
         fused.append({**d, "rrf": rrf, "age_days": age,
                       "vec_sim": float(vec[np.where(idx_all == gi)[0][0]]),
                       "score": rrf * decay})
