@@ -181,6 +181,12 @@ def on_transform_llm_output(response_text="", session_id="", **kwargs):
         notes.append("⚠️ 下列數字在本輪工具回傳中找不到出處，請自行核對後再採用：" + "、".join(flagged))
     if turn is not None and not turn["tools"] and _mentions_stock_info(response_text):
         notes.append(_NO_TOOL_NOTE)
+    missing = _omitted_holdings(turn["question"] if turn else "", response_text, context)
+    if missing:
+        notes.append("⚠️ 回答漏列了持倉：" + "、".join(missing) + "，請以查詢結果為準。")
+    no_shares = _omitted_shares(turn["question"] if turn else "", response_text, context)
+    if no_shares:
+        notes.append("⚠️ 下列持倉的回答沒有寫出股數：" + "、".join(no_shares) + "，請以查詢結果為準。")
     issues = _language_issues(response_text, context)
     if issues:
         notes.append("⚠️ 用詞與單位提醒：" + "；".join(issues) + "。以資料原欄位與單位為準。")
@@ -193,6 +199,22 @@ def _mentions_stock_info(text):
     except Exception as error:  # noqa: BLE001 - 判斷失效時寧可多給警語
         print(f"[twstock-guard] 股票資訊判斷無法執行：{error}", file=sys.stderr)
         return True
+
+
+def _omitted_holdings(question, text, context):
+    try:
+        return _module(_ROUTER_FILE, "router").omitted_holdings(question, text, context)
+    except Exception as error:  # noqa: BLE001 - 漏列檢查失效不能擋住回答
+        print(f"[twstock-guard] 漏列檢查無法執行：{error}", file=sys.stderr)
+        return []
+
+
+def _omitted_shares(question, text, context):
+    try:
+        return _module(_ROUTER_FILE, "router").omitted_shares(question, text, context)
+    except Exception as error:  # noqa: BLE001 - 漏列檢查失效不能擋住回答
+        print(f"[twstock-guard] 股數檢查無法執行：{error}", file=sys.stderr)
+        return []
 
 
 def _language_issues(text, context=""):

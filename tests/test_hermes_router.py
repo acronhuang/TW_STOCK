@@ -619,3 +619,66 @@ def test_an_unrewritten_portfolio_result_keeps_the_glossary_for_its_raw_fields()
 def test_empty_and_missing_fields_are_left_out_of_the_line():
     line = hr.render_portfolio("lots", '[{"symbol":"2330","buy_date":"2023-03-15","shares":1000,"price":500.5,"note":"","sell_date":null}]')
     assert line == "2330 買進日 2023-03-15：股數 1000 股，買進價 500.5 元"
+
+
+HELD_CONTEXT = hr.format_context([("portfolio_data", {"kind": "positions"}, POSITIONS, False)]) + "\n■ stock_data kind=price symbol=2330\n2330：收盤 2420.0"
+
+
+def test_portfolio_symbols_come_only_from_the_positions_block():
+    assert hr.portfolio_symbols(HELD_CONTEXT) == ["00679B", "1229"]
+    assert hr.portfolio_symbols("■ stock_data kind=price symbol=2330\n2330：收盤 2420.0") == []
+    assert hr.portfolio_symbols("") == [] and hr.portfolio_symbols(None) == []
+
+
+def test_a_listing_that_stops_early_is_reported_with_the_missing_symbols():
+    assert hr.omitted_holdings("我的持倉有哪些", "00679B：25000 股", HELD_CONTEXT) == ["1229"]
+    assert hr.omitted_holdings("列出全部持股", "沒有資料", HELD_CONTEXT) == ["00679B", "1229"]
+
+
+def test_a_complete_listing_reports_nothing():
+    assert hr.omitted_holdings("我的持倉有哪些", "00679B 25000 股\n1229 15000 股", HELD_CONTEXT) == []
+
+
+def test_a_symbol_inside_a_longer_code_does_not_count_as_listed():
+    assert hr.omitted_holdings("列出持倉", "00679B1 與 01229 都有", HELD_CONTEXT) == ["00679B", "1229"]
+
+
+@pytest.mark.parametrize("question", ["我的持倉總成本是多少", "持倉裡 00679B 的均價", "2330 估值"])
+def test_questions_that_do_not_ask_for_a_list_are_not_checked(question):
+    assert hr.omitted_holdings(question, "略", HELD_CONTEXT) == []
+
+
+def test_without_a_positions_block_nothing_is_reported():
+    assert hr.omitted_holdings("列出所有", "略", "■ stock_data kind=price symbol=2330\n2330：收盤 2420.0") == []
+
+
+def test_a_symbol_listed_without_its_share_count_is_reported_when_shares_were_asked():
+    assert hr.omitted_shares("列出持倉的代號與股數", "00679B\n1229", HELD_CONTEXT) == ["00679B", "1229"]
+    assert hr.omitted_shares("列出持倉的代號與股數", "00679B 25000 股\n1229", HELD_CONTEXT) == ["1229"]
+
+
+def test_share_counts_are_matched_verbatim_and_thousands_separators_are_allowed():
+    assert hr.omitted_shares("列出持倉的股數", "00679B 25,000 股；1229 15000 股", HELD_CONTEXT) == []
+    assert hr.omitted_shares("列出持倉的股數", "00679B 250000 股；1229 15000 股", HELD_CONTEXT) == ["00679B"]
+    assert hr.omitted_shares("列出持倉的股數", "00679B 2500 股；1229 15000 股", HELD_CONTEXT) == ["00679B"]
+
+
+def test_a_symbol_that_is_not_listed_is_left_to_the_omitted_holdings_check():
+    assert hr.omitted_shares("列出持倉的股數", "00679B 25000 股", HELD_CONTEXT) == []
+
+
+@pytest.mark.parametrize("question", ["列出持倉的代號", "持倉的股數是多少", "我的持倉有哪些"])
+def test_shares_are_only_checked_when_the_question_asks_for_a_list_of_shares(question):
+    assert hr.omitted_shares(question, "00679B\n1229", HELD_CONTEXT) == []
+
+
+def test_without_a_positions_block_no_share_check_happens():
+    assert hr.omitted_shares("列出所有持倉的股數", "略", "■ stock_data kind=price symbol=2330\n2330：收盤 2420.0") == []
+
+
+def test_how_many_shares_is_also_a_question_about_shares():
+    assert hr.omitted_shares("列出持倉各多少股", "00679B\n1229", HELD_CONTEXT) == ["00679B", "1229"]
+
+
+def test_a_number_that_only_ends_with_the_share_count_after_a_decimal_point_does_not_count():
+    assert hr.omitted_shares("列出持倉的股數", "00679B 均價 30.25000；1229 15000 股", HELD_CONTEXT) == ["00679B"]

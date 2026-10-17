@@ -422,3 +422,39 @@ def test_the_plugin_hands_the_real_date_to_the_router(plugin):
     import datetime
 
     assert plugin._today() == datetime.date.today().isoformat()
+
+
+HELD = "■ portfolio_data kind=positions\n00679B（債券ETF）：股數 25000 股，均價 30.03 元\n1229（波段）：股數 15000 股，均價 44.97 元"
+
+
+def test_a_listing_that_leaves_out_a_holding_gets_a_warning(plugin):
+    out = turn(plugin, "我的持倉有哪些", [HELD], "00679B 25000 股，均價 30.03 元")
+    assert out.startswith("00679B 25000 股，均價 30.03 元") and "漏列了持倉：1229" in out
+
+
+def test_a_complete_listing_gets_no_warning(plugin):
+    assert turn(plugin, "我的持倉有哪些", [HELD], "00679B 25000 股，均價 30.03 元；1229 15000 股，均價 44.97 元") is None
+
+
+def test_a_broken_omission_check_does_not_block_the_answer(plugin, monkeypatch):
+    def broken(*args):
+        raise RuntimeError("x")
+
+    router = plugin._module(plugin._ROUTER_FILE, "router")
+    monkeypatch.setattr(router, "omitted_holdings", broken)
+    out = turn(plugin, "我的持倉有哪些", [HELD], "00679B 25000 股；1229 15000 股")
+    assert out is None or "漏列" not in out
+
+
+def test_a_listing_with_codes_but_no_share_counts_gets_a_warning(plugin):
+    out = turn(plugin, "列出持倉的代號與股數", [HELD], "00679B\n1229")
+    assert "沒有寫出股數：00679B、1229" in out and "漏列" not in out
+
+
+def test_a_listing_with_share_counts_gets_no_warning(plugin):
+    assert turn(plugin, "列出持倉的代號與股數", [HELD], "00679B 25000 股；1229 15000 股") is None
+
+
+def test_the_omission_warnings_carry_the_warning_sign(plugin):
+    assert "\n⚠️ 回答漏列了持倉：" in turn(plugin, "我的持倉有哪些", [HELD], "00679B 25000 股")
+    assert "\n⚠️ 下列持倉的回答沒有寫出股數：" in turn(plugin, "列出持倉的股數", [HELD], "00679B\n1229")

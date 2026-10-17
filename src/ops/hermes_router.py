@@ -327,6 +327,45 @@ def render_portfolio(kind, text):
     return "\n".join(_portfolio_line(kind, row) for row in rows)
 
 
+_LIST_WORDS = re.compile(r"列出|哪些|清單|全部|所有")
+_HOLDING_LINE = re.compile(r"^([0-9A-Za-z]{4,8})(?:（[^）]*）)?：", re.MULTILINE)
+_POSITIONS_BLOCK = re.compile(r"■ portfolio_data kind=positions[^\n]*\n(.*?)(?=\n■ |\n【|\Z)", re.DOTALL)
+
+
+def portfolio_symbols(context):
+    """預查上下文裡「目前持倉」逐列中文的代號；沒有就回空清單。"""
+    block = _POSITIONS_BLOCK.search(context or "")
+    return _HOLDING_LINE.findall(block.group(1)) if block else []
+
+
+def omitted_holdings(question, answer, context):
+    """問題要求列出持倉時，回答漏掉的代號；小模型常列到一半就停或漏欄，數字核對看不出來。"""
+    if not _LIST_WORDS.search(question or ""):
+        return []
+    symbols = portfolio_symbols(context)
+    return [s for s in symbols if not re.search(rf"(?<![0-9A-Za-z]){re.escape(s)}(?![0-9A-Za-z])", answer or "")] if symbols else []
+
+
+_SHARES_LINE = re.compile(r"^([0-9A-Za-z]{4,8})(?:（[^）]*）)?：股數 (\d+) 股", re.MULTILINE)
+_ASKS_SHARES = re.compile(r"股數|幾股|多少股")
+
+
+def omitted_shares(question, answer, context):
+    """問題問股數時，答了代號卻沒寫出股數的持倉；回代號清單。股數逐字比對（容許千分位逗號）。"""
+    if not _LIST_WORDS.search(question or "") or not _ASKS_SHARES.search(question or ""):
+        return []
+    block = _POSITIONS_BLOCK.search(context or "")
+    if not block:
+        return []
+    text = re.sub(r"(?<=\d),(?=\d{3})", "", answer or "")
+    missing = []
+    for symbol, shares in _SHARES_LINE.findall(block.group(1)):
+        listed = re.search(rf"(?<![0-9A-Za-z]){re.escape(symbol)}(?![0-9A-Za-z])", text)
+        if listed and not re.search(rf"(?<![\d.]){shares}(?![\d])", text):
+            missing.append(symbol)
+    return missing
+
+
 def mentions_stock_info(answer):
     return bool(_STOCK_INFO.search(answer or ""))
 
