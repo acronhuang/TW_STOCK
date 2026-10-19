@@ -40,7 +40,6 @@ TIMEOUT = float(os.getenv("OLLAMA_WATCH_TIMEOUT", "6"))
 NODES = {
     "主力(.28)": os.getenv("OLLAMA_URL", "http://172.16.9.28:11434"),
     "合議(.27)": os.getenv("OLLAMA_CONSENSUS_URL", "http://172.16.9.27:11434"),
-    "獨立(.27:11435)": os.getenv("OLLAMA_LAB_URL", "http://172.16.9.27:11435"),  # Hermes 專用實例
 }
 
 
