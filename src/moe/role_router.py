@@ -2,17 +2,17 @@
 角色 → 模型 路由器
 
 7 分析角色 → 本地模型（實際映射以下方 ROLE_TO_MODEL 為準；env 可覆寫）：
-  🎩 investment-advisor      → MAIN_14B  (qwen3-14b @ .28)   最強整合
-  🤝 stock-team-orchestrator → MAIN_14B  (qwen3-14b @ .28)   團隊協調
-  📈 technical-analyst       → llama3.1:8b @ .27              指標 + 型態(負載分流)
-  💰 fundamental-analyst     → MAIN_14B  (qwen3-14b @ .28)   財報數字
-  🎯 macro-analyst           → MAIN_14B  (qwen3-14b @ .28)   大局
-  💎 value-analyst           → VIEW_MODEL(gemma2:9b  @ .28)  換視角
-  🏦 chip-analyst            → VIEW_MODEL(gemma2:9b  @ .28)  法人趨勢
-  🛡️ risk-manager            → qwen2.5-14b:latest    @ .27   財經風控(2026-08-23 由 .28 移 .27)
+  🎩 investment-advisor      → MAIN (qwen3.5:35b-a3b @ .28)   最強整合
+  🤝 stock-team-orchestrator → MAIN (qwen3.5:35b-a3b @ .28)   團隊協調
+  📈 technical-analyst       → MAIN (@ .28)                    指標 + 型態
+  💰 fundamental-analyst     → MAIN (@ .28)                    財報數字
+  🎯 macro-analyst           → MAIN (@ .28)                    大局
+  💎 value-analyst           → VIEW (= MAIN @ .28)             估值
+  🏦 chip-analyst            → VIEW (= MAIN @ .28)             法人趨勢（團隊分析流程已改規則模板，見 rule_roles.py）
+  🛡️ risk-manager            → qwen3.8:27b @ .27               財經風控（團隊分析流程已改規則模板）
 
-  合議委員(consensus.COMMITTEE) → gemma2:9b(.28) / qwen2.5-14b(.27) / llama3.1:8b(.27)
-  facilitator                   → qwen3-14b (@ .28)
+  合議委員(consensus.COMMITTEE) → qwen3.8:27b(.27) / gemma4:12b(.27) / granite4.2:8b(.28)
+  facilitator                   → qwen3.5:35b-a3b (@ .28)
   型態/看圖 → SenVision 蔡森演算法(非 LLM，精準型態/頸線)，結果餵 technical-analyst
   工具型   → （已移除：embed、tw-polish 沒有呼叫端）
   env 覆寫 → TWSTOCK_MAIN_LLM / TWSTOCK_VIEW_LLM / CONSENSUS_MODELS / CONSENSUS_FACILITATOR
@@ -38,9 +38,9 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────
 #  角色 → 模型 映射
 # ─────────────────────────────────────────────────────────
-# 台股主力 14b:env TWSTOCK_MAIN_LLM 可覆寫(回退設 qwen2.5-14b:latest)。2026-08 由使用者決定切 qwen3。
+# 主力模型:env TWSTOCK_MAIN_LLM 可覆寫（2026-10-19 起預設 qwen3.5:35b-a3b；舊的 qwen3-14b/qwen2.5-14b 已從節點刪除，回退要先重新 pull）。
 MAIN_14B = os.getenv('TWSTOCK_MAIN_LLM', model_nodes.DEFAULT_MAIN)
-# 換視角模型(value/chip 角色):env TWSTOCK_VIEW_LLM 可覆寫;預設 gemma2:9b(2026-08 由 hermes3→gemma2)。
+# 換視角模型(value/chip 角色):env TWSTOCK_VIEW_LLM 可覆寫;預設同主力（gemma2:9b 已停用並刪除）。
 VIEW_MODEL = os.getenv('TWSTOCK_VIEW_LLM', model_nodes.DEFAULT_VIEW)
 
 ROLE_TO_MODEL = {
@@ -61,12 +61,12 @@ ROLE_TO_MODEL = {
     # 也就是正式週跑裡技術角色有 2/3 機率在靜默降級。分流後 .28 負載降約 39%。
     # ⚠️ 這組數字混淆了「模型能力」與「節點負載」:.28 的 237.9s 多數是排隊。
     #    引用正確性只是最低門檻,真正的品質答案要看 verdict_detail 的事後超額報酬,
-    #    換前/換後各累積一段再比。TECH_MODEL=qwen3-14b:latest 可立即還原。
+    #    換前/換後各累積一段再比。（歷史紀錄：qwen3-14b、llama3.1 已於 2026-10-19 從節點刪除，TECH_MODEL 不能再指向它們。）
     # 2026-10-19 技術角色走主力 MoE(.28)：同提示詞 MoE 約 6 秒、密集 27B 約 41 秒。
     'technical-analyst':        os.getenv('TECH_MODEL', model_nodes.DEFAULT_TECH),
     'fundamental-analyst':      MAIN_14B,
 
-    # 換視角（gemma2:9b @ .27 合議節點）
+    # 換視角（預設同主力 MoE @ .28）
     'value-analyst':            VIEW_MODEL,
     'chip-analyst':             VIEW_MODEL,
 

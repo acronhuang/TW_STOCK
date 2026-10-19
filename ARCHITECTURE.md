@@ -43,7 +43,7 @@
      │  主力推理 (OLLAMA_URL)│         │  推理 (OLLAMA_CONSENSUS)  │
      │  ─────────────────   │         │  ──────────────────────  │
      │  qwen3.5:35b-a3b     │         │  qwen3.8:27b             │
-     │    六角色(除風控)/顧問/主持人 │         │    風控/委員/知識庫回答    │
+     │    總經/基本面/價值/技術/顧問/主持人 │         │    委員/知識庫回答        │
      │  granite4.2:8b 委員  │         │  gemma4:12b  委員         │
      │  bge-m3  向量嵌入     │         │                          │
      └─────────────────────┘         └──────────────────────────┘
@@ -53,7 +53,7 @@
 |------|------|----------|------|
 | `.166` | 主機（資料/儲存/運算/介面/排程） | — | — |
 | `.28` | 主力推理 + 嵌入 + 主持人 | `OLLAMA_URL` | `qwen3.5:35b-a3b-q4_K_M`, `granite4.2:8b-q4_K_M`, `bge-m3` |
-| `.27` | 風控、知識庫回答與合議委員 | `OLLAMA_CONSENSUS_URL` | `qwen3.8:27b-q4_K_M`, `gemma4:12b-it-q4_K_M` |
+| `.27` | 知識庫回答與合議委員 | `OLLAMA_CONSENSUS_URL` | `qwen3.8:27b-q4_K_M`, `gemma4:12b-it-q4_K_M` |
 
 模型到節點的對照只登記在 `src/moe/model_nodes.py`（也可用環境變數 `MODEL_NODES` 覆寫）。Hermes 唯讀助理（不在分析流程內）用 `.27:11434` 上的 `hermes-qwen3-4b`（`num_ctx` 32768）；原本的 11435 獨立實例已關閉，全環境只保留 11434。
 
@@ -172,11 +172,13 @@
 | phase1 | 📈 技術分析師 `technical-analyst` | `qwen3.5:35b-a3b` | `.28` |
 | phase1 | 💰 基本面分析師 `fundamental-analyst` | `qwen3.5:35b-a3b` | `.28` |
 | phase1 | 💎 價值分析師 `value-analyst` | `qwen3.5:35b-a3b` | `.28` |
-| phase1 | 🛡️ 風險管理 `risk-manager` | `qwen3.8:27b` | `.27` |
-| phase1 | 🏦 籌碼分析師 `chip-analyst` | `qwen3.5:35b-a3b` | `.28` |
+| phase1 | 🛡️ 風險管理 `risk-manager` | 規則模板（不經 LLM） | `.166` |
+| phase1 | 🏦 籌碼分析師 `chip-analyst` | 規則模板（不經 LLM） | `.166` |
 | phase2 | 🎩 投資顧問 `investment-advisor` | `qwen3.5:35b-a3b` | `.28` |
 | phase2 | 🗳️ 合議委員會（三位） | `qwen3.8:27b`、`gemma4:12b`、`granite4.2:8b` | `.27` / `.27` / `.28` |
 | phase2 | 🎙️ 主持人（定案） | `qwen3.5:35b-a3b` | `.28` |
+
+風險管理與籌碼兩個角色由 `src/moe/rule_roles.py` 以固定模板產生（部位與停損本來就是程式算好的數字，籌碼立場離線分析幾乎不帶資訊），報告仍照六份存檔；`TEAM_RULE_ROLES`（空字串＝全部回到 LLM）可覆寫。
 
 模型名稱只登記在 `src/moe/model_nodes.py`；`TWSTOCK_MAIN_LLM`、`TWSTOCK_VIEW_LLM`、`CONSENSUS_MODELS`、`CONSENSUS_FACILITATOR` 等環境變數可覆寫。空方委員（魔鬼代言人，`qwen3.8:27b`）預設關閉，設 `CONSENSUS_DEVIL=1` 才啟用。
 

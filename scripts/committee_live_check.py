@@ -13,7 +13,7 @@ env 覆寫、模型沒 pull 成功、回覆格式抽不到票，任一種都會�
 
 可失敗性證據（ADR-0002 條件 1，可重跑）:
   正向  committee_live_check.py --since-hours 24                          -> 結束碼 0
-  反向  CONSENSUS_MODELS=gemma2:9b,qwen2.5:7b,__does_not_exist__:1b \
+  反向  CONSENSUS_MODELS=qwen3.8:27b-q4_K_M,gemma4:12b-it-q4_K_M,__does_not_exist__:1b \
           committee_live_check.py --since-hours 24                        -> 結束碼 1
         （報「設定的委員未出現在投票紀錄」）
 

@@ -39,7 +39,8 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 load_dotenv(ROOT / '.env')
 
-from scripts.team_analyze import fetch_all_data, build_expert_prompt
+from scripts.team_analyze import fetch_all_data, build_expert_prompt, _position_hint
+from src.moe import rule_roles
 from src.moe.role_router import ask_role, ROLE_TO_MODEL
 
 FINMIND_URL = 'https://api.finmindtrade.com/api/v4/data'
@@ -54,6 +55,10 @@ ROLE_ICON = {
     'fundamental-analyst': '💰基本面', 'value-analyst': '💎價值',
     'risk-manager': '🛡️風險', 'chip-analyst': '🏦籌碼',
 }
+def _n_llm_roles():
+    return len(ANALYST_ROLES) - len(rule_roles.active(ANALYST_ROLES))
+
+
 # 要求每個角色把引用數值攤出來（透明化；正確性由查證層獨立驗證）
 EVIDENCE_SUFFIX = ("\n\n【務必】最後另起一行『📌引用數值：』，以「欄位=數值」條列你"
                    "實際用到的關鍵數字(至少3項)，數字一律取自上方提供的資料，不可自行編造。")
@@ -246,7 +251,7 @@ def report_role_failures(alert: bool = True):
     ts_ = _ROLE_FAIL['total_stocks']
     if not ts_:
         return
-    n_role = ts_ * len(ANALYST_ROLES)
+    n_role = ts_ * _n_llm_roles()
     rate = _ROLE_FAIL['roles'] / n_role if n_role else 0
     print(f"\n角色失敗統計：{_ROLE_FAIL['roles']}/{n_role} 份報告失敗 "
           f"({rate*100:.1f}%)，影響 {_ROLE_FAIL['stocks']}/{ts_} 檔")
@@ -324,8 +329,11 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     # 3 併發實測加速 1.73x（非線性，GPU 已有負載）；六角色分屬 .28(三個 14B)
     # 與 .27(三個小模型)，並行後小模型的時間可完全被 14B 蓋掉。
     # 設 TEAM_ROLE_PARALLEL=1 可還原為循序。
+    rule = rule_roles.active(ANALYST_ROLES)       # 規則角色不打 LLM（見 src/moe/rule_roles.py）
     prompts = {}
     for role in ANALYST_ROLES:
+        if role in rule:
+            continue
         prompt = build_expert_prompt(role, symbol, data)
         if role == 'value-analyst':
             try:
@@ -355,7 +363,9 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     # 300s 逾時被撐破。三個 14B 角色是瓶頸，設 3 讓它們併行、小模型順帶塞進空檔，
     # 保留大部分加速又不把 GPU 打爆。TEAM_ROLE_PARALLEL=1 可還原循序。
     # 總經快取命中就不打 LLM（見 _MACRO_CACHE 註解）
-    todo_roles, got = list(ANALYST_ROLES), {}
+    _price = (data.get('factors') or {}).get('close') or (data.get('valuation') or {}).get('current_price')
+    todo_roles = [r for r in ANALYST_ROLES if r not in rule]
+    got = {r: rule_roles.render(r, data, _position_hint(_price)) for r in rule}
     ind = my_name = None
     if MACRO_CACHE_ON and 'macro-analyst' in todo_roles:
         ind, my_name = _info_of(symbol)
@@ -400,7 +410,8 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
         mdl = r.get('model') or '?'
         try:
             from src.moe.role_router import MODEL_TO_URL, OLLAMA_URL
-            host = MODEL_TO_URL.get(mdl.split('(')[0], OLLAMA_URL).split('//')[-1].split(':')[0]
+            host = ('local' if mdl == rule_roles.MODEL_LABEL
+                    else MODEL_TO_URL.get(mdl.split('(')[0], OLLAMA_URL).split('//')[-1].split(':')[0])
         except Exception:
             host = '?'
         models[role] = f"{mdl}@{host}"
@@ -412,7 +423,7 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     if failed:
         _ROLE_FAIL['stocks'] += 1
         _ROLE_FAIL['roles'] += len(failed)
-        print(f"     🔴 {len(failed)}/{len(ANALYST_ROLES)} 角色失敗(重試後仍失敗): "
+        print(f"     🔴 {len(failed)}/{_n_llm_roles()} 角色失敗(重試後仍失敗): "
               f"{', '.join(failed)} —— 這幾份報告的內容是錯誤訊息，不是分析")
     _ROLE_FAIL['total_stocks'] += 1
 
