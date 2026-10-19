@@ -9,21 +9,28 @@ import os
 NODE_28 = os.getenv("OLLAMA_URL", "http://172.16.9.28:11434")  # 主力
 NODE_27 = os.getenv("OLLAMA_CONSENSUS_URL", "http://172.16.9.27:11434")  # 合議
 
-# 預設編制：.28 放主力、換視角與嵌入；.27 放風控與技術角色。
-DEFAULT_MAIN = "qwen3-14b:latest"
-DEFAULT_VIEW = "gemma2:9b"
+# 預設編制（2026-10-19 換新，舊的四個模型已停用）：
+#   .28 放 MoE 主力（總經/基本面/價值/籌碼/技術/顧問/主持人）、嵌入與 IBM 委員；
+#   .27 放密集 27B（風控/知識庫回答/委員）與 Google 委員。
+# 技術與價值/籌碼走主力 MoE：同提示詞實測 MoE 約 6 秒、密集 27B 約 41 秒，全放 .27 會拖垮整批。
+# 委員三位來自三家不同訓練來源（Alibaba、Google、IBM），主持人用主力 MoE（不投票）。
+# 第三席不用 ministral-3:8b：12 檔實測 12 票全是賣出、輸出格式也不守「第二行寫理由」；granite4.2:8b 票型分散且守格式。
+DEFAULT_MAIN = "qwen3.5:35b-a3b-q4_K_M"
+DEFAULT_VIEW = DEFAULT_MAIN
 DEFAULT_EMBED = "bge-m3"
-DEFAULT_RISK = "qwen2.5-14b:latest"
-DEFAULT_TECH = "llama3.1:8b"
-DEFAULT_COMMITTEE = (DEFAULT_VIEW, DEFAULT_RISK, DEFAULT_TECH)
+DEFAULT_RISK = "qwen3.8:27b-q4_K_M"
+DEFAULT_TECH = DEFAULT_MAIN
+DEFAULT_MEMBER_GOOGLE = "gemma4:12b-it-q4_K_M"
+DEFAULT_MEMBER_IBM = "granite4.2:8b-q4_K_M"
+DEFAULT_COMMITTEE = (DEFAULT_RISK, DEFAULT_MEMBER_GOOGLE, DEFAULT_MEMBER_IBM)
 DEFAULT_DEVIL = DEFAULT_RISK
 
 DEFAULT_NODES = {
     DEFAULT_MAIN: NODE_28,
-    DEFAULT_VIEW: NODE_28,
     DEFAULT_EMBED: NODE_28,
+    DEFAULT_MEMBER_IBM: NODE_28,
     DEFAULT_RISK: NODE_27,
-    DEFAULT_TECH: NODE_27,
+    DEFAULT_MEMBER_GOOGLE: NODE_27,
 }
 
 

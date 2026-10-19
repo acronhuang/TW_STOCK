@@ -8,7 +8,7 @@ Prompt 設計針對本專案語料的特性:
   2. 一律附上 [n] 出處編號 —— 這個語料不可盡信,使用者必須能回頭查證。
   3. 資料不足時要說「資料不足」,不要用常識補。
 
-模型:qwen2.5-14b(.27)。qwen2.5 系列預設傾向簡體,
+模型:ANSWER_MODEL(預設 qwen3.8:27b @.27)。Qwen 系列預設傾向簡體,
 故 prompt 明確要求繁體中文。
 """
 import json
@@ -67,6 +67,7 @@ def generate(question, hits, model=MODEL, num_predict=700, timeout=600):
         "system": SYSTEM,
         "prompt": build_prompt(question, hits),
         "stream": False,
+        "think": False,
         "options": {"num_predict": num_predict, "temperature": 0.2, "num_ctx": 8192},
     }
     req = urllib.request.Request(

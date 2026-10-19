@@ -62,6 +62,7 @@ ROLE_TO_MODEL = {
     # ⚠️ 這組數字混淆了「模型能力」與「節點負載」:.28 的 237.9s 多數是排隊。
     #    引用正確性只是最低門檻,真正的品質答案要看 verdict_detail 的事後超額報酬,
     #    換前/換後各累積一段再比。TECH_MODEL=qwen3-14b:latest 可立即還原。
+    # 2026-10-19 技術角色走主力 MoE(.28)：同提示詞 MoE 約 6 秒、密集 27B 約 41 秒。
     'technical-analyst':        os.getenv('TECH_MODEL', model_nodes.DEFAULT_TECH),
     'fundamental-analyst':      MAIN_14B,
 
@@ -122,6 +123,14 @@ if OLLAMA_ALTOS_URL:
     MODEL_TO_URL[model_nodes.ALTOS_MODEL] = OLLAMA_ALTOS_URL
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    return os.getenv(name, str(default)).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+# 2026-10-18 起預設關閉思考並限制輸出長度：
+#   qwen3 預設會先寫一大段思考（同一份提示生成量 4.2 倍、生成時間 72 秒對 19 秒），且過去 7 天有 4 次失控生成
+#   （7,500 個 token 以上、撞 10 分鐘逾時回 500）。已存角色報告最長 708 字，1536 個 token 有餘裕。
+#   ROLE_THINK=true、ROLE_NUM_PREDICT=N 可還原或調整。
 def ask_role(role: str,
              question: str,
              include_role_prompt: bool = True,
@@ -152,19 +161,24 @@ def ask_role(role: str,
                     'model': model,
                     'prompt': prompt,
                     'stream': False,
+                    'think': _env_flag('ROLE_THINK', False),
                     'options': {'num_gpu': 99, 'temperature': LLM_TEMPERATURE, 'seed': LLM_SEED,
-                               'num_ctx': int(os.getenv('ROLE_NUM_CTX', '8192'))},
+                               'num_ctx': int(os.getenv('ROLE_NUM_CTX', '8192')),
+                               'num_predict': int(os.getenv('ROLE_NUM_PREDICT', '1536'))},
                 },
                 timeout=timeout,
             )
             r.raise_for_status()
             elapsed = time.time() - t0
+            body = r.json()
             out = {
                 'role': role,
                 'model': model,
-                'response': r.json().get('response', ''),
+                'response': body.get('response', ''),
                 'elapsed_sec': round(elapsed, 1),
             }
+            if body.get('done_reason') == 'length':
+                out['truncated'] = True      # 撞到輸出上限：文字保留，但要看得見，不能靜默當完整報告
             if i:
                 out['retries'] = i          # 留痕：這份報告是重試後才拿到的
             return out

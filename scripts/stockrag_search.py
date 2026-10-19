@@ -41,7 +41,7 @@ if hasattr(sys.stdout, "reconfigure"):
 def embed(text):
     req = urllib.request.Request(
         f"{OLLAMA}/api/embeddings",
-        data=json.dumps({"model": MODEL, "prompt": text}).encode(),
+        data=json.dumps({"model": MODEL, "prompt": text, "options": {"num_ctx": 8192}}).encode(),
         headers={"Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=180) as r:
         return json.loads(r.read())["embedding"]

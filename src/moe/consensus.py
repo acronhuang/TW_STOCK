@@ -2,10 +2,10 @@
 合議投票層 —— 委員會多模型對顧問草案投票定案
 ======================================================
 架構(依實機分工)：
-  .28 主力 qwen3-14b 出初稿+主持人整合 → 顧問草案(買/持/賣)
-  委員會 gemma2:9b(.28) + qwen2.5-14b(.27) + llama3.1:8b(.27) 獨立投票
+  .28 主力 qwen3.5:35b-a3b 出初稿+主持人整合 → 顧問草案(買/持/賣)
+  委員會 qwen3.8:27b(.27) + gemma4:12b(.27) + granite4.2:8b(.28) 獨立投票
 
-委員跨兩節點：qwen2.5-14b/llama3.1 在 .27，gemma2 在 .28（與主力共存）。
+委員跨兩節點：qwen3.8、gemma4 在 .27，granite4.2 在 .28（與主力共存）。
 資安模型(foundation-sec/whiterabbitneo)對股票判斷較弱,不納入。
 可用 env CONSENSUS_MODELS 覆寫。完全不改動 Ollama 本身。
 """
@@ -66,8 +66,10 @@ def _ask(model: str, prompt: str, timeout: int = 120, url: str = None) -> str:
         try:
             r = requests.post(f'{url or CONSENSUS_URL}/api/generate',
                               json={'model': model, 'prompt': prompt, 'stream': False,
+                                    'think': os.getenv('CONSENSUS_THINK', 'false').strip().lower() in ('1', 'true', 'yes', 'on'),
                                     'options': {'temperature': float(os.getenv('LLM_TEMPERATURE', '0')), 'num_gpu': 99, 'seed': int(os.getenv('LLM_SEED', '42')),
-                                               'num_ctx': int(os.getenv('CONSENSUS_NUM_CTX', '8192'))}},
+                                               'num_ctx': int(os.getenv('CONSENSUS_NUM_CTX', '8192')),
+                                               'num_predict': int(os.getenv('CONSENSUS_NUM_PREDICT', '768'))}},
                               timeout=timeout)
             r.raise_for_status()
             return r.json().get('response', '')

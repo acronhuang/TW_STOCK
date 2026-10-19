@@ -42,10 +42,9 @@
      │  172.16.9.28         │         │  172.16.9.27              │
      │  主力推理 (OLLAMA_URL)│         │  推理 (OLLAMA_CONSENSUS)  │
      │  ─────────────────   │         │  ──────────────────────  │
-     │  qwen3-14b           │         │  qwen2.5-14b             │
-     │    總經/基本面/顧問   │         │    風控/委員              │
-     │  gemma2:9b           │         │  llama3.1:8b             │
-     │    價值/籌碼/委員      │         │    技術/委員              │
+     │  qwen3.5:35b-a3b     │         │  qwen3.8:27b             │
+     │    六角色(除風控)/顧問/主持人 │         │    風控/委員/知識庫回答    │
+     │  granite4.2:8b 委員  │         │  gemma4:12b  委員         │
      │  bge-m3  向量嵌入     │         │                          │
      └─────────────────────┘         └──────────────────────────┘
 ```
@@ -53,10 +52,10 @@
 | 節點 | 角色 | 環境變數 | 模型 |
 |------|------|----------|------|
 | `.166` | 主機（資料/儲存/運算/介面/排程） | — | — |
-| `.28` | 主力推理 + 嵌入 + 主持人 | `OLLAMA_URL` | `qwen3-14b`, `gemma2:9b`, `bge-m3` |
-| `.27` | 風控、技術角色與合議委員 | `OLLAMA_CONSENSUS_URL` | `qwen2.5-14b`, `llama3.1:8b` |
+| `.28` | 主力推理 + 嵌入 + 主持人 | `OLLAMA_URL` | `qwen3.5:35b-a3b-q4_K_M`, `granite4.2:8b-q4_K_M`, `bge-m3` |
+| `.27` | 風控、知識庫回答與合議委員 | `OLLAMA_CONSENSUS_URL` | `qwen3.8:27b-q4_K_M`, `gemma4:12b-it-q4_K_M` |
 
-模型到節點的對照只登記在 `src/moe/model_nodes.py`（也可用環境變數 `MODEL_NODES` 覆寫）。Hermes 唯讀助理（不在分析流程內）另用 `.27:11435` 的獨立實例。
+模型到節點的對照只登記在 `src/moe/model_nodes.py`（也可用環境變數 `MODEL_NODES` 覆寫）。Hermes 唯讀助理（不在分析流程內）用 `.27:11434` 上的 `hermes-qwen3-4b`（`num_ctx` 32768）；原本的 11435 獨立實例已關閉，全環境只保留 11434。
 
 **服務管理**：API 與 Dashboard 皆為 systemd 服務（`systemctl {start,stop,restart,status} twstock-api / twstock-dashboard`），開機自啟。排程一律走 `cron`（非 macOS launchctl）。
 
@@ -169,17 +168,17 @@
 
 | 階段 | 角色 | 模型 | 節點 |
 |------|------|------|------|
-| phase1 | 🎯 總經分析師 `macro-analyst` | `qwen3-14b` | `.28` |
-| phase1 | 📈 技術分析師 `technical-analyst` | `llama3.1:8b` | `.27` |
-| phase1 | 💰 基本面分析師 `fundamental-analyst` | `qwen3-14b` | `.28` |
-| phase1 | 💎 價值分析師 `value-analyst` | `gemma2:9b` | `.28` |
-| phase1 | 🛡️ 風險管理 `risk-manager` | `qwen2.5-14b` | `.27` |
-| phase1 | 🏦 籌碼分析師 `chip-analyst` | `gemma2:9b` | `.28` |
-| phase2 | 🎩 投資顧問 `investment-advisor` | `qwen3-14b` | `.28` |
-| phase2 | 🗳️ 合議委員會（三位） | `gemma2:9b`、`qwen2.5-14b`、`llama3.1:8b` | `.28` / `.27` / `.27` |
-| phase2 | 🎙️ 主持人（定案） | `qwen3-14b` | `.28` |
+| phase1 | 🎯 總經分析師 `macro-analyst` | `qwen3.5:35b-a3b` | `.28` |
+| phase1 | 📈 技術分析師 `technical-analyst` | `qwen3.5:35b-a3b` | `.28` |
+| phase1 | 💰 基本面分析師 `fundamental-analyst` | `qwen3.5:35b-a3b` | `.28` |
+| phase1 | 💎 價值分析師 `value-analyst` | `qwen3.5:35b-a3b` | `.28` |
+| phase1 | 🛡️ 風險管理 `risk-manager` | `qwen3.8:27b` | `.27` |
+| phase1 | 🏦 籌碼分析師 `chip-analyst` | `qwen3.5:35b-a3b` | `.28` |
+| phase2 | 🎩 投資顧問 `investment-advisor` | `qwen3.5:35b-a3b` | `.28` |
+| phase2 | 🗳️ 合議委員會（三位） | `qwen3.8:27b`、`gemma4:12b`、`granite4.2:8b` | `.27` / `.27` / `.28` |
+| phase2 | 🎙️ 主持人（定案） | `qwen3.5:35b-a3b` | `.28` |
 
-模型名稱只登記在 `src/moe/model_nodes.py`；`TWSTOCK_MAIN_LLM`、`TWSTOCK_VIEW_LLM`、`CONSENSUS_MODELS`、`CONSENSUS_FACILITATOR` 等環境變數可覆寫。空方委員（魔鬼代言人，`qwen2.5-14b`）預設關閉，設 `CONSENSUS_DEVIL=1` 才啟用。
+模型名稱只登記在 `src/moe/model_nodes.py`；`TWSTOCK_MAIN_LLM`、`TWSTOCK_VIEW_LLM`、`CONSENSUS_MODELS`、`CONSENSUS_FACILITATOR` 等環境變數可覆寫。空方委員（魔鬼代言人，`qwen3.8:27b`）預設關閉，設 `CONSENSUS_DEVIL=1` 才啟用。
 
 ### 兩階段流程
 

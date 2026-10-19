@@ -66,7 +66,7 @@ def _facilitate_direct(symbol, name, advisor, data, transcript, tally, rounds, t
     r = requests.post(f"{FACILITATOR_URL}/api/generate",
                       json={"model": FACILITATOR_MODEL, "prompt": prompt,
                             "stream": False, "think": False,
-                            "options": {"temperature": 0}}, timeout=timeout)
+                            "options": {"temperature": 0, "num_ctx": 8192}}, timeout=timeout)
     return _extract_vote(r.json().get("response", ""))
 
 

@@ -139,7 +139,7 @@ def test_strict_mode_fails_only_when_there_are_findings(tmp_path):
 
 def test_the_real_lineup_is_what_the_default_roster_reads():
     roster = lint.current_roster()
-    assert "qwen3-14b:latest" in roster and "nomic-embed-text" not in roster
+    assert "qwen3.5:35b-a3b-q4_K_M" in roster and "nomic-embed-text" not in roster
 
 
 def test_a_model_name_glued_to_a_longer_identifier_is_not_reported():

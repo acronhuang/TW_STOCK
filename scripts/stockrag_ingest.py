@@ -39,7 +39,7 @@ MAX_JSON_BYTES = 300_000     # result JSON 超過此大小視為原始資料傾�
 def embed(text):
     req = urllib.request.Request(
         f"{OLLAMA}/api/embeddings",
-        data=json.dumps({"model": MODEL, "prompt": text[:6000]}).encode(),
+        data=json.dumps({"model": MODEL, "prompt": text[:6000], "options": {"num_ctx": 8192}}).encode(),
         headers={"Content-Type": "application/json"}, method="POST")
     for a in range(3):
         try:

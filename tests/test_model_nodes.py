@@ -41,15 +41,29 @@ def test_env_extends_the_table_without_touching_defaults():
         reloaded = importlib.reload(model_nodes)
         try:
             assert reloaded.node_of("qwen3.5:9b") == "http://172.16.9.27:11435"
-            assert reloaded.node_of("gemma2:9b") == reloaded.NODE_28
+            assert reloaded.node_of(reloaded.DEFAULT_MAIN) == reloaded.NODE_28
         finally:
             importlib.reload(model_nodes)
 
 
 def test_default_nodes_match_where_the_models_actually_live():
-    assert model_nodes.node_of("qwen3-14b:latest") == N28 and model_nodes.node_of("gemma2:9b") == N28
-    assert model_nodes.node_of("qwen2.5-14b:latest") == N27 and model_nodes.node_of("llama3.1:8b") == N27
+    assert model_nodes.node_of("qwen3.5:35b-a3b-q4_K_M") == N28
+    assert model_nodes.node_of("granite4.2:8b-q4_K_M") == N28
+    assert model_nodes.node_of("qwen3.8:27b-q4_K_M") == N27
+    assert model_nodes.node_of("gemma4:12b-it-q4_K_M") == N27
     assert model_nodes.node_of("bge-m3") == N28
+
+
+def test_retired_models_are_no_longer_registered():
+    for old in ("qwen3-14b:latest", "gemma2:9b", "qwen2.5-14b:latest", "llama3.1:8b"):
+        assert old not in model_nodes.DEFAULT_NODES, old
+
+
+def test_committee_has_three_distinct_models_from_three_families():
+    committee = model_nodes.DEFAULT_COMMITTEE
+    assert len(committee) == 3 and len(set(committee)) == 3
+    assert len({m.split(":")[0].rstrip("0123456789.-") for m in committee}) == 3
+    assert model_nodes.DEFAULT_MAIN not in committee  # 主持人不投票
 
 
 def test_every_model_the_code_asks_for_is_registered():
@@ -71,7 +85,7 @@ def test_roles_and_committee_use_the_shared_table():
         assert consensus.COMMITTEE_MODEL_URL[model] == model_nodes.MODEL_NODES[model]
 
 
-@pytest.mark.parametrize("model, node", [("gemma2:9b", N28), ("llama3.1:8b", N27)])
+@pytest.mark.parametrize("model, node", [("qwen3.5:35b-a3b-q4_K_M", N28), ("qwen3.8:27b-q4_K_M", N27)])
 def test_facilitator_follows_its_model_unless_the_url_is_set(model, node):
     clean = {k: v for k, v in os.environ.items() if k not in {"OLLAMA_FACILITATOR_URL", "CONSENSUS_FACILITATOR"}}
     with patch.dict(os.environ, {**clean, "CONSENSUS_FACILITATOR": model}, clear=True):
@@ -104,7 +118,7 @@ def test_preflight_refuses_a_role_model_nobody_registered():
 
 
 def test_preflight_refuses_an_unregistered_committee_member():
-    with patch.object(consensus, "COMMITTEE", ["gemma2:9b", "mystery:1b"]):
+    with patch.object(consensus, "COMMITTEE", ["qwen3.5:35b-a3b-q4_K_M", "mystery:1b"]):
         with pytest.raises(preflight.OllamaNotReady):
             preflight.required_models(["technical-analyst"])
 
@@ -122,7 +136,7 @@ def test_embedding_endpoint_follows_the_embedding_model_unless_the_url_is_set():
     with patch.dict(os.environ, {}, clear=True):
         assert model_nodes.embed_url() == model_nodes.node_of(model_nodes.EMBED_MODEL)
         # 換成另一個節點上的模型，端點要跟著走
-        with patch.object(model_nodes, "EMBED_MODEL", model_nodes.DEFAULT_TECH):
+        with patch.object(model_nodes, "EMBED_MODEL", model_nodes.DEFAULT_RISK):
             assert model_nodes.embed_url() == N27
     with patch.dict(os.environ, {"RAG_EMBED_URL": "http://h:2/"}):
         assert model_nodes.embed_url() == "http://h:2"

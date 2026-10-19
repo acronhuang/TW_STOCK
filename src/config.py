@@ -27,7 +27,7 @@ MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "tw_stock_analysis")
 
 
 # ── Ollama 推理節點 ────────────────────────────────────────────────────
-# 主力節點 .28（qwen3/gemma2）；合議節點 .27（qwen2.5-14b/llama3.1）。
+# 主力節點 .28（qwen3.5 MoE、granite4.2）；合議節點 .27（qwen3.8、gemma4）。
 # 與 consensus.py / role_router.py 既有 env 名一致。
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://172.16.9.28:11434")
 OLLAMA_CONSENSUS_URL = os.getenv("OLLAMA_CONSENSUS_URL", "http://172.16.9.27:11434")

@@ -67,6 +67,7 @@ def generate_analysis(question: str, event_type: str, articles: list[dict[str, s
         "system": SYSTEM,
         "prompt": build_prompt(question, event_type, articles),
         "stream": False,
+        "think": False,
         "options": {"num_predict": 700, "temperature": 0.1, "num_ctx": 8192},
     }
     request = urllib.request.Request(

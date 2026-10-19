@@ -18,7 +18,7 @@
 - 專案：`/home/mdsadmin/Stock/tw-stock-analysis`
 - venv：`/home/mdsadmin/Stock/.venv`（**在專案外**，故未入版控）
 - DB：本機 MongoDB，database `tw_stock_analysis`
-- 模型節點：`.28`（主力 qwen3-14b）、`.27`（合議 gemma2+qwen2.5）  ← 與 Wazuh 共用池(ADR-009)
+- 模型節點：`.28`（主力 qwen3.5:35b-a3b）、`.27`（qwen3.8:27b + gemma4:12b）  ← 與 Wazuh 共用池(ADR-009)
 - 備份：`~/Stock/mongodb_backups/*.tar.gz`（週日 01:00 cron），還原性每週驗（`verify_backup.py`）
 
 ## 從零重建（.166 全毀時）

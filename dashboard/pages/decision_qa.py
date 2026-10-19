@@ -256,7 +256,7 @@ def answer_question(question, today_docs, decision_date=None):
         "\n\n【使用者問題】\n" + question + "\n\n【回答】\n")
     r = requests.post(
         f"{OLLAMA}/api/generate",
-        json={"model": MODEL, "prompt": prompt, "stream": False,
+        json={"model": MODEL, "prompt": prompt, "stream": False, "think": False,
               "options": {"num_predict": 800, "temperature": 0.3, "num_ctx": 8192}},
         timeout=600)
     r.raise_for_status()

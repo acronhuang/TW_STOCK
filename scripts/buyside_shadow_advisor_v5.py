@@ -54,7 +54,7 @@ def default_ask(prompt: str) -> str:
         r = requests.post(f"{OLLAMA_28}/api/generate",
                           json={"model": MODEL, "prompt": prompt, "stream": False,
                                 "think": think,
-                                "options": {"temperature": 0.1, "num_predict": 320}}, timeout=120)
+                                "options": {"temperature": 0.1, "num_predict": 320, "num_ctx": 8192}}, timeout=120)
         return r.json().get("response", "")
     out = _post(False)
     if extract_rating(out) is None:            # 極少數仍缺 → 開 thinking 重試一次(較慢但語意完整)
