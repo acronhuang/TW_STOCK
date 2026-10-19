@@ -22,7 +22,7 @@ sys.path.insert(0, ROOT)
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 
-from src.moe.consensus import _ask, COMMITTEE, CONSENSUS_URL
+from src.moe.consensus import _ask, COMMITTEE, COMMITTEE_MODEL_URL, CONSENSUS_URL
 
 RISK_VOTES = ("續抱", "減碼", "出場")
 DB = MongoClient("localhost", 27017)["tw_stock_analysis"]
@@ -97,7 +97,7 @@ def deliberate(ctx):
         "【部位風險資料】\n" + ctx + "\n\n【你的判定】\n")
     votes = []
     for m in COMMITTEE:
-        raw = _ask(m, prompt, url=CONSENSUS_URL)
+        raw = _ask(m, prompt, url=COMMITTEE_MODEL_URL.get(m, CONSENSUS_URL))
         votes.append({"model": m, "vote": _extract_risk_vote(raw or ""), "raw": (raw or "").strip()[:220]})
     valid = [x for x in votes if x["vote"]]
     tally = {v: sum(1 for x in valid if x["vote"] == v) for v in RISK_VOTES}
