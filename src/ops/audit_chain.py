@@ -70,8 +70,27 @@ def write_head(db, path: Path, now: datetime | None = None) -> dict | None:
     return record
 
 
-def verify(db, collections=LEDGERS, head_file: Path | None = None) -> dict:
-    """回報：鏈本身斷裂、文件被改、文件被刪、鏈頭與備份不符。全空才算通過。"""
+def _anchor_problems(by_seq: dict, saved: dict, label: str = "") -> list:
+    prefix = f"{label}：" if label else ""
+    mine = by_seq.get(saved["seq"])
+    if mine is None:
+        return [f"{prefix}鏈頭備份的第 {saved['seq']} 筆已不在鏈上（鏈被截斷）"]
+    if mine["hash"] != saved["hash"]:
+        return [f"{prefix}第 {saved['seq']} 筆的雜湊與鏈頭備份不同（鏈被重寫）"]
+    return []
+
+
+def anchor_files(directory) -> list:
+    """異機錨點：目錄下所有 audit_chain_head_*.json；目錄不存在回空。"""
+    directory = Path(directory) if directory else None
+    return sorted(directory.glob("audit_chain_head_*.json")) if directory and directory.is_dir() else []
+
+
+def verify(db, collections=LEDGERS, head_file: Path | None = None, anchors=()) -> dict:
+    """回報：鏈本身斷裂、文件被改、文件被刪、鏈頭與備份不符。全空才算通過。
+
+    head_file 是同一台機器上的鏈頭檔（每晚登記時重寫，只能防「忘了寫」）；
+    anchors 是從異機抄回的歷史鏈頭，鏈上同序號的雜湊必須一致，這才防得住整條鏈被重寫。"""
     problems = {"broken_links": [], "modified": [], "missing": [], "anchor": []}
     prev, last_seq = GENESIS, 0
     entries = list(db[CHAIN].find().sort("seq", 1))
@@ -99,9 +118,11 @@ def verify(db, collections=LEDGERS, head_file: Path | None = None) -> dict:
 
     if head_file and Path(head_file).exists():
         saved = json.loads(Path(head_file).read_text(encoding="utf-8"))
-        mine = by_seq.get(saved["seq"])
-        if mine is None:
-            problems["anchor"].append(f"鏈頭備份的第 {saved['seq']} 筆已不在鏈上（鏈被截斷）")
-        elif mine["hash"] != saved["hash"]:
-            problems["anchor"].append(f"第 {saved['seq']} 筆的雜湊與鏈頭備份不同（鏈被重寫）")
-    return {"entries": len(entries), "ok": not any(problems.values()), **problems}
+        problems["anchor"] += _anchor_problems(by_seq, saved)
+    for path in anchors:
+        try:
+            saved = json.loads(Path(path).read_text(encoding="utf-8"))
+            problems["anchor"] += _anchor_problems(by_seq, {"seq": saved["seq"], "hash": saved["hash"]}, Path(path).name)
+        except (OSError, ValueError, KeyError, TypeError):
+            problems["anchor"].append(f"{Path(path).name}：錨點檔無法讀取")
+    return {"entries": len(entries), "anchors_checked": len(list(anchors)), "ok": not any(problems.values()), **problems}

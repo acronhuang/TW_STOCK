@@ -19,12 +19,18 @@ from datetime import datetime
 
 from pymongo import MongoClient
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
 BACKUP_DIR = os.path.expanduser("~/Stock/mongodb_backups")
 LIVE_DB = "tw_stock_analysis"
 SCRATCH_DB = "tw_stock_analysis_restore_test"
 # 關鍵表：還原後這些至少要有合理筆數（vs live 比例）
+# 前五個是價量與基本資料；後面是「丟了補不回來」的：帳本與指紋鏈、素材累積、團隊分析與驗證結果
 KEY_COLLECTIONS = ["stock_price", "stock_factors", "quarterly_earnings",
-                   "institutional_flow", "taiwan_stock_info"]
+                   "institutional_flow", "taiwan_stock_info",
+                   "research_signal_snapshots", "portfolio_trades", "audit_chain",
+                   "wiki_raw", "team_analysis", "verdict_detail"]
 MIN_RATIO = 0.80  # 還原筆數 ≥ live 的 80%（備份較舊，容許差異）
 
 
@@ -37,6 +43,19 @@ def _line(msg):
             n.send(f"💾 {datetime.now():%Y-%m-%d %H:%M} 備份驗證\n{msg}")
     except Exception as e:
         print("LINE 發送失敗:", e)
+
+
+def restored_chain_line(db):
+    """還原後的帳本與指紋鏈要彼此一致（鏈沒斷、文件沒被改、沒被刪）。回 (通過與否, 一行說明)。"""
+    from src.ops import audit_chain as chain
+
+    result = chain.verify(db)
+    if not result["entries"]:
+        return False, "  ❌ 指紋鏈（還原後自核）備份裡沒有鏈"
+    problems = sum(len(result[k]) for k in ("broken_links", "modified", "missing"))
+    if problems:
+        return False, f"  ❌ 指紋鏈（還原後自核）{problems} 項異常"
+    return True, f"  ✅ 指紋鏈（還原後自核）{result['entries']:,} 筆通過"
 
 
 def _find_dump_dir(root):
@@ -95,6 +114,10 @@ def main():
             if ratio < MIN_RATIO:
                 ok = False
             rows.append(f"  {status} {c:22} 還原 {n_rest:>9,} / 現行 {n_live:>9,}  ({ratio*100:.0f}%)")
+        chain_ok, chain_line = restored_chain_line(restored)
+        rows.append(chain_line)
+        if not chain_ok:
+            ok = False
         print("\n".join(rows))
 
     finally:

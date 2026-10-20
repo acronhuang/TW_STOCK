@@ -17,6 +17,8 @@ from src.config import get_db  # noqa: E402
 from src.ops import audit_chain as chain  # noqa: E402
 
 HEAD_FILE = ROOT / "logs" / "audit_chain_head.json"
+# Windows 端 pull_backup.ps1 每天抄回的鏈頭，再傳到這裡；這才是異機錨點
+ANCHORS_DIR = Path.home() / "Stock" / "ops_win_backup" / "audit_anchors"
 
 
 def run_register(db) -> int:
@@ -27,9 +29,11 @@ def run_register(db) -> int:
     return 0
 
 
-def run_verify(db, alert: bool) -> int:
-    result = chain.verify(db, head_file=HEAD_FILE)
+def run_verify(db, alert: bool, anchors_dir=ANCHORS_DIR) -> int:
+    anchors = chain.anchor_files(anchors_dir)
+    result = chain.verify(db, head_file=HEAD_FILE, anchors=anchors)
     print(f"鏈 {result['entries']} 筆；" + ("通過" if result["ok"] else "未通過"))
+    print(f"異機錨點 {len(anchors)} 份已核對" if anchors else "（沒有異機錨點檔：整條鏈被重寫的情況目前核對不到）")
     lines = []
     for label, key in (("鏈斷裂", "broken_links"), ("文件被改", "modified"), ("文件被刪", "missing"), ("鏈頭不符", "anchor")):
         if result[key]:
@@ -49,9 +53,10 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("register", "verify"))
     parser.add_argument("--alert", action="store_true")
+    parser.add_argument("--anchors-dir", type=Path, default=ANCHORS_DIR)
     args = parser.parse_args(argv)
     db = get_db()
-    return run_register(db) if args.action == "register" else run_verify(db, args.alert)
+    return run_register(db) if args.action == "register" else run_verify(db, args.alert, args.anchors_dir)
 
 
 if __name__ == "__main__":
