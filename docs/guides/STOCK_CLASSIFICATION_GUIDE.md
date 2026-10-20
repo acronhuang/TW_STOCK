@@ -274,7 +274,7 @@ if not info:
 
 ### 1. 集成到下载协调器
 
-修改 `src/services/download_coordinator.py`:
+修改 src/services/download_coordinator.py（該模組已不存在，以下僅為當時的整合構想）:
 
 ```python
 from utils.stock_classifier import StockClassifier, SecurityType

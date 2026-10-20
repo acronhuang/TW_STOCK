@@ -38,7 +38,7 @@ db.stock_price.aggregate([{$group:{_id:{$type:"$close"},n:{$sum:1}}}])   # doubl
 
 | # | 元件 | 問題 | 嚴重度 |
 |---|------|------|:--:|
-| P1 | `src/moe/router.py` (`MoERouter`) | **死碼**：寫舊模型 qwen3.6/deepseek，團隊分析不走它 | 中 |
+| P1 | src/moe/router.py (`MoERouter`，已於 2026-10-13 刪除) | **死碼**：寫舊模型 qwen3.6/deepseek，團隊分析不走它 | 中 |
 | P2 | `role_router.py` docstring | 與 `ROLE_TO_MODEL` 程式值不符（宣稱 qwen3/deepseek） | 低（誤導） |
 | P3 | RSI 雙公式 | `indicators/rsi.py`(Wilder) vs `momentum_factors`(簡單平均)，輸出用後者 | 中 |
 | P4 | value factors 不寫回 | `_TWSE_MANAGED` 攔截，算了白算 | 低 |

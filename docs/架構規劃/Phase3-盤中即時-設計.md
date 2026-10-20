@@ -42,7 +42,7 @@
 
 ## 5. 交付通道(LINE 已爆額 → 必須改設計)
 LINE 月額度已用盡(429),**盤中不能靠 LINE 狂推**。優先序:
-1. **Dashboard 即時頁**(推薦):新 `dashboard/pages/intraday.py`,盤中自動刷新,紅/綠燈列出命中訊號+Phase2 合議。零額度成本。
+1. **Dashboard 即時頁**(推薦):新建 `dashboard/pages/intraday.py`,盤中自動刷新,紅/綠燈列出命中訊號+Phase2 合議。零額度成本。
 2. **盤中 spool + 收盤彙整**:沿用既有 `LINE_SPOOL`+`evening_digest` 機制,盤中訊號寫 spool,**只有「重大即時」才即時推 1 則**,其餘併入收盤 digest。呼應既有降噪成果。
 3. (未來)LINE 額度解決後再開即時推播。
 

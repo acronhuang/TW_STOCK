@@ -1,5 +1,7 @@
 # 規劃 · 部署手冊
 
+> **歷史快照（2026-07）**：文中的模型名是當時的編制；現行編制以 `src/moe/model_nodes.py` 與 ARCHITECTURE.md 為準。
+
 > 從零在新機重建本系統的人工操作手冊。對應 [環境基線](規劃-環境基線.md) 與 [2 節點試點瘦身版](規劃-2節點試點瘦身版.md)。Claude Code 自動化版見 [部署Prompt-ClaudeCode版](規劃-部署Prompt-ClaudeCode版.md)。
 
 ---

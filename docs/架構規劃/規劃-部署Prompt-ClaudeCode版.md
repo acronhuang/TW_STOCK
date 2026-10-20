@@ -1,5 +1,7 @@
 # 規劃 · 部署 Prompt（Claude Code 版）
 
+> **歷史快照（2026-07）**：文中的模型名是當時的編制；現行編制以 `src/moe/model_nodes.py` 與 ARCHITECTURE.md 為準。
+
 > 可直接貼給 Claude Code（或同類 agent）的部署指令模板。人工手冊見 [部署Prompt手冊](規劃-部署Prompt手冊.md)。使用前替換 `<角括號>` 內佔位符。
 
 ---

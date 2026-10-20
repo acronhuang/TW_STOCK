@@ -59,6 +59,7 @@ MODEL_NODES = {**DEFAULT_NODES, **parse_overrides(os.getenv("MODEL_NODES", ""))}
 ANSWER_MODEL = os.getenv("ANSWER_MODEL", DEFAULT_RISK)
 # 知識庫嵌入模型；換了要重建語料（向量維度不同）並改 stockrag_ingest.DIM。
 EMBED_MODEL = os.getenv("EMBED_MODEL", DEFAULT_EMBED)
+HERMES_MODEL = "hermes-qwen3-4b"  # Hermes 總指揮用（.27，由 ~/.hermes/config.yaml 指定），不在團隊分析編制內，所以不進 DEFAULT_NODES
 
 
 def canonical(name):

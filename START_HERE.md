@@ -118,8 +118,6 @@
 
 ### 核心腳本 (Core Scripts)
 1. `scripts/final_system_validation.py` - 系統驗證
-2. `scripts/fix_database_roe.py` - ROE 修正
-3. `scripts/batch_download_all_financials.py` - 下載財報
 
 ---
 

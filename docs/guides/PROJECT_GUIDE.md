@@ -296,7 +296,7 @@ db.dividends.createIndex({ stock_id: 1, ex_dividend_date: -1 })
 ### P0: 數據品質修復 ✅
 
 **執行時間**: 2026-02-20 10:15-10:45  
-**執行腳本**: `scripts/fix_p0_issues.py`  
+**執行腳本**: fix_p0_issues.py（一次性腳本，已移除）  
 
 **修復內容**:
 1. **刪除無效價格記錄**: 48,176 筆

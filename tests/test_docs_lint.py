@@ -149,3 +149,32 @@ def test_a_model_name_glued_to_a_longer_identifier_is_not_reported():
 @pytest.mark.parametrize("name", ["llama3:instruct", "phi3:mini"])
 def test_a_model_with_only_a_tag_and_no_size_is_still_reported(name):
     assert lint.stale_models(f"用 {name}", ROSTER) == [(1, name)]
+
+
+def test_short_model_names_match_the_full_tagged_roster_entries():
+    roster = ["qwen3.5:35b-a3b-q4_K_M", "gemma4:12b-it-q4_K_M", "granite4.2:8b-q4_K_M"]
+    text = "主模型 qwen3.5:35b-a3b、gemma4:12b、granite4.2:8b；舊的 qwen3.5:35b 與 gemma4:12b-it-q8_0 不在編制"
+    assert [name for _, name in lint.stale_models(text, roster)] == ["qwen3.5:35b", "gemma4:12b-it-q8_0"]
+
+
+def test_hermes_local_model_is_not_reported_as_stale():
+    assert "hermes-qwen3-4b" in lint.current_roster()
+
+
+def test_a_path_on_a_line_that_says_it_is_not_built_yet_is_not_dead(tmp_path):
+    (tmp_path / "README.md").write_text("待建 `scripts/future.py`\n已有 `scripts/gone.py`\n", encoding="utf-8")
+    found = lint.lint(tmp_path, ROSTER)
+    assert [(f["line"], f["detail"]) for f in found] == [(2, "scripts/gone.py")]
+
+
+def test_a_historical_snapshot_skips_the_model_check_but_still_gets_the_path_check(tmp_path):
+    (tmp_path / "OLD.md").write_text("# 舊規劃\n\n> 歷史快照（2026-07）\n\n用 hermes3:8b，見 `scripts/gone.py`\n", encoding="utf-8")
+    found = lint.lint(tmp_path, ROSTER)
+    assert [f["kind"] for f in found] == ["失效路徑"]
+    assert lint.historical_snapshots(tmp_path) == ["OLD.md"]
+    assert "略過模型名檢查" in lint.render("2026-10-20", found, 1, ["OLD.md"])
+
+
+def test_the_snapshot_marker_only_counts_near_the_top_of_the_file(tmp_path):
+    (tmp_path / "LATE.md").write_text("\n".join(["x"] * 20) + "\n歷史快照\n用 hermes3:8b\n", encoding="utf-8")
+    assert [f["detail"] for f in lint.lint(tmp_path, ROSTER)] == ["hermes3:8b"]
