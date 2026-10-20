@@ -236,6 +236,8 @@ main() {
     FAILED_LIST=""
     CURRENT_INDEX=0
     STATE_FILE="$LOG_BASE/.hourly_notify_state"
+    # 「一天做一次就夠」的類別（預設基本面）：到點後第一輪做、成功才記帳；規則與開關見 src/ops/daily_gate.py
+    DAILY_STATE="$LOG_BASE/.hourly_daily_state.json"
 
     # 逐一下載各類別
     for category in "${CATEGORIES[@]}"; do
@@ -245,8 +247,16 @@ main() {
         log_info "類別 [$CURRENT_INDEX/$TOTAL_CATEGORIES]: $category"
         log_info "========================================"
 
+        python3 "$SCRIPT_DIR/hourly_daily_gate.py" check "$category" "$DAILY_STATE"
+        if [ $? -eq 10 ]; then
+            log_info "$category 每日一次：今天已完成或還沒到時間，本輪略過"
+            ((SUCCESS_COUNT++))
+            continue
+        fi
+
         if download_data "$category"; then
             ((SUCCESS_COUNT++))
+            python3 "$SCRIPT_DIR/hourly_daily_gate.py" done "$category" "$DAILY_STATE"
         else
             ((FAILED_COUNT++))
             FAILED_LIST="${FAILED_LIST}${category} "

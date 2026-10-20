@@ -365,3 +365,11 @@ log_error() {
 **最後更新**: 2026-02-22  
 **腳本版本**: 1.0.0  
 **API 版本**: FinMind v4
+
+## 每日一次的類別（2026-10-21 起）
+
+「基本面」（股利政策、除權除息結果、月營收）每天只在 03:00 之後的第一輪下載，成功才記帳（`logs/.hourly_daily_state.json`），失敗下一小時重試；其餘類別仍每小時。原因與量測見 `docs/adr/0022-不訂閱FinMind付費方案.md`。
+
+- 還原成每小時：環境變數 `HOURLY_DAILY_CATEGORIES=`（空字串）。
+- 改時間：`HOURLY_DAILY_HOUR=5`（幾點之後才做）。
+- 強制今天再做一次：刪掉 `logs/.hourly_daily_state.json` 裡 `基本面` 那一項。
