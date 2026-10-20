@@ -147,3 +147,90 @@ def test_prompts_are_not_built_for_roles_that_never_reach_the_llm(pipeline, monk
     tdv.analyze_symbol("2006", quick=True)
 
     assert "risk-manager" not in built and "chip-analyst" not in built and "fundamental-analyst" in built
+
+
+VALUATION = {
+    "current_price": 422.0,
+    "dcf": {"fair_value": 180.5, "upside_pct": -57.2},
+    "ddm": {"fair_value": 90.1, "upside_pct": -78.6},
+    "pe_band": {"fair_value": 300.0, "upside_pct": -28.9, "zone": "偏高區", "current_pe": 27.9, "pe_percentile": 66.7},
+    "composite": {"fair_value": 216.99, "upside_pct": -48.6, "verdict": "嚴重高估", "models_used": 3},
+}
+
+
+def test_the_value_report_opens_with_the_computed_verdict_and_cites_the_program_numbers():
+    text = rule_roles.value_report({"valuation": VALUATION}, "")
+
+    assert text.splitlines()[0].startswith("嚴重高估（現價422.0元、綜合合理價216.99元，安全邊際-48.6%；採用3個模型）")
+    assert "DCF 合理價180.5元（-57.2%）" in text and "PE Band 合理價300.0元（-28.9%，偏高區、本益比27.9、歷史百分位66.7%）" in text
+    assert cited(text) == {"current_price": "422.0", "composite_fair_value": "216.99", "dcf_fair_value": "180.5",
+                           "ddm_fair_value": "90.1", "pe_band_fair_value": "300.0"}
+
+
+def test_the_value_report_adds_the_four_dimension_profile_only_when_there_is_one():
+    assert "四維畫像" not in rule_roles.value_report({"valuation": VALUATION}, "")
+    assert "四維畫像：財務:ROIC26.5%" in rule_roles.value_report({"valuation": VALUATION}, "財務:ROIC26.5%")
+
+
+@pytest.mark.parametrize("data", [{}, {"valuation": {"current_price": 10.0}}, {"valuation": {"composite": {"fair_value": 5.0}}}])
+def test_the_value_report_says_the_data_is_missing_instead_of_inventing_a_price(data):
+    text = rule_roles.value_report(data, "")
+
+    assert "資料不足" in text and "分析失敗" not in text
+
+
+def test_a_missing_model_shows_blanks_instead_of_none():
+    val = {"current_price": 10.0, "composite": {"fair_value": 8.0}, "dcf": {"fair_value": 8.0}}
+
+    text = rule_roles.value_report({"valuation": val}, "")
+
+    assert "None" not in text and "DDM 合理價無資料元" in text and "ddm_fair_value" not in text
+
+
+def test_value_analyst_is_not_a_rule_role_unless_asked_for(monkeypatch):
+    monkeypatch.delenv("TEAM_RULE_ROLES", raising=False)
+    assert "value-analyst" not in rule_roles.active(ROLES)
+
+    monkeypatch.setenv("TEAM_RULE_ROLES", "risk-manager,chip-analyst,value-analyst")
+    assert rule_roles.active(ROLES) == ["value-analyst", "risk-manager", "chip-analyst"]
+
+
+def test_with_value_as_a_rule_role_the_pipeline_asks_the_llm_for_one_role_less_and_still_stores_six_reports(pipeline, monkeypatch):
+    monkeypatch.setenv("TEAM_RULE_ROLES", "risk-manager,chip-analyst,value-analyst")
+    monkeypatch.setitem(DATA, "valuation", {**VALUATION})
+    monkeypatch.setattr("src.analysis.value_profile.value_profile_text", lambda db, s: "財務:ROIC26.5%")
+
+    result = tdv.analyze_symbol("2006", quick=False)
+
+    assert "value-analyst" not in pipeline and set(result["reports"]) == set(ROLES)
+    assert result["reports"]["value-analyst"].startswith("嚴重高估") and "四維畫像：財務:ROIC26.5%" in result["reports"]["value-analyst"]
+    assert result["models"]["value-analyst"] == "rule-based@local"
+
+
+def test_the_llm_value_prompt_still_gets_the_profile_and_skips_it_when_the_data_is_insufficient(pipeline, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(tdv, "build_expert_prompt", lambda role, sym, data: f"prompt-{role}")
+    monkeypatch.setattr(tdv, "ask_role", lambda role, prompt, include_role_prompt=True, timeout=300: seen.setdefault(role, prompt) and
+                        {"role": role, "model": "fake", "response": "x\\n📌引用數值：a=1", "elapsed_sec": 0.0})
+
+    monkeypatch.setattr("src.analysis.value_profile.value_profile_text", lambda db, s: "財務:ROIC26.5%")
+    tdv.analyze_symbol("2006", quick=True)
+    assert "【四維價值畫像】財務:ROIC26.5%" in seen["value-analyst"]
+
+    seen.clear()
+    monkeypatch.setattr("src.analysis.value_profile.value_profile_text", lambda db, s: "四維價值資料不足")
+    tdv.analyze_symbol("2006", quick=True)
+    assert "四維價值畫像" not in seen["value-analyst"]
+
+
+def test_a_failing_profile_lookup_never_breaks_the_analysis(pipeline, monkeypatch):
+    def boom(db, symbol):
+        raise RuntimeError("mongo down")
+
+    monkeypatch.setenv("TEAM_RULE_ROLES", "risk-manager,chip-analyst,value-analyst")
+    monkeypatch.setitem(DATA, "valuation", {**VALUATION})
+    monkeypatch.setattr("src.analysis.value_profile.value_profile_text", boom)
+
+    result = tdv.analyze_symbol("2006", quick=False)
+
+    assert result["reports"]["value-analyst"].startswith("嚴重高估") and "四維畫像" not in result["reports"]["value-analyst"]

@@ -178,7 +178,7 @@
 | phase2 | 🗳️ 合議委員會（三位） | `qwen3.8:27b`、`gemma4:12b`、`granite4.2:8b` | `.27` / `.27` / `.28` |
 | phase2 | 🎙️ 主持人（定案） | `qwen3.5:35b-a3b` | `.28` |
 
-風險管理與籌碼兩個角色由 `src/moe/rule_roles.py` 以固定模板產生（部位與停損本來就是程式算好的數字，籌碼立場離線分析幾乎不帶資訊），報告仍照六份存檔；`TEAM_RULE_ROLES`（空字串＝全部回到 LLM）可覆寫。
+風險管理與籌碼兩個角色由 `src/moe/rule_roles.py` 以固定模板產生（部位與停損本來就是程式算好的數字，籌碼立場離線分析幾乎不帶資訊），報告仍照六份存檔；`TEAM_RULE_ROLES`（空字串＝全部回到 LLM）可覆寫。價值分析師也有模板（`TEAM_RULE_ROLES=risk-manager,chip-analyst,value-analyst` 才啟用，預設關閉）：它的立場本來就是 `valuation.composite.verdict`，離線檢驗中與「現價／合理價」比值的相關係數 0.91；要不要預設啟用等 `scripts/rule_roles_shadow.py` 的影子測試結果（2026-10-23）。
 
 模型名稱只登記在 `src/moe/model_nodes.py`；`TWSTOCK_MAIN_LLM`、`TWSTOCK_VIEW_LLM`、`CONSENSUS_MODELS`、`CONSENSUS_FACILITATOR` 等環境變數可覆寫。空方委員（魔鬼代言人，`qwen3.8:27b`）預設關閉，設 `CONSENSUS_DEVIL=1` 才啟用。
 

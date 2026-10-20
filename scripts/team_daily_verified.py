@@ -316,6 +316,17 @@ def _macro_reuse(hit: dict, sym: str, name: str) -> str:
     return txt
 
 
+def _value_profile(symbol: str) -> str:
+    """四維價值畫像文字；查不到或資料不足回空字串。"""
+    try:
+        from src.analysis.value_profile import value_profile_text
+        from pymongo import MongoClient as _MC
+        text = value_profile_text(_MC('localhost', 27017)['tw_stock_analysis'], symbol)
+    except Exception:
+        return ''
+    return '' if not text or text == '四維價值資料不足' else text
+
+
 def analyze_symbol(symbol: str, quick: bool) -> dict:
     data = fetch_all_data(symbol)
     evidence = verify_metrics(symbol)
@@ -336,14 +347,9 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
             continue
         prompt = build_expert_prompt(role, symbol, data)
         if role == 'value-analyst':
-            try:
-                from src.analysis.value_profile import value_profile_text
-                from pymongo import MongoClient as _MC
-                _vp = value_profile_text(_MC('localhost', 27017)['tw_stock_analysis'], symbol)
-                if _vp and _vp != '四維價值資料不足':
-                    prompt += '\n\n【四維價值畫像】' + _vp + '\n請結合此四維(ROIC財務健全、營益率穩定度=護城河、連配年數=治理一致性、DCF安全邊際=估值)綜合研判,不要只算 DCF。'
-            except Exception:
-                pass
+            _vp = _value_profile(symbol)
+            if _vp:
+                prompt += '\n\n【四維價值畫像】' + _vp + '\n請結合此四維(ROIC財務健全、營益率穩定度=護城河、連配年數=治理一致性、DCF安全邊際=估值)綜合研判,不要只算 DCF。'
         if role == 'technical-analyst':
             # 技術角色依「蔡森方法」分析：餵入 SenVision 型態/頸線/目標價/風報比
             prompt += "\n\n" + senvision_text(sv_pats) + \
@@ -365,7 +371,7 @@ def analyze_symbol(symbol: str, quick: bool) -> dict:
     # 總經快取命中就不打 LLM（見 _MACRO_CACHE 註解）
     _price = (data.get('factors') or {}).get('close') or (data.get('valuation') or {}).get('current_price')
     todo_roles = [r for r in ANALYST_ROLES if r not in rule]
-    got = {r: rule_roles.render(r, data, _position_hint(_price)) for r in rule}
+    got = {r: rule_roles.render(r, data, _position_hint(_price), _value_profile(symbol) if r == 'value-analyst' else '') for r in rule}
     ind = my_name = None
     if MACRO_CACHE_ON and 'macro-analyst' in todo_roles:
         ind, my_name = _info_of(symbol)

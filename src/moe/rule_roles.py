@@ -7,6 +7,7 @@ TEAM_RULE_ROLES 可覆寫（逗號分隔；設成空字串＝全部回到 LLM）
 import os
 
 DEFAULT_RULE_ROLES = ("risk-manager", "chip-analyst")
+# value-analyst 也有模板，但不在預設：它的立場幾乎就是 valuation.composite.verdict，改用模板前要先過影子測試（scripts/rule_roles_shadow.py）
 MODEL_LABEL = "rule-based"
 
 
@@ -70,11 +71,37 @@ def chip_report(data):
     ])
 
 
+def value_report(data, profile=""):
+    val = data.get("valuation") or {}
+    comp, price = val.get("composite") or {}, val.get("current_price")
+    if comp.get("fair_value") is None or price is None:
+        return "估值資料不足，無法推估合理價。"
+
+    def model(label, m, extra=""):
+        m = m or {}
+        return f"{label}合理價{_num(m.get('fair_value'))}元（{_num(m.get('upside_pct'))}%{extra}）"
+
+    pe = val.get("pe_band") or {}
+    pe_extra = f"，{pe.get('zone', '區間無資料')}、本益比{_num(pe.get('current_pe'))}、歷史百分位{_num(pe.get('pe_percentile'))}%" if pe else ""
+    cited = [("current_price", price), ("composite_fair_value", comp.get("fair_value")),
+             ("dcf_fair_value", (val.get("dcf") or {}).get("fair_value")), ("ddm_fair_value", (val.get("ddm") or {}).get("fair_value")),
+             ("pe_band_fair_value", pe.get("fair_value"))]
+    lines = [
+        f"{comp.get('verdict') or '資料不足'}（現價{price}元、綜合合理價{comp['fair_value']}元，安全邊際{_num(comp.get('upside_pct'))}%；採用{_num(comp.get('models_used'))}個模型）",
+        "；".join([model("DCF ", val.get("dcf")), model("DDM ", val.get("ddm")), model("PE Band ", pe, pe_extra)]),
+    ]
+    if profile:
+        lines.append("四維畫像：" + profile)
+    lines.append("📌引用數值：" + "、".join(f"{k}={v}" for k, v in cited if v is not None))
+    return "\n".join(lines)
+
+
 _RENDERERS = {
-    "risk-manager": lambda data, hint: risk_report(data, hint),
-    "chip-analyst": lambda data, hint: chip_report(data),
+    "risk-manager": lambda data, hint, profile: risk_report(data, hint),
+    "chip-analyst": lambda data, hint, profile: chip_report(data),
+    "value-analyst": lambda data, hint, profile: value_report(data, profile),
 }
 
 
-def render(role, data, hint=""):
-    return {"role": role, "model": MODEL_LABEL, "response": _RENDERERS[role](data, hint), "elapsed_sec": 0.0}
+def render(role, data, hint="", profile=""):
+    return {"role": role, "model": MODEL_LABEL, "response": _RENDERERS[role](data, hint, profile), "elapsed_sec": 0.0}
