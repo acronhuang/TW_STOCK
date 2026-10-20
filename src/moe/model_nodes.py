@@ -55,9 +55,6 @@ def parse_overrides(text):
 
 MODEL_NODES = {**DEFAULT_NODES, **parse_overrides(os.getenv("MODEL_NODES", ""))}
 
-# 選用的外部節點（環境變數 OLLAMA_ALTOS_URL）上的模型。
-ALTOS_MODEL = "qwen3:30b"
-
 # 專案知識庫回答、決策問答、國際新聞分析共用的回答模型。
 ANSWER_MODEL = os.getenv("ANSWER_MODEL", DEFAULT_RISK)
 # 知識庫嵌入模型；換了要重建語料（向量維度不同）並改 stockrag_ingest.DIM。

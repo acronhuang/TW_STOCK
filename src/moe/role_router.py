@@ -115,12 +115,9 @@ LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0'))  # 0=greedy 完全可
 LLM_SEED = int(os.getenv('LLM_SEED', '42'))
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://172.16.9.28:11434')       # 主力 .28
 OLLAMA_URL_27 = os.getenv('OLLAMA_CONSENSUS_URL', 'http://172.16.9.27:11434')  # 合議 .27
-OLLAMA_ALTOS_URL = os.getenv('OLLAMA_ALTOS_URL', '').rstrip('/')
 
 # 模型 → 主機：唯一來源是 src/moe/model_nodes.py（env MODEL_NODES 可擴充）；換模型時改那裡。
 MODEL_TO_URL = dict(model_nodes.MODEL_NODES)
-if OLLAMA_ALTOS_URL:
-    MODEL_TO_URL[model_nodes.ALTOS_MODEL] = OLLAMA_ALTOS_URL
 
 
 def _env_flag(name: str, default: bool) -> bool:

@@ -105,7 +105,7 @@ def render(stamp, findings, scanned):
 def current_roster():
     from src.moe import model_nodes
 
-    return [*model_nodes.MODEL_NODES, model_nodes.EMBED_MODEL, model_nodes.ALTOS_MODEL, *EXTERNAL_MODELS]
+    return [*model_nodes.MODEL_NODES, model_nodes.EMBED_MODEL, *EXTERNAL_MODELS]
 
 
 def main(argv=None, roster=None, now=datetime.now):

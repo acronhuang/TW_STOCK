@@ -36,7 +36,7 @@ STATE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 REMIND_HOURS = float(os.getenv("OLLAMA_WATCH_REMIND_HOURS", "6"))
 TIMEOUT = float(os.getenv("OLLAMA_WATCH_TIMEOUT", "6"))
 
-# 監控目標：名稱 -> base url（env 可覆寫）。.44(altos) 未使用，不納入監控。
+# 監控目標：名稱 -> base url（env 可覆寫）。
 NODES = {
     "主力(.28)": os.getenv("OLLAMA_URL", "http://172.16.9.28:11434"),
     "合議(.27)": os.getenv("OLLAMA_CONSENSUS_URL", "http://172.16.9.27:11434"),
