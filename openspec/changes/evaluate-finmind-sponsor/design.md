@@ -62,7 +62,7 @@
 | month_revenue_detail | 1,358,820 | 1,358,820 | 0（0.00%） | 0 |
 
 結論：採 D2 方案 B。每小時下載對這三個資料集的重抓在 7.5 天內沒有改變任何一筆文件的內容，每天約 7,200 次請求沒有產出；已於 2026-10-21 實作：`scripts/hourly_data_update.sh` 每輪先問 `scripts/hourly_daily_gate.py`，「基本面」類別（除這三個資料集外只有不耗額度的下市資料表）每天 03:00 之後第一輪才下載，成功才記帳（`logs/.hourly_daily_state.json`），失敗下一小時重試；`HOURLY_DAILY_CATEGORIES=` 設成空字串即可還原每小時。
-限制：量測期間不含月營收公告期（每月 10 日前後），所以「新出現 0」只代表非公告期；公告期的新增由月營收每日 timer 與 OpenAPI 同步負責，方案 B 另案時要一併驗證。暫時排程已於 2026-10-20 移除，快照檔 `logs/refetch_measure.jsonl` 保留作為依據。
+限制：量測期間不含月營收公告期（每月 10 日前後），所以「新出現 0」只代表非公告期；公告期的新增由月營收每日 timer 與 OpenAPI 同步負責，方案 B 另案時要一併驗證。暫時排程已於 2026-10-20 移除；量測腳本（`scripts/measure_hourly_refetch.py`、`src/ops/refetch_measure.py`）、測試與快照檔（約 81MB）已於 2026-10-21 清除，數字以上表為準，腳本可從 git 歷史取回。
 
 ### 1.3 `--limit 250` 的效果
 
