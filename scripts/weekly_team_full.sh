@@ -58,6 +58,7 @@ if [ "${WEEKLY_SKIP_GUARD:-0}" != "1" ]; then
 fi
 
 # ── [1/4] phase1 背景啟動 ───────────────────────────────────────────
+bash scripts/wait_for_pipeline.sh      # 收盤後管線還在跑就先等，不與它同時搶 .28
 echo "──── [1/4] phase1：6 角色分析（quick，universe=${UNIVERSE}）背景啟動 ────"
 # --skip-done：中斷重跑時不重做已有完整無失敗報告的標的（有失敗的仍會重跑）
 $PY -u scripts/team_daily_verified.py --universe "$UNIVERSE" --quick --no-line \
