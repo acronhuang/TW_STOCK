@@ -95,4 +95,3 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 50 23 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/wiki_raw_capture.py capture >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_wiki_raw.log 2>&1
 55 23 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/macro_news_capture.py capture >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_macro_news.log 2>&1
 */2 * * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/gpu_sample.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_gpu_sample.log 2>&1
-30 10 23 10 *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/rule_roles_shadow.py --n 48 >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_rule_roles_shadow.log 2>&1  # 一次性：2026-10-23 角色簡化影子測試，跑完移除
