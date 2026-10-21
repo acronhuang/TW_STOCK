@@ -7,6 +7,7 @@
 - [x] 1.3 把 `sync_dividend_detail.py` 的排程參數改為 `--limit 250`；2026-10-13 已套用（live crontab 與 `deploy/crontab.txt`，漂移檢查 OK，67 條）。尚缺驗證：連續 7 天 `check_finmind_quota.py` 通過，且 01:05 的 402 消失。  驗證結果（2026-10-20）：`check_finmind_quota.py` 自 10-14 起連續 7 天通過（10-13 那次是修正前、看到 10-13 01:05 的 51 次 402），保留的每小時日誌中最後一次 402 是 10-13 01:05；之後每晚 01:05 開始時伺服器端用量為 552/600（餘 48，緣由是 250 次股利同步加 300 次每小時下載，邊際不大）。
 - [x] 1.4 量測每小時重抓的價值：已於 2026-10-13 排入每小時 :50 的快照（`scripts/measure_hourly_refetch.py snapshot`，暫時排程），24 小時後執行 `report`；驗證：產出「24 小時內內容有變動的文件數」表附在 design.md，並據此在方案 B 與維持現狀之間下結論，之後移除暫時排程。  結果（2026-10-20）：181 份快照、7.5 天，三個資料集 0 筆內容變動，結論採方案 B（實作另案），暫時排程已移除；數字見 design.md「量測結果」。
 - [x] 1.5 FinMind 客戶端遇 402 不重試，同一程序連續 2 次 402 後略過剩餘請求（2026-10-13 完成）；驗證：`tests/test_finmind_client_quota.py` 5 個測試，三處實作被破壞時皆失敗，`tests/test_downloaders.py` 仍通過，全量回歸 822 passed。
+- [x] 1.6 基本面三個資料集改每日一次（2026-10-21）：`src/ops/daily_gate.py`、`scripts/hourly_daily_gate.py` 接上 `scripts/hourly_data_update.sh`；驗證：`tests/test_hourly_daily_gate.py` 13 個測試、16 處變異全數抓到；正式環境 07:05 下載一次並記帳、08:05 略過，08:05 輪結束用量 6/600（先前每輪約 300）。
 
 ## 2. 可觀測性
 

@@ -5,7 +5,7 @@ date: 2026-10-21
 
 # 不訂閱 FinMind 付費方案
 
-本決定以正式機 `172.16.9.166` 為準。脈絡、量測與替代方案見 OpenSpec 變更 `openspec/changes/evaluate-finmind-sponsor/`（[design.md](../../openspec/changes/evaluate-finmind-sponsor/design.md)）。
+本決定以正式機 `172.16.9.166` 為準。脈絡、量測與替代方案見 OpenSpec 變更 `openspec/changes/archive/2026-10-21-evaluate-finmind-sponsor/`（[design.md](../../openspec/changes/archive/2026-10-21-evaluate-finmind-sponsor/design.md)）。
 
 ## 現況量測
 

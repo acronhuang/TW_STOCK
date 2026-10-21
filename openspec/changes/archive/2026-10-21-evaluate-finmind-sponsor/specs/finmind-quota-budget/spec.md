@@ -68,3 +68,24 @@ FinMind 回 HTTP 402 時，下載客戶端 MUST NOT 重試；同一程序內連�
 #### Scenario: The usage query fails
 - **WHEN** 用量查詢逾時或回傳錯誤
 - **THEN** 日誌 SHALL 記「伺服器端用量無資料」，且不得出現 0% 或 0/600
+
+### Requirement: Slowly changing datasets are downloaded once a day
+每小時下載對「基本面」類別（股利政策、除權除息結果、月營收）SHALL 每天只在 03:00 之後的第一輪下載一次；下載成功才算當天完成，失敗 SHALL 於下一小時重試；閘門本身出錯時 MUST NOT 停掉下載。其餘類別維持每小時。
+
+驗證：`tests/test_hourly_daily_gate.py`（模組與命令的單元測試，以及在暫存專案裡真的執行 `scripts/hourly_data_update.sh` 的端到端測試）。
+
+#### Scenario: The first run after the daily hour
+- **WHEN** 今天還沒成功下載過基本面，且現在已過 03:00
+- **THEN** 該輪 SHALL 下載基本面並記下今天已完成
+
+#### Scenario: A later run on the same day
+- **WHEN** 基本面今天已成功下載
+- **THEN** 之後各輪 SHALL 略過基本面並在日誌寫明，其餘類別仍照常下載，略過的類別仍算本輪成功
+
+#### Scenario: The daily download failed
+- **WHEN** 基本面下載失敗
+- **THEN** 當天 SHALL NOT 記為完成，下一小時那輪 SHALL 重試
+
+#### Scenario: The gate itself breaks
+- **WHEN** 閘門命令無法執行或出錯
+- **THEN** 每小時下載 SHALL 照舊執行所有類別
