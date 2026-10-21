@@ -2,10 +2,10 @@
 """角色簡化影子測試：同一批股票用不同角色編制各跑一次，比較最後裁決。只讀，不寫資料庫。
 
 編制（arm）：
-  P   現行：風控、籌碼用規則模板
+  P   現行：價值、風控、籌碼都用規則模板（2026-10-21 起的預設）
   P2  與 P 完全相同再跑一次，量測「重跑本身」的雜訊（同輸入也會偶爾翻票）
   F   六個角色全走 LLM（TEAM_RULE_ROLES=""）
-  V   現行再加價值角色用規則模板
+  V   價值角色走 LLM、風控與籌碼用模板（2026-10-21 之前的編制）
 判讀以 P↔P2 的一致率當底線：F 或 V 與 P 的一致率區間若與它重疊，差異就分不出是編制還是雜訊。
 輸出：logs/rule_roles_shadow/shadow_YYYYMMDD.jsonl（可續跑）與 report_YYYYMMDD.md。
 
@@ -29,9 +29,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-ARMS = {"P": None, "P2": None, "F": "", "V": "risk-manager,chip-analyst,value-analyst"}  # None＝不設環境變數；""＝全部回 LLM
+ARMS = {"P": None, "P2": None, "F": "", "V": "risk-manager,chip-analyst"}  # None＝不設環境變數；""＝全部回 LLM
 COMPARISONS = (("P", "P2", "雜訊底線：同編制再跑一次"), ("P", "F", "現行 vs 六角色全 LLM"),
-               ("V", "P", "價值角色改模板 vs 現行"), ("V", "F", "價值角色改模板 vs 六角色全 LLM"))
+               ("V", "P", "價值角色走 LLM（舊編制）vs 現行"), ("V", "F", "價值角色走 LLM（舊編制）vs 六角色全 LLM"))
 OUT_DIR = ROOT / "logs" / "rule_roles_shadow"
 
 

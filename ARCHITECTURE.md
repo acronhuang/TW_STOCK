@@ -171,14 +171,14 @@
 | phase1 | 🎯 總經分析師 `macro-analyst` | `qwen3.5:35b-a3b` | `.28` |
 | phase1 | 📈 技術分析師 `technical-analyst` | `qwen3.5:35b-a3b` | `.28` |
 | phase1 | 💰 基本面分析師 `fundamental-analyst` | `qwen3.5:35b-a3b` | `.28` |
-| phase1 | 💎 價值分析師 `value-analyst` | `qwen3.5:35b-a3b` | `.28` |
+| phase1 | 💎 價值分析師 `value-analyst` | 規則模板（不經 LLM） | `.166` |
 | phase1 | 🛡️ 風險管理 `risk-manager` | 規則模板（不經 LLM） | `.166` |
 | phase1 | 🏦 籌碼分析師 `chip-analyst` | 規則模板（不經 LLM） | `.166` |
 | phase2 | 🎩 投資顧問 `investment-advisor` | `qwen3.5:35b-a3b` | `.28` |
 | phase2 | 🗳️ 合議委員會（三位） | `qwen3.8:27b`、`gemma4:12b`、`granite4.2:8b` | `.27` / `.27` / `.28` |
 | phase2 | 🎙️ 主持人（定案） | `qwen3.5:35b-a3b` | `.28` |
 
-風險管理與籌碼兩個角色由 `src/moe/rule_roles.py` 以固定模板產生（部位與停損本來就是程式算好的數字，籌碼立場離線分析幾乎不帶資訊），報告仍照六份存檔；`TEAM_RULE_ROLES`（空字串＝全部回到 LLM）可覆寫。價值分析師也有模板（`TEAM_RULE_ROLES=risk-manager,chip-analyst,value-analyst` 才啟用，預設關閉）：它的立場本來就是 `valuation.composite.verdict`，離線檢驗中與「現價／合理價」比值的相關係數 0.91；要不要預設啟用等 `scripts/rule_roles_shadow.py` 的影子測試結果（2026-10-23）。
+價值、風險管理與籌碼三個角色由 `src/moe/rule_roles.py` 以固定模板產生（部位與停損本來就是程式算好的數字，籌碼立場離線分析幾乎不帶資訊），報告仍照六份存檔；`TEAM_RULE_ROLES`（空字串＝全部回到 LLM）可覆寫。價值角色自 2026-10-21 起也用模板（`TEAM_RULE_ROLES=risk-manager,chip-analyst` 可讓它單獨回到 LLM）：它的立場本來就是 `valuation.composite.verdict`；`scripts/rule_roles_shadow.py` 影子測試（48 檔）與 LLM 版的最後裁決一致率 88%，落在同編制重跑的雜訊（81%）內，每檔省約 11% 耗時，見 `docs/adr/0023-價值角色改用規則模板.md`。
 
 模型名稱只登記在 `src/moe/model_nodes.py`；`TWSTOCK_MAIN_LLM`、`TWSTOCK_VIEW_LLM`、`CONSENSUS_MODELS`、`CONSENSUS_FACILITATOR` 等環境變數可覆寫。空方委員（魔鬼代言人，`qwen3.8:27b`）預設關閉，設 `CONSENSUS_DEVIL=1` 才啟用。
 

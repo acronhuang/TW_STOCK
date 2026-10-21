@@ -72,7 +72,7 @@ def test_each_arm_sets_its_own_environment_while_running_and_restores_it(tmp_pat
     for arm in ("P", "F", "V"):
         shadow.run_arm(arm, ["2330"], record(arm), tmp_path / "o.jsonl", set(), workers=1)
 
-    assert seen == {"P": "<unset>", "F": "", "V": "risk-manager,chip-analyst,value-analyst"}
+    assert seen == {"P": "<unset>", "F": "", "V": "risk-manager,chip-analyst"}
     assert os.environ["TEAM_RULE_ROLES"] == "original"
     assert all(not r.get("error") for r in shadow.load_rows(tmp_path / "o.jsonl"))
 
@@ -115,7 +115,7 @@ def test_main_runs_every_arm_writes_the_dated_files_and_prints_the_report(tmp_pa
     assert code == 0
     rows = shadow.load_rows(tmp_path / "shadow_20261023.jsonl")
     assert sorted({r["arm"] for r in rows}) == ["F", "P", "P2", "V"] and len(rows) == 8
-    assert "| V↔F 價值角色改模板 vs 六角色全 LLM | 2/2 = 100%" in (tmp_path / "report_20261023.md").read_text(encoding="utf-8")
+    assert "| V↔F 價值角色走 LLM（舊編制）vs 六角色全 LLM | 2/2 = 100%" in (tmp_path / "report_20261023.md").read_text(encoding="utf-8")
     assert "== 編制 P：2 檔" in capsys.readouterr().out
 
 

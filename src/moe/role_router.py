@@ -7,7 +7,7 @@
   📈 technical-analyst       → MAIN (@ .28)                    指標 + 型態
   💰 fundamental-analyst     → MAIN (@ .28)                    財報數字
   🎯 macro-analyst           → MAIN (@ .28)                    大局
-  💎 value-analyst           → VIEW (= MAIN @ .28)             估值
+  💎 value-analyst           → VIEW (= MAIN @ .28)             估值（團隊分析流程已改規則模板，見 rule_roles.py）
   🏦 chip-analyst            → VIEW (= MAIN @ .28)             法人趨勢（團隊分析流程已改規則模板，見 rule_roles.py）
   🛡️ risk-manager            → qwen3.8:27b @ .27               財經風控（團隊分析流程已改規則模板）
 

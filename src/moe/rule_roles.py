@@ -2,12 +2,13 @@
 
 離線分析：這兩個角色的多空立場幾乎不帶資訊（籌碼 99% 中性、風控本身不分多空），
 且風控的部位與停損早已由程式算好；改用固定模板可省兩次最慢的 LLM 呼叫，輸出格式與原本一致。
-TEAM_RULE_ROLES 可覆寫（逗號分隔；設成空字串＝全部回到 LLM）。
+價值角色（2026-10-21 起）：立場本來就是 valuation.composite.verdict；影子測試（48 檔）與 LLM 版的最後裁決一致率 88%，
+落在同編制重跑的雜訊（81%）內，每檔省約 11% 耗時（docs/adr/0023）。
+TEAM_RULE_ROLES 可覆寫（逗號分隔；設成空字串＝全部回到 LLM；只想讓價值回到 LLM 就設 risk-manager,chip-analyst）。
 """
 import os
 
-DEFAULT_RULE_ROLES = ("risk-manager", "chip-analyst")
-# value-analyst 也有模板，但不在預設：它的立場幾乎就是 valuation.composite.verdict，改用模板前要先過影子測試（scripts/rule_roles_shadow.py）
+DEFAULT_RULE_ROLES = ("risk-manager", "chip-analyst", "value-analyst")
 MODEL_LABEL = "rule-based"
 
 

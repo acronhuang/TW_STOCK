@@ -77,10 +77,10 @@ def test_partial_data_shows_blanks_instead_of_none():
     assert "None" not in rule_roles.risk_report(data, "") and "None" not in rule_roles.chip_report(data)
 
 
-def test_by_default_risk_and_chip_are_rule_roles_in_pipeline_order(monkeypatch):
+def test_by_default_value_risk_and_chip_are_rule_roles_in_pipeline_order(monkeypatch):
     monkeypatch.delenv("TEAM_RULE_ROLES", raising=False)
 
-    assert rule_roles.active(ROLES) == ["risk-manager", "chip-analyst"]
+    assert rule_roles.active(ROLES) == ["value-analyst", "risk-manager", "chip-analyst"]
 
 
 @pytest.mark.parametrize("value, expected", [("", []), ("chip-analyst", ["chip-analyst"]), ("chip-analyst, nonsense", ["chip-analyst"])])
@@ -114,13 +114,13 @@ def pipeline(monkeypatch):
     return asked
 
 
-def test_the_pipeline_asks_the_llm_only_for_the_four_remaining_roles_and_still_stores_six_reports(pipeline):
+def test_the_pipeline_asks_the_llm_only_for_the_three_remaining_roles_and_still_stores_six_reports(pipeline):
     result = tdv.analyze_symbol("2006", quick=False)
 
-    assert sorted(pipeline) == sorted(["macro-analyst", "technical-analyst", "fundamental-analyst", "value-analyst", "investment-advisor"])
+    assert sorted(pipeline) == sorted(["macro-analyst", "technical-analyst", "fundamental-analyst", "investment-advisor"])
     assert set(result["reports"]) == set(ROLES)
     assert "風險等級：中風險" in result["reports"]["risk-manager"] and "籌碼訊號" in result["reports"]["chip-analyst"]
-    assert result["models"]["risk-manager"] == "rule-based@local" and result["models"]["chip-analyst"] == "rule-based@local"
+    assert {result["models"][r] for r in ("value-analyst", "risk-manager", "chip-analyst")} == {"rule-based@local"}
 
 
 def test_restoring_the_environment_sends_all_six_roles_back_to_the_llm(pipeline, monkeypatch):
@@ -128,7 +128,7 @@ def test_restoring_the_environment_sends_all_six_roles_back_to_the_llm(pipeline,
 
     tdv.analyze_symbol("2006", quick=False)
 
-    assert {"risk-manager", "chip-analyst"} <= set(pipeline)
+    assert {"value-analyst", "risk-manager", "chip-analyst"} <= set(pipeline)
 
 
 def test_the_failure_rate_counts_only_roles_that_actually_call_the_llm(monkeypatch, capsys):
@@ -137,7 +137,7 @@ def test_the_failure_rate_counts_only_roles_that_actually_call_the_llm(monkeypat
 
     tdv.report_role_failures(alert=False)
 
-    assert "1/40 份報告失敗" in capsys.readouterr().out
+    assert "1/30 份報告失敗" in capsys.readouterr().out
 
 
 def test_prompts_are_not_built_for_roles_that_never_reach_the_llm(pipeline, monkeypatch):
@@ -146,7 +146,7 @@ def test_prompts_are_not_built_for_roles_that_never_reach_the_llm(pipeline, monk
 
     tdv.analyze_symbol("2006", quick=True)
 
-    assert "risk-manager" not in built and "chip-analyst" not in built and "fundamental-analyst" in built
+    assert not {"value-analyst", "risk-manager", "chip-analyst"} & set(built) and "fundamental-analyst" in built
 
 
 VALUATION = {
@@ -187,16 +187,15 @@ def test_a_missing_model_shows_blanks_instead_of_none():
     assert "None" not in text and "DDM 合理價無資料元" in text and "ddm_fair_value" not in text
 
 
-def test_value_analyst_is_not_a_rule_role_unless_asked_for(monkeypatch):
+def test_value_analyst_is_a_rule_role_by_default_and_can_go_back_to_the_llm_alone(monkeypatch):
     monkeypatch.delenv("TEAM_RULE_ROLES", raising=False)
-    assert "value-analyst" not in rule_roles.active(ROLES)
+    assert "value-analyst" in rule_roles.active(ROLES)
 
-    monkeypatch.setenv("TEAM_RULE_ROLES", "risk-manager,chip-analyst,value-analyst")
-    assert rule_roles.active(ROLES) == ["value-analyst", "risk-manager", "chip-analyst"]
+    monkeypatch.setenv("TEAM_RULE_ROLES", "risk-manager,chip-analyst")
+    assert rule_roles.active(ROLES) == ["risk-manager", "chip-analyst"]
 
 
-def test_with_value_as_a_rule_role_the_pipeline_asks_the_llm_for_one_role_less_and_still_stores_six_reports(pipeline, monkeypatch):
-    monkeypatch.setenv("TEAM_RULE_ROLES", "risk-manager,chip-analyst,value-analyst")
+def test_by_default_the_value_report_is_the_template_with_the_profile_and_no_llm_call(pipeline, monkeypatch):
     monkeypatch.setitem(DATA, "valuation", {**VALUATION})
     monkeypatch.setattr("src.analysis.value_profile.value_profile_text", lambda db, s: "財務:ROIC26.5%")
 
@@ -208,6 +207,7 @@ def test_with_value_as_a_rule_role_the_pipeline_asks_the_llm_for_one_role_less_a
 
 
 def test_the_llm_value_prompt_still_gets_the_profile_and_skips_it_when_the_data_is_insufficient(pipeline, monkeypatch):
+    monkeypatch.setenv("TEAM_RULE_ROLES", "risk-manager,chip-analyst")
     seen = {}
     monkeypatch.setattr(tdv, "build_expert_prompt", lambda role, sym, data: f"prompt-{role}")
     monkeypatch.setattr(tdv, "ask_role", lambda role, prompt, include_role_prompt=True, timeout=300: seen.setdefault(role, prompt) and
@@ -227,7 +227,6 @@ def test_a_failing_profile_lookup_never_breaks_the_analysis(pipeline, monkeypatc
     def boom(db, symbol):
         raise RuntimeError("mongo down")
 
-    monkeypatch.setenv("TEAM_RULE_ROLES", "risk-manager,chip-analyst,value-analyst")
     monkeypatch.setitem(DATA, "valuation", {**VALUATION})
     monkeypatch.setattr("src.analysis.value_profile.value_profile_text", boom)
 
