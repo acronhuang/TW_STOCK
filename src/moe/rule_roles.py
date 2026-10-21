@@ -76,7 +76,12 @@ def value_report(data, profile=""):
     val = data.get("valuation") or {}
     comp, price = val.get("composite") or {}, val.get("current_price")
     if comp.get("fair_value") is None or price is None:
-        return "估值資料不足，無法推估合理價。"
+        # 估值模型各自會寫 reason（淨利為負、無股利…）；有現價就把原因帶出去，別只說資料不足
+        reasons = [f"{label}{m['reason']}" for label, m in (("DCF：", val.get("dcf")), ("DDM：", val.get("ddm")), ("PE Band：", val.get("pe_band")))
+                   if isinstance(m, dict) and m.get("reason")]
+        if price is None or not reasons:
+            return "估值資料不足，無法推估合理價。"
+        return "\n".join([f"{comp.get('verdict') or '無法判定'}（現價{price}元，沒有可用的合理價）", "；".join(reasons), f"📌引用數值：current_price={price}"])
 
     def model(label, m, extra=""):
         m = m or {}

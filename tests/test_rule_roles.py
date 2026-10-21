@@ -233,3 +233,39 @@ def test_a_failing_profile_lookup_never_breaks_the_analysis(pipeline, monkeypatc
     result = tdv.analyze_symbol("2006", quick=False)
 
     assert result["reports"]["value-analyst"].startswith("嚴重高估") and "四維畫像" not in result["reports"]["value-analyst"]
+
+
+LOSS_MAKER = {
+    "current_price": 26.8,
+    "dcf": {"fair_value": None, "reason": "淨利為負，DCF 不適用"},
+    "ddm": {"fair_value": None, "reason": "最近一年無股利"},
+    "pe_band": {"fair_value": None, "reason": "EPS 不足"},
+    "composite": {"fair_value": None, "upside_pct": None, "verdict": "無法判定", "models_used": 0},
+}
+
+
+def test_without_a_usable_fair_price_the_value_report_says_why_each_model_does_not_apply():
+    text = rule_roles.value_report({"valuation": LOSS_MAKER}, "")
+
+    assert text.splitlines()[0] == "無法判定（現價26.8元，沒有可用的合理價）"
+    assert "DCF：淨利為負，DCF 不適用；DDM：最近一年無股利；PE Band：EPS 不足" in text
+    assert cited(text) == {"current_price": "26.8"} and "資料不足" not in text
+
+
+def test_only_the_models_that_wrote_a_reason_are_listed():
+    val = {**LOSS_MAKER, "dcf": None, "pe_band": {"fair_value": None}}
+
+    assert rule_roles.value_report({"valuation": val}, "").splitlines()[1] == "DDM：最近一年無股利"
+
+
+@pytest.mark.parametrize("val", [{**LOSS_MAKER, "current_price": None},
+                                 {"current_price": 26.8, "composite": LOSS_MAKER["composite"]},
+                                 {"current_price": 26.8, "dcf": {"fair_value": None}, "composite": {"fair_value": None}}])
+def test_without_a_price_or_without_any_reason_it_still_says_the_data_is_insufficient(val):
+    assert rule_roles.value_report({"valuation": val}, "") == "估值資料不足，無法推估合理價。"
+
+
+def test_a_missing_verdict_still_opens_with_the_word_for_undetermined():
+    val = {**LOSS_MAKER, "composite": {"fair_value": None}}
+
+    assert rule_roles.value_report({"valuation": val}, "").startswith("無法判定（現價26.8元")
