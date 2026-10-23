@@ -37,6 +37,7 @@ CONCENTRATION_FAIL = 30.0
 CHASE_MA_BIAS = 9.0    # 2024 年起全市場個股日資料的第 90 百分位（9.1）
 CHASE_RSI = 72.0       # 同上（71.5）
 CHASE_RETURN_1M = 14.0  # 同上（14.3）
+RESIST_BLOCK = 3       # 與 signal_rules.PARAMS["resist_block"] 一致（測試比對）
 DISCLAIMER = "計畫審查（只檢查計畫的風控是否完整，不預測漲跌、不保證報酬、不代為下單）"
 
 
@@ -224,6 +225,20 @@ def check_chase(factors):
     return _check("追高", PASS, f"{shown}，未達追高門檻。")
 
 
+def check_resistance(resistance):
+    """近期在同價位衝高失敗的次數。歷史驗證的效果小於一次來回成本，所以只當風險提示。"""
+    count = _num(resistance.get("failed_touches")) if isinstance(resistance, dict) else None
+    if count is None:
+        return _check("同價位受阻", MISSING, "查不到近期價格資料，無法計算同價位受阻次數。")
+    count, window, zone = int(count), int(_num(resistance.get("window")) or 30), _num(resistance.get("zone_high"))
+    if count >= RESIST_BLOCK:
+        where = f"{_n(zone)} 元附近" if zone is not None else "近期高點附近"
+        return _check("同價位受阻", WARN, f"近 {window} 日在{where}有 {count} 次衝高失敗（達 {RESIST_BLOCK} 次）。這只是風險提示："
+                      "歷史驗證（2013 至 2026 年，開發期與留存期各一次）中，被這條規則標到的買進條件，之後 20 日平均落後未被標到者約 0.3 到 0.4%，"
+                      "小於一次來回交易成本，不是進出場訊號。")
+    return _check("同價位受阻", PASS, f"近 {window} 日同價位衝高失敗 {count} 次，未達 {RESIST_BLOCK} 次。")
+
+
 def check_holding(plan, entry, positions):
     if positions is None:
         return _check("持倉", MISSING, "查不到持倉資料。")
@@ -246,7 +261,10 @@ def verdict(checks):
     return f"{result}（另有 {missing} 項資料不足，未能檢查）" if missing else result
 
 
-def review(plan, risk, factors, positions):
+_SKIP = object()
+
+
+def review(plan, risk, factors, positions, resistance=_SKIP):
     """plan 要先經 normalize；risk、factors、positions 取不到時傳 None。回 {plan, checks, verdict}。"""
     risk = risk if isinstance(risk, dict) and not risk.get("error") else None
     factors = factors if isinstance(factors, dict) else None
@@ -260,6 +278,8 @@ def review(plan, risk, factors, positions):
         stop_check, stop = check_stop(plan, entry, atr)
         checks = [stop_check, check_risk(plan, entry, stop), check_size(plan, entry, risk),
                   check_average_down(plan, entry, positions), check_chase(factors)]
+        if resistance is not _SKIP:
+            checks.append(check_resistance(resistance))
     else:
         checks = [check_holding(plan, entry, positions)]
     return {"plan": plan, "checks": checks, "verdict": verdict(checks)}

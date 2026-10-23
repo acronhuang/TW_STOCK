@@ -248,3 +248,38 @@ def test_a_zero_half_kelly_cap_is_explained_instead_of_saying_exceeds_zero_perce
     text = detail(pr.review(plan(shares=300), risk, CALM, []), "倉位占比")
     assert status(pr.review(plan(shares=300), risk, CALM, []), "倉位占比") == pr.WARN
     assert "半凱利上限為 0%" in text and "超過系統風控" not in text
+
+
+# ---- 同價位受阻 ----
+def with_resistance(resistance, **kw):
+    return pr.review(plan(**kw), RISK, CALM, [], resistance)
+
+
+@pytest.mark.parametrize("count, expected", [(0, pr.PASS), (2, pr.PASS), (3, pr.WARN), (7, pr.WARN)])
+def test_resistance_threshold(count, expected):
+    assert status(with_resistance({"failed_touches": count, "window": 30, "zone_high": 105.0}), "同價位受阻") == expected
+
+
+def test_resistance_warning_names_the_zone_and_admits_the_effect_is_small():
+    text = detail(with_resistance({"failed_touches": 3, "window": 30, "zone_high": 105.0}), "同價位受阻")
+    assert "105 元附近" in text and "3 次衝高失敗" in text and "小於一次來回交易成本" in text and "不是進出場訊號" in text
+
+
+@pytest.mark.parametrize("bad", [None, {"error": "價格資料不足"}, {"window": 30}, ["x"], {"failed_touches": "abc"}])
+def test_resistance_missing_or_invalid_data_is_missing_not_passed(bad):
+    assert status(with_resistance(bad), "同價位受阻") == pr.MISSING
+
+
+def test_resistance_is_only_checked_when_given_and_only_for_buys():
+    assert "同價位受阻" not in [c["item"] for c in pr.review(plan(), RISK, CALM, [])["checks"]]
+    assert "同價位受阻" not in [c["item"] for c in pr.review(plan(action="賣出"), RISK, CALM, HELD, {"failed_touches": 5})["checks"]]
+
+
+def test_a_resistance_warning_alone_makes_the_verdict_a_warning():
+    assert with_resistance({"failed_touches": 3, "window": 30}, shares=300)["verdict"] == pr.WARN
+
+
+def test_the_plan_review_threshold_matches_the_validated_rule():
+    from src.analysis import signal_rules
+
+    assert pr.RESIST_BLOCK == signal_rules.PARAMS["resist_block"]

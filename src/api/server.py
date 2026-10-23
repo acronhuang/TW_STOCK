@@ -68,6 +68,32 @@ def get_price(symbol: str, days: int = 20):
     } for p in reversed(prices)]
 
 
+@app.get("/api/resistance/{symbol}")
+def get_resistance(symbol: str):
+    """近 30 日在同一價位（±2%）衝高失敗的次數；規則與驗證見 src/analysis/signal_rules.py。"""
+    import pandas as pd
+
+    from src.analysis import signal_rules
+
+    window = signal_rules.PARAMS['resist_window']
+    rows = list(db[COLL_STOCK_PRICE].find(
+        {'symbol': symbol}, {'_id': 0, 'date': 1, 'adj_high': 1, 'adj_close': 1, 'close': 1}
+    ).sort('date', -1).limit(window * 3))[::-1]
+    rows = [r for r in rows if tof(r.get('adj_high')) and tof(r.get('adj_close')) and tof(r.get('close'))]
+    if len(rows) < window + 5:
+        return {'symbol': symbol, 'error': '價格資料不足'}
+    frame = pd.DataFrame({'high': [tof(r['adj_high']) for r in rows], 'close': [tof(r['adj_close']) for r in rows]})
+    scale = tof(rows[-1]['close']) / tof(rows[-1]['adj_close'])
+    return {
+        'symbol': symbol,
+        'as_of': str(rows[-1]['date'])[:10],
+        'window': window,
+        'failed_touches': int(signal_rules.failed_touches(frame).iloc[-1]),
+        'zone_high': round(float(frame['high'].tail(window).max()) * scale, 2),
+        'block_at': signal_rules.PARAMS['resist_block'],
+    }
+
+
 # ──────────────────────────────────────────────
 #  因子
 # ──────────────────────────────────────────────

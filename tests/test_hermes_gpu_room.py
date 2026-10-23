@@ -149,3 +149,24 @@ def test_plugin_canonicalizes_untagged_evict_names(monkeypatch):
     plugin._module = lambda path, label: {"nodes": model_nodes, "room": room}[label]
     plugin._make_room()
     assert seen["evict"] == ["bge-m3:latest"]
+
+
+def test_hermes_evict_is_derived_from_the_committee_members_on_the_hermes_node():
+    nodes = {"a": "http://x:1", "b": "http://x:1/", "c": "http://y:1", "d": "http://x:1"}
+    assert model_nodes.hermes_evict(("a", "b", "c", "d", "e"), nodes, "http://x:1", {"a"}) == ("b", "d")
+
+
+def test_hermes_evict_never_includes_a_model_other_roles_need():
+    nodes = {"risk": "http://x:1", "seat": "http://x:1"}
+    assert model_nodes.hermes_evict(("risk", "seat"), nodes, "http://x:1", {"risk"}) == ("seat",)
+
+
+def test_the_effective_committee_follows_the_environment_like_the_consensus_module(monkeypatch):
+    monkeypatch.delenv("CONSENSUS_MODELS", raising=False)
+    assert model_nodes.effective_committee() == tuple(model_nodes.DEFAULT_COMMITTEE)
+    monkeypatch.setenv("CONSENSUS_MODELS", " m1 , m2,,")
+    assert model_nodes.effective_committee() == ("m1", "m2")
+
+
+def test_the_current_evict_list_is_the_gemma_seat_on_node_27():
+    assert model_nodes.HERMES_EVICT == (model_nodes.DEFAULT_MEMBER_GOOGLE,)

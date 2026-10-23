@@ -59,6 +59,19 @@ def _shift(series, n):
     return series.shift(n, fill_value=False)
 
 
+def failed_touches(df, p=PARAMS):
+    """近 resist_window 日在最高價附近（±resist_zone）衝高失敗的次數：收盤離高點太遠，或隔日大跌。"""
+    h, c = df["high"].astype(float), df["close"].astype(float)
+    zone = h.rolling(p["resist_window"]).max()
+    wick_fail = (h - c) >= p["resist_wick"] * h
+    dropped = (c / c.shift(1) - 1) < p["resist_drop"]
+    count = pd.Series(0, index=df.index)
+    for k in range(p["resist_window"]):
+        failed = wick_fail.shift(k, fill_value=False) if k == 0 else wick_fail.shift(k, fill_value=False) | dropped.shift(k - 1, fill_value=False)
+        count = count + (failed & (h.shift(k) >= (1 - p["resist_zone"]) * zone)).astype(int)
+    return count
+
+
 def signals(df, p=PARAMS):
     """回傳 {名稱: 布林 Series}，包含各規則、premise（上升趨勢）、base 與兩個過濾器。"""
     o, h, l, c, v = (df[k].astype(float) for k in ("open", "high", "low", "close", "volume"))
@@ -118,12 +131,5 @@ def signals(df, p=PARAMS):
     warning = (star | hanging | bearish_engulf | doji) & ((c / ema10 - 1) > p["warn_bias"])
     out["blk_warn"] = _flag(warning.astype(int).rolling(p["warn_window"]).sum() >= p["warn_block"])
 
-    zone = h.rolling(p["resist_window"]).max()
-    wick_fail = (h - c) >= p["resist_wick"] * h
-    dropped = (c / c.shift(1) - 1) < p["resist_drop"]
-    count = pd.Series(0, index=df.index)
-    for k in range(p["resist_window"]):
-        failed = wick_fail.shift(k, fill_value=False) if k == 0 else wick_fail.shift(k, fill_value=False) | dropped.shift(k - 1, fill_value=False)
-        count = count + (failed & (h.shift(k) >= (1 - p["resist_zone"]) * zone)).astype(int)
-    out["blk_resist"] = _flag(count >= p["resist_block"])
+    out["blk_resist"] = _flag(failed_touches(df, p) >= p["resist_block"])
     return out

@@ -136,6 +136,7 @@
 | `ml/` | 機器學習 | `anomaly_detector.py`, `predictor.py`（XGBoost 5 日預測） |
 | `sentiment/` | 情緒分析（新聞/PTT/內部人） | `analyzer.py` |
 | `chip_analysis/` | 籌碼分析 | — |
+| `analysis/`（風控與驗證） | ATR 倉位、買賣計畫審查、候選訊號規則與其統計驗證 | `atr_sizing.py`, `plan_review.py`, `signal_rules.py`, `signal_study.py` |
 
 **回測策略**（`src/backtesting/strategy.py`）：`MovingAverageCrossover`（均線交叉）、`RSIMeanReversion`（RSI 均值回歸）、`ValueMomentum`（價值動能）；另有 `examples/` 的 `MomentumStrategy`。績效指標含總報酬/年化/夏普/Sortino/Calmar/最大回撤/勝率/獲利因子。
 
@@ -154,9 +155,17 @@
 
 ### ⑤ 介面 (`src/api`, `dashboard`, `src/alerts`)
 
-- **FastAPI** `:8888` — ~26 個唯讀端點（[§7](#7-api-端點總表)）
+- **FastAPI** `:8888` — ~27 個唯讀端點（[§7](#7-api-端點總表)）
 - **Streamlit** `:8501` — 9 頁儀表板（[§8](#8-儀表板頁面)）
 - **LINE** — `src/alerts/line_notifier.py`，每日推播選股與完整度檢查
+
+### ⑥ Hermes 助理與訊號驗證（唯讀，`deploy/hermes`、`src/ops`）
+
+- **工具**：`src/ops/readonly_tools.py` 只發白名單 GET（個股、大盤、產業、持倉），另有 `calc`、`convert_unit`、`plan_review`；MCP 入口 `scripts/hermes_readonly_mcp.py`。
+- **預路由**：`src/ops/hermes_router.py` 先查資料再交給模型。使用者陳述買賣計畫（有止損或張數等細節）並請求審查時走 `plan_review`；「下單」「幫我買」一律拒絕。
+- **計畫審查**：`src/analysis/plan_review.py` 只檢查風控完整性（止損、單筆風險、倉位占比、攤平、追高、同價位受阻），不預測、不保證報酬；ATR 與 2N 停損來自 `atr_sizing.py`（`/api/risk` 的 `atr`）。外掛直接以工具原文作答，避免 4B 模型轉述時改錯狀態。
+- **外掛** `deploy/hermes/twstock_guard`：預查、數字出處核對；每次對話前依 `model_nodes.HERMES_EVICT`（由有效委員名單與節點自動推導）卸載同節點的委員模型（`src/ops/hermes_gpu_room.py`），讓 Hermes 完整進 GPU（否則只載入約三分之一，慢約 12 倍）。
+- **訊號驗證**：`signal_rules.py` 的 12 條候選規則參數事前固定；`scripts/signal_rules_study.py` 唯讀，開發期可看、留存期只跑一次（`logs/signal_rules/holdout_done.json`）。結論只有 `s_trend_turn` 與 `blk_resist` 兩期方向一致，且效果小於一次來回成本；不進評分、不進預測。
 
 ---
 
@@ -282,6 +291,7 @@ FastAPI，綁 `127.0.0.1:8888`，systemd `twstock-api`。全部為唯讀 `GET`�
 | `/api/valuation/{symbol}` | DCF + DDM + PE Band 估值 |
 | `/api/risk/{symbol}` | 個股風險（VaR/Sharpe/MDD） |
 | `/api/risk/portfolio` | 投組風險 |
+| `/api/resistance/{symbol}` | 近 30 日同價位衝高失敗次數（計畫審查用） |
 | `/api/peer/{symbol}` | 同業比較 |
 | `/api/industry/{industry}` | 產業排名 |
 | `/api/ranking` | 綜合選股排行 |

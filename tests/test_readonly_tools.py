@@ -349,6 +349,7 @@ PLAN_ROUTES = {
     "/api/risk/2330": {"current_price": 100.0, "position_sizing": {"max_position_pct": 3.9}, "atr": {"n": 2.0, "stop_2n": 96.0}},
     "/api/factors/2330": {"close": 100.0, "ma_bias_20": 1.0, "rsi_14": 50.0, "return_1m": 2.0},
     "/api/portfolio/positions": [],
+    "/api/resistance/2330": {"failed_touches": 0, "window": 30, "zone_high": 105.0},
 }
 
 
@@ -380,3 +381,16 @@ def test_plan_review_only_issues_get_requests_to_the_allowed_endpoints():
     ro.call_tool("plan_review", {"symbol": "2330", "action": "賣出", "lots": 1}, fetch)
     assert all(url.startswith(ro.BASE + "/api/") for url in fetch.urls)
     assert not any("predict" in url or "scan" in url for url in fetch.urls)
+
+
+def test_resistance_is_an_allowed_stock_kind_and_hits_the_expected_url():
+    assert "resistance" in ro.STOCK_KINDS
+    fetch = Recorder()
+    ro.call_tool("stock_data", {"kind": "resistance", "symbol": "2330"}, fetch)
+    assert fetch.urls == [ro.BASE + "/api/resistance/2330"]
+
+
+def test_plan_review_shows_the_resistance_check_from_the_endpoint():
+    routes = {**PLAN_ROUTES, "/api/resistance/2330": {"failed_touches": 3, "window": 30, "zone_high": 105.0}}
+    text, is_error = ro.call_tool("plan_review", {"symbol": "2330", "action": "買進", "stop": 96, "lots": 1, "capital": 1000000}, Routes(routes))
+    assert not is_error and "同價位受阻：警告" in text

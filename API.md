@@ -21,7 +21,8 @@ Swagger UI: `http://localhost:8888/docs`
 | GET | `/api/factors/{symbol}` | PE/PB/殖利率/RSI |
 | GET | `/api/financial/{symbol}` | 6維財報健康分析 |
 | GET | `/api/valuation/{symbol}` | DCF+DDM+PE Band |
-| GET | `/api/risk/{symbol}` | VaR/Sharpe/MDD |
+| GET | `/api/risk/{symbol}` | VaR/Sharpe/MDD、ATR 與 2N 停損 |
+| GET | `/api/resistance/{symbol}` | 近 30 日同價位衝高失敗次數 |
 | GET | `/api/peer/{symbol}` | 同業比較 |
 | GET | `/api/score/{symbol}` | 單股綜合評分 |
 

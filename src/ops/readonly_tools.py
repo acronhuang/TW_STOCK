@@ -20,7 +20,7 @@ DEFAULT_PROTOCOL = "2025-06-18"
 # predict 不開放：它每次都重訓並覆寫 models/<代號>_xgb.pkl，不是唯讀。
 STOCK_KINDS = (
     "price", "factors", "valuation", "risk", "peer", "score", "sentiment",
-    "anomaly", "institutional", "revenue", "dividend", "financial", "team", "hsieh",
+    "anomaly", "institutional", "revenue", "dividend", "financial", "team", "hsieh", "resistance",
 )
 MARKET_KINDS = ("macro", "pku", "stocks", "team", "health", "ranking", "scan", "advisor", "hsieh")
 PORTFOLIO_KINDS = ("positions", "lots", "trades")
@@ -262,6 +262,7 @@ def _plan_review(args, fetch):
         _get_json("stock_data", {"kind": "risk", "symbol": symbol}, fetch),
         _get_json("stock_data", {"kind": "factors", "symbol": symbol}, fetch),
         _get_json("portfolio_data", {"kind": "positions"}, fetch),
+        _get_json("stock_data", {"kind": "resistance", "symbol": symbol}, fetch),
     )
     return review.render(result), False
 

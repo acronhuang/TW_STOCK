@@ -61,7 +61,23 @@ ANSWER_MODEL = os.getenv("ANSWER_MODEL", DEFAULT_RISK)
 EMBED_MODEL = os.getenv("EMBED_MODEL", DEFAULT_EMBED)
 # Hermes 使用前要先從同節點卸載的模型：兩者加 Hermes 超過 .27 顯存，Hermes 會被部分載入到 CPU（慢約 12 倍）。
 HERMES_URL = os.getenv("HERMES_OLLAMA_URL", NODE_27).rstrip("/")
-HERMES_EVICT = (DEFAULT_MEMBER_GOOGLE,)
+
+
+def effective_committee():
+    """與 consensus.py 相同：環境變數 CONSENSUS_MODELS 優先，否則用預設編制。"""
+    raw = os.getenv("CONSENSUS_MODELS", ",".join(DEFAULT_COMMITTEE))
+    return tuple(name.strip() for name in raw.split(",") if name.strip())
+
+
+def hermes_evict(committee, nodes, url, keep):
+    """與 Hermes 同節點、屬於委員、且不是其他角色（風險、答覆、主力、嵌入…）用到的模型。"""
+    return tuple(name for name in committee if nodes.get(name, "").rstrip("/") == url and name not in keep)
+
+
+HERMES_EVICT = hermes_evict(
+    effective_committee(), MODEL_NODES, HERMES_URL,
+    {DEFAULT_RISK, DEFAULT_DEVIL, DEFAULT_MAIN, DEFAULT_VIEW, DEFAULT_TECH, ANSWER_MODEL, EMBED_MODEL},
+)
 HERMES_MODEL = "hermes-qwen3-4b"  # Hermes 總指揮用（.27，由 ~/.hermes/config.yaml 指定），不在團隊分析編制內，所以不進 DEFAULT_NODES
 
 

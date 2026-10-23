@@ -403,3 +403,10 @@ def test_all_outputs_are_boolean_series_aligned_to_the_input():
 def test_every_rule_has_a_baseline_and_the_filters_do_not():
     assert set(sr.BASELINE) == set(sr.ENTRY_RULES) | set(sr.SELL_RULES)
     assert set(sr.BASELINE.values()) <= {"premise", "all"}
+
+
+def test_failed_touches_counts_the_touches_and_drives_the_resistance_filter():
+    assert int(sr.failed_touches(resistance_frame(3)).iloc[-1]) == 3
+    assert int(sr.failed_touches(resistance_frame(2)).iloc[-1]) == 2
+    df = random_walk()
+    assert (sr.failed_touches(df) >= sr.PARAMS["resist_block"]).equals(sr.signals(df)["blk_resist"])
