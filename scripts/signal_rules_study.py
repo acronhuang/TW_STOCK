@@ -99,6 +99,18 @@ def get_prices(cache, refresh, limit):
     return data
 
 
+def stock_frame(data, j):
+    """第 j 檔的 (有效日索引, OHLCV 資料表, 20 日平均成交值, 未還原收盤)；歷史不足回 None。"""
+    o, h, l, c, v, raw = (data[k][:, j].astype(float) for k in ("adj_open", "adj_high", "adj_low", "adj_close", "volume", "close"))
+    valid = np.isfinite(o) & np.isfinite(h) & np.isfinite(l) & np.isfinite(c) & np.isfinite(v) & (c > 0) & (raw > 0)
+    if valid.sum() < MIN_BARS:
+        return None
+    index = np.nonzero(valid)[0]
+    frame = pd.DataFrame({"open": o[index], "high": h[index], "low": l[index], "close": c[index], "volume": v[index]})
+    value = (pd.Series(raw[index] * v[index]).rolling(20).mean()).to_numpy()
+    return index, frame, value, raw[index]
+
+
 def detect(data):
     close = data["adj_close"]
     days, stocks = close.shape
@@ -106,14 +118,11 @@ def detect(data):
     masks = {name: np.zeros((days, stocks), dtype=bool) for name in names}
     universe = np.zeros((days, stocks), dtype=bool)
     for j in range(stocks):
-        o, h, l, c, v, raw = (data[k][:, j].astype(float) for k in ("adj_open", "adj_high", "adj_low", "adj_close", "volume", "close"))
-        valid = np.isfinite(o) & np.isfinite(h) & np.isfinite(l) & np.isfinite(c) & np.isfinite(v) & (c > 0) & (raw > 0)
-        if valid.sum() < MIN_BARS:
+        got = stock_frame(data, j)
+        if got is None:
             continue
-        index = np.nonzero(valid)[0]
-        frame = pd.DataFrame({"open": o[index], "high": h[index], "low": l[index], "close": c[index], "volume": v[index]})
-        value = (pd.Series(raw[index] * v[index]).rolling(20).mean()).to_numpy()
-        universe[index, j] = (value >= MIN_VALUE) & (raw[index] >= MIN_PRICE)
+        index, frame, value, raw = got
+        universe[index, j] = (value >= MIN_VALUE) & (raw >= MIN_PRICE)
         for name, series in sr.signals(frame).items():
             masks[name][index, j] = series.to_numpy()
     return masks, universe
