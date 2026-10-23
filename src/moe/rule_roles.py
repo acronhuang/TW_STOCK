@@ -39,14 +39,21 @@ def risk_report(data, hint):
     cited = [("current_price", price), ("daily_var_95", var95), ("annual_volatility", ret.get("annual_volatility")),
              ("max_drawdown", dd.get("max_drawdown")), ("risk_level_score", level.get("score")),
              ("max_position_pct", size.get("max_position_pct"))]
-    return "\n".join([
+    lines = [
         f"風險等級：{level.get('level', '資料不足')}（分數 {_num(level.get('score'))}，{level.get('description', '')}；"
         f"年化波動 {_num(ret.get('annual_volatility'))}%、Beta {_num(ratios.get('beta'))}、最大回撤 {_num(dd.get('max_drawdown'))}%）",
         f"建議部位/張數：{position}",
         f"停損價：{stop}",
         f"單檔上限：半凱利 {_num(size.get('half_kelly'))}、不超過資金的 {_num(size.get('max_position_pct'))}%",
-        "📌引用數值：" + "、".join(f"{k}={v}" for k, v in cited if v is not None),
-    ])
+    ]
+    atr = risk.get("atr") or {}
+    if atr.get("n") is not None:  # ATR 資料不足時整段省略，其餘輸出與原本相同
+        atr_stop = f"{atr['stop_2n']}元" if atr.get("stop_2n") is not None else "資料不足"
+        lines.append(f"ATR 停損：{atr_stop}（現價 − 2×N；N={atr['n']}元，約股價的{_num(atr.get('n_pct'))}%，{_num(atr.get('period'))} 日期間）")
+        lines.append(f"ATR 部位：單筆停損虧損上限 {_num(atr.get('risk_pct'))}% 資金時，部位約占資金 {_num(atr.get('position_pct'))}%（實際取此數與上列單檔上限中較小者）")
+        cited += [("atr_n", atr.get("n")), ("atr_stop_2n", atr.get("stop_2n")), ("atr_position_pct", atr.get("position_pct"))]
+    lines.append("📌引用數值：" + "、".join(f"{k}={v}" for k, v in cited if v is not None))
+    return "\n".join(lines)
 
 
 def chip_report(data):

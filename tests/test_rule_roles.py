@@ -269,3 +269,26 @@ def test_a_missing_verdict_still_opens_with_the_word_for_undetermined():
     val = {**LOSS_MAKER, "composite": {"fair_value": None}}
 
     assert rule_roles.value_report({"valuation": val}, "").startswith("無法判定（現價26.8元")
+
+
+ATR = {"period": 20, "n": 2.4, "n_pct": 2.6, "stop_2n": 87.4, "add_step": 1.2, "risk_pct": 1.0, "position_pct": 19.2}
+
+
+def test_the_risk_report_adds_atr_lines_and_citations_when_atr_is_available():
+    text = rule_roles.risk_report({**DATA, "risk": {**DATA["risk"], "atr": ATR}}, HINT)
+
+    assert "ATR 停損：87.4元（現價 − 2×N；N=2.4元，約股價的2.6%" in text
+    assert "部位約占資金 19.2%" in text and "取此數與上列單檔上限中較小者" in text
+    assert cited(text)["atr_n"] == "2.4" and cited(text)["atr_stop_2n"] == "87.4" and cited(text)["atr_position_pct"] == "19.2"
+    assert "停損價：89.63元" in text  # 原有的 VaR 停損行不受影響
+
+
+def test_the_risk_report_is_unchanged_without_atr():
+    assert "ATR" not in rule_roles.risk_report(DATA, HINT)
+    assert "ATR" not in rule_roles.risk_report({**DATA, "risk": {**DATA["risk"], "atr": None}}, HINT)
+
+
+def test_the_risk_report_says_data_insufficient_when_the_atr_stop_is_missing():
+    text = rule_roles.risk_report({**DATA, "risk": {**DATA["risk"], "atr": {**ATR, "stop_2n": None}}}, HINT)
+
+    assert "ATR 停損：資料不足" in text and "None" not in text and "atr_stop_2n" not in text

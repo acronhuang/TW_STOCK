@@ -21,6 +21,7 @@ from bson.decimal128 import Decimal128
 from pymongo import MongoClient
 from scipy import stats as sp_stats
 
+from src.analysis import atr_sizing
 from src.domain.collections import (
     COLL_STOCK_PRICE,
 )
@@ -112,6 +113,9 @@ class RiskAnalyzer:
         # 風險等級
         risk_level = self._risk_grade(annual_vol, max_dd, var_95)
 
+        # ATR（海龜 N 值）與 2N 停損；資料不足時為 None
+        atr = self._atr_summary(symbol, price)
+
         return {
             'symbol': symbol,
             'current_price': price,
@@ -153,6 +157,7 @@ class RiskAnalyzer:
                 'max_position_pct': round(min(kelly / 2, 0.25) * 100, 1),
             },
             'risk_level': risk_level,
+            'atr': atr,
         }
 
     # ──────────────────────────────────────────────
@@ -261,13 +266,15 @@ class RiskAnalyzer:
         # ATR（用日波動率近似）
         daily_vol = risk['returns']['annual_volatility'] / np.sqrt(self.TRADING_DAYS) / 100
         atr_approx = price * daily_vol * 1.5  # 近似 ATR
+        true_atr = risk.get('atr')
+        atr_value = true_atr['n'] if true_atr else atr_approx
 
         # 方法1：固定風險法（R = max_loss_pct × capital）
         risk_amount = capital * max_loss_pct
         shares_risk = int(risk_amount / (price * stop_loss_pct))
 
         # 方法2：ATR 法
-        shares_atr = int(risk_amount / (atr_approx * 2)) if atr_approx > 0 else 0
+        shares_atr = int(risk_amount / (atr_value * 2)) if atr_value > 0 else 0
 
         # 方法3：Kelly Criterion
         kelly = risk['position_sizing']['half_kelly']
@@ -288,7 +295,8 @@ class RiskAnalyzer:
             'capital': capital,
             'methods': {
                 'fixed_risk': {'shares': shares_risk, 'lots': shares_risk // 1000},
-                'atr_based': {'shares': shares_atr, 'lots': shares_atr // 1000, 'atr': round(atr_approx, 2)},
+                'atr_based': {'shares': shares_atr, 'lots': shares_atr // 1000, 'atr': round(atr_value, 2),
+                              'source': 'true_range' if true_atr else 'volatility_approx'},
                 'kelly': {'shares': shares_kelly, 'lots': shares_kelly // 1000, 'kelly_pct': round(kelly * 100, 2)},
             },
             'recommended': {
@@ -329,6 +337,14 @@ class RiskAnalyzer:
                 returns.append(r)
 
         return returns[-lookback_days:] if len(returns) > lookback_days else returns
+
+    def _atr_summary(self, symbol: str, price: float | None) -> dict | None:
+        """ATR 與 2N 停損；用還原價算再換回現價單位，任何一根缺值就不給（不猜）。"""
+        rows = list(self.db[COLL_STOCK_PRICE].find(
+            {'symbol': symbol}, {'adj_high': 1, 'adj_low': 1, 'adj_close': 1}
+        ).sort('date', -1).limit(60))[::-1]
+        highs, lows, closes = ([_to_float(r.get(k)) for r in rows] for k in ('adj_high', 'adj_low', 'adj_close'))
+        return atr_sizing.summary(highs, lows, closes, price)
 
     def _get_latest_price(self, symbol: str) -> float | None:
         rec = self.db[COLL_STOCK_PRICE].find_one(
