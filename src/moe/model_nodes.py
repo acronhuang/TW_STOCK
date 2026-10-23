@@ -59,6 +59,9 @@ MODEL_NODES = {**DEFAULT_NODES, **parse_overrides(os.getenv("MODEL_NODES", ""))}
 ANSWER_MODEL = os.getenv("ANSWER_MODEL", DEFAULT_RISK)
 # 知識庫嵌入模型；換了要重建語料（向量維度不同）並改 stockrag_ingest.DIM。
 EMBED_MODEL = os.getenv("EMBED_MODEL", DEFAULT_EMBED)
+# Hermes 使用前要先從同節點卸載的模型：兩者加 Hermes 超過 .27 顯存，Hermes 會被部分載入到 CPU（慢約 12 倍）。
+HERMES_URL = os.getenv("HERMES_OLLAMA_URL", NODE_27).rstrip("/")
+HERMES_EVICT = (DEFAULT_MEMBER_GOOGLE,)
 HERMES_MODEL = "hermes-qwen3-4b"  # Hermes 總指揮用（.27，由 ~/.hermes/config.yaml 指定），不在團隊分析編制內，所以不進 DEFAULT_NODES
 
 

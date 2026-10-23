@@ -18,6 +18,7 @@ def load(monkeypatch, repo=ROOT):
     spec.loader.exec_module(module)
     module._real_prefetch = module._prefetch
     module._prefetch = lambda question: ([], "")  # 預設不連網；需要的測試自己開
+    module._make_room = lambda: []
     return module
 
 

@@ -13,6 +13,8 @@ _REPO = os.environ.get("TWSTOCK_REPO", "/home/mdsadmin/Stock/tw-stock-analysis")
 _GUARD_FILE = os.path.join(_REPO, "src", "analysis", "answer_guard.py")
 _ROUTER_FILE = os.path.join(_REPO, "src", "ops", "hermes_router.py")
 _TOOLS_FILE = os.path.join(_REPO, "src", "ops", "readonly_tools.py")
+_NODES_FILE = os.path.join(_REPO, "src", "moe", "model_nodes.py")
+_ROOM_FILE = os.path.join(_REPO, "src", "ops", "hermes_gpu_room.py")
 _NAMES_URL = "http://127.0.0.1:8888/api/stocks?limit=3000"
 _NAMES_TTL = 6 * 3600
 _CHECKED_INPUT = {  # 會產生新數字的工具 → 要核對出處的參數
@@ -97,7 +99,22 @@ def _prefetch(question):
     )
 
 
+def _make_room():
+    nodes = _module(_NODES_FILE, "nodes")
+    return _module(_ROOM_FILE, "room").make_room(
+        nodes.HERMES_URL,
+        nodes.canonical(nodes.HERMES_MODEL),
+        [nodes.canonical(name) for name in nodes.HERMES_EVICT],
+    )
+
+
 def on_pre_llm_call(session_id="", user_message="", **kwargs):
+    try:
+        unloaded = _make_room()
+        if unloaded:
+            print(f"[twstock-guard] 為讓 Hermes 完整進 GPU，已卸載：{unloaded}", file=sys.stderr)
+    except Exception as error:  # noqa: BLE001 - 卸載失敗只會變慢，不能擋住對話
+        print(f"[twstock-guard] 卸載擋路模型失敗：{error}", file=sys.stderr)
     question = _text(user_message)
     texts, context = [], ""
     try:
