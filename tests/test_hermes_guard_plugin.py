@@ -1,6 +1,8 @@
 """TDD: Hermes 回答的數字核對外掛——沒有出處的數字要被列出來，守門失效也要看得見。"""
 
 import importlib.util
+import json
+import os
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,7 @@ def load(monkeypatch, repo=ROOT):
     module._real_prefetch = module._prefetch
     module._prefetch = lambda question: ([], "")  # 預設不連網；需要的測試自己開
     module._make_room = lambda: []
+    module._AUDIT_FILE = os.devnull
     return module
 
 
@@ -488,3 +491,36 @@ def test_ordinary_questions_are_not_replaced(plugin):
 def test_the_review_text_is_used_once_and_state_is_cleared(plugin):
     assert review_turn(plugin, "x") == REVIEW
     assert "r1" not in plugin._turns
+
+
+def audit_lines(path):
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_a_plan_review_is_logged_with_the_extracted_arguments_and_the_verdict(plugin, tmp_path):
+    plugin._AUDIT_FILE = str(tmp_path / "a" / "audit.jsonl")  # 目錄不存在也要能寫
+    plugin._prefetch = lambda question: ([("plan_review", {"symbol": "2330", "action": "買進", "stop": 2300.0}, REVIEW, False)], "ctx")
+    plugin.on_pre_llm_call(session_id="a1", user_message="我打算買 3 張 2330，停損 2300")
+    (record,) = audit_lines(tmp_path / "a" / "audit.jsonl")
+    assert record["kind"] == "plan" and record["args"]["stop"] == 2300.0 and record["verdict"] == "結論：不通過"
+    assert record["question"] == "我打算買 3 張 2330，停損 2300" and record["at"]
+
+
+def test_a_near_miss_is_logged_without_a_verdict(plugin, tmp_path):
+    plugin._AUDIT_FILE = str(tmp_path / "audit.jsonl")
+    plugin.on_pre_llm_call(session_id="a2", user_message="我打算買 2330，合理嗎")
+    (record,) = audit_lines(tmp_path / "audit.jsonl")
+    assert record["kind"] == "near_miss" and record["args"] is None and record["verdict"] is None
+
+
+def test_ordinary_questions_and_orders_leave_no_audit_record(plugin, tmp_path):
+    plugin._AUDIT_FILE = str(tmp_path / "audit.jsonl")
+    for question in ("2330 估值如何", "幫我買 3 張 2330，停損 2300，可以嗎", "下單 2330"):
+        plugin.on_pre_llm_call(session_id="a3", user_message=question)
+    assert not (tmp_path / "audit.jsonl").exists()
+
+
+def test_an_unwritable_audit_file_never_breaks_the_turn(plugin, tmp_path, capsys):
+    plugin._AUDIT_FILE = str(tmp_path)  # 是目錄，開檔必失敗
+    plugin.on_pre_llm_call(session_id="a4", user_message="我打算買 3 張 2330，停損 2300")
+    assert "紀錄寫入失敗" in capsys.readouterr().err and plugin._turns["a4"]["question"].startswith("我打算買")

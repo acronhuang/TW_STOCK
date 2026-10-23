@@ -140,3 +140,10 @@ def test_decide_insufficient_sample_in_either_period(override):
 
 def test_decide_boundary_samples_are_enough():
     assert ss.decide({"days": 60, "events": 300, "mean": 0.01}, GOOD, +1, True) == ss.SUPPORTED
+
+
+def test_one_sided_positive_p_halves_a_positive_t_and_flips_a_negative_one():
+    assert ss.one_sided_positive_p({"t": 2.0, "p": 0.06}) == pytest.approx(0.03)
+    assert ss.one_sided_positive_p({"t": -2.0, "p": 0.06}) == pytest.approx(0.97)
+    assert ss.one_sided_positive_p({"t": float("nan"), "p": float("nan")}) == 1.0
+    assert ss.one_sided_positive_p({}) == 1.0

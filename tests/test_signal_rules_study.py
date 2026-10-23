@@ -121,3 +121,60 @@ def test_stocks_with_too_little_history_are_skipped():
     data = synthetic(stocks=2, days=100)
     masks, universe = study.detect(data)
     assert not universe.any() and not any(m.any() for m in masks.values())
+
+
+def with_forward(monkeypatch, run):
+    monkeypatch.setitem(study.SPLITS, "forward", (datetime(2014, 9, 1), None))
+    run("--split", "dev")
+    run("--split", "holdout")
+
+
+def test_forward_needs_the_holdout_result_first(env, monkeypatch):
+    run, _ = env
+    monkeypatch.setitem(study.SPLITS, "forward", (datetime(2014, 9, 1), None))
+    with pytest.raises(SystemExit, match="尚未有留存期結果"):
+        run("--split", "forward")
+
+
+def test_forward_before_the_registered_date_is_refused_unless_exploratory(env, monkeypatch, capsys):
+    run, out = env
+    with_forward(monkeypatch, run)
+    monkeypatch.setattr(study, "FORWARD_EARLIEST", datetime(2999, 1, 1))
+    with pytest.raises(SystemExit, match="預先登記"):
+        run("--split", "forward")
+    assert run("--split", "forward", "--exploratory") == 0
+    assert "探索性" in capsys.readouterr().out
+    assert not (out / "forward_done.json").exists() and not (out / "result_forward.json").exists()
+
+
+def test_forward_runs_once_after_the_registered_date_and_judges_only_the_two_rules(env, monkeypatch):
+    run, out = env
+    with_forward(monkeypatch, run)
+    monkeypatch.setattr(study, "FORWARD_EARLIEST", datetime(2020, 1, 1))
+    assert run("--split", "forward") == 0
+    verdict = json.loads((out / "verdict_forward.json").read_text(encoding="utf-8"))
+    assert set(verdict) == set(study.FORWARD_RULES) == {"s_stretch", "s_no_volume_high"}
+    assert set(verdict.values()) <= {ss.SUPPORTED, ss.NOT_SUPPORTED, ss.INSUFFICIENT}
+    assert (out / "forward_done.json").exists()
+    with pytest.raises(SystemExit, match="不重跑"):
+        run("--split", "forward")
+    assert run("--split", "forward", "--force-forward") == 0
+
+
+def test_forward_window_stops_one_longest_window_before_the_latest_data(monkeypatch):
+    data = synthetic()
+    masks, universe = study.detect(data)
+    excess, _ = ss.build_excess(data["adj_close"].astype(float), min_stocks=10)
+    monkeypatch.setitem(study.SPLITS, "forward", (datetime(2013, 6, 1), None))
+    full = study.run_split("forward", data, masks, universe, ss.Windows(excess))["s_no_volume_high"]["events"]
+    monkeypatch.setitem(study.SPLITS, "forward", (datetime(2013, 6, 1), datetime(2030, 1, 1)))
+    assert full < study.run_split("forward", data, masks, universe, ss.Windows(excess))["s_no_volume_high"]["events"]
+
+
+def test_forward_verdicts_use_a_one_sided_bonferroni_threshold():
+    base = {"days": 100, "events": 500, "mean": 0.01, "t": 2.4, "p": 0.04}
+    prev = {"s_stretch": base, "s_no_volume_high": base}
+    fwd = {"s_stretch": {**base, "p": 0.04}, "s_no_volume_high": {**base, "p": 0.06}}  # 單尾 0.02 與 0.03
+    assert study.forward_verdicts(prev, fwd) == {"s_stretch": ss.SUPPORTED, "s_no_volume_high": ss.NOT_SUPPORTED}
+    fwd_negative = {name: {**base, "mean": -0.01, "t": -2.4} for name in study.FORWARD_RULES}
+    assert set(study.forward_verdicts(prev, fwd_negative).values()) == {ss.NOT_SUPPORTED}

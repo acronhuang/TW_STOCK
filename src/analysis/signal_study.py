@@ -14,6 +14,7 @@ RETURN_LIMIT = 0.15     # 單日報酬超過此值視為資料錯誤，當缺值
 INDEX_JUMP = 0.12       # 等權指數計算時略過單日漲跌超過此值的個股
 MIN_INDEX_STOCKS = 300  # 當天有價的股票不到這個數就不算指數
 MIN_DAYS, MIN_EVENTS, FDR = 60, 300, 0.10
+FORWARD_ALPHA = 0.025   # 前瞻驗證的兩個假設，用 Bonferroni：0.05 ÷ 2
 SUPPORTED, NOT_SUPPORTED, INSUFFICIENT = "支持", "不支持", "樣本不足"
 
 
@@ -111,6 +112,14 @@ def benjamini_hochberg(pvalues, q=FDR):
     if passed.any():
         significant[order[: np.max(np.nonzero(passed)[0]) + 1]] = True
     return significant
+
+
+def one_sided_positive_p(summary):
+    """t_summary 的雙尾 p 轉成「平均大於 0」的單尾 p；缺值視為不顯著。"""
+    t, p = summary.get("t"), summary.get("p")
+    if t is None or p is None or np.isnan(t) or np.isnan(p):
+        return 1.0
+    return p / 2 if t > 0 else 1 - p / 2
 
 
 def decide(dev, hold, direction, hold_significant):

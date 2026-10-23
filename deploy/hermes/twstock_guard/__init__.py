@@ -16,6 +16,7 @@ _TOOLS_FILE = os.path.join(_REPO, "src", "ops", "readonly_tools.py")
 _NODES_FILE = os.path.join(_REPO, "src", "moe", "model_nodes.py")
 _ROOM_FILE = os.path.join(_REPO, "src", "ops", "hermes_gpu_room.py")
 _NAMES_URL = "http://127.0.0.1:8888/api/stocks?limit=3000"
+_AUDIT_FILE = os.path.join(_REPO, "logs", "hermes_plan_review.jsonl")
 _NAMES_TTL = 6 * 3600
 _CHECKED_INPUT = {  # 會產生新數字的工具 → 要核對出處的參數
     "calc": "expression", "mcp__twstock__calc": "expression",
@@ -108,6 +109,24 @@ def _make_room():
     )
 
 
+def _audit(question, results):
+    """留下計畫審查的觸發紀錄（含差一點沒觸發的），供事後檢查有沒有誤判；寫不進去不影響對話。"""
+    try:
+        kind = _module(_ROUTER_FILE, "router").plan_review_audit(question)
+        if kind is None:
+            return
+        args, text = next(((a, t) for name, a, t, _ in results if name == "plan_review"), (None, ""))
+        record = {
+            "at": datetime.datetime.now().isoformat(timespec="seconds"), "kind": kind, "question": question[:300], "args": args,
+            "verdict": next((line for line in text.splitlines() if line.startswith("結論")), None),
+        }
+        os.makedirs(os.path.dirname(_AUDIT_FILE), exist_ok=True)
+        with open(_AUDIT_FILE, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as error:  # noqa: BLE001
+        print(f"[twstock-guard] 計畫審查紀錄寫入失敗：{error}", file=sys.stderr)
+
+
 def on_pre_llm_call(session_id="", user_message="", **kwargs):
     try:
         unloaded = _make_room()
@@ -116,7 +135,7 @@ def on_pre_llm_call(session_id="", user_message="", **kwargs):
     except Exception as error:  # noqa: BLE001 - 卸載失敗只會變慢，不能擋住對話
         print(f"[twstock-guard] 卸載擋路模型失敗：{error}", file=sys.stderr)
     question = _text(user_message)
-    texts, context, verbatim = [], "", None
+    texts, context, verbatim, results = [], "", None, []
     try:
         results, context = _prefetch(question)
         texts = [context] if results else []
@@ -124,6 +143,7 @@ def on_pre_llm_call(session_id="", user_message="", **kwargs):
     except Exception as error:  # noqa: BLE001 - 預查失效時照舊讓模型自己查，但要看得見
         print(f"[twstock-guard] 預先查詢失敗：{error}", file=sys.stderr)
         context = ""
+    _audit(question, results)
     with _lock:
         _turns[session_id] = {"question": question, "tools": texts, "verbatim": verbatim}
         _last[0] = session_id

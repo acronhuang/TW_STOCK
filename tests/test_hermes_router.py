@@ -759,3 +759,27 @@ def test_a_plan_review_never_gets_the_calculation_hint_even_though_the_question_
     results = [("plan_review", {"symbol": "2330", "action": "買進"}, "計畫審查...", False)]
     assert "本題需要運算" not in hr.format_context(results, NAMES, calc_hint=True)
     assert "本題需要運算" in hr.format_context([("stock_data", {"kind": "price", "symbol": "2330"}, "[]", False)], NAMES, calc_hint=True)
+
+
+def test_audit_kinds():
+    assert hr.plan_review_audit(PLAN_Q) == "plan"
+    assert hr.plan_review_audit("我打算買 2330，合理嗎") == "near_miss"
+    assert hr.plan_review_audit("幫我買 3 張 2330，停損 2300，可以嗎") is None
+    assert hr.plan_review_audit("2330 估值如何") is None and hr.plan_review_audit("") is None and hr.plan_review_audit(None) is None
+    assert hr.plan_review_audit("2330 的買進批次有幾張") is None  # 有買賣動詞但沒有審查詞，不算差一點
+
+
+# 一般問題的語料：含買賣、停損、張數等字眼，但不是在陳述買賣計畫，都不能被當成計畫審查
+ORDINARY = [
+    "外資今天買超多少張", "投信連續賣超幾天了", "2330 的買進批次有幾張", "我的持股賣出紀錄", "持倉有 3 張 2330 嗎",
+    "停損價怎麼設比較好", "停損 5% 是什麼意思", "ATR 停損是什麼", "2330 現在可以買嗎", "該不該買進 2317", "分批買進策略是什麼",
+    "買進後要注意什麼", "為什麼外資在賣", "2330 本益比多少", "台積電今天收盤價", "半導體業評分前三名", "大盤現在如何",
+    "2317 外資買賣超幾張", "我有多少張 2330", "賣出訊號是什麼意思", "現金股利怎麼算", "5 張是多少股", "2330 殖利率合理嗎",
+    "鴻海營收年增率多少", "列出所有持倉", "最近一筆賣出是哪一檔", "停損和停利有什麼差別", "海龜法則怎麼設停損",
+]
+
+
+@pytest.mark.parametrize("question", ORDINARY)
+def test_ordinary_questions_are_never_plan_reviews(question):
+    assert not hr.is_plan_review(question)
+    assert not any(name == "plan_review" for name, _ in hr.plan(question, NAMES, ro.INDUSTRIES))

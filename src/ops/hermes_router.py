@@ -187,6 +187,16 @@ def is_plan_review(question):
     return bool(not _EXECUTE.search(q) and _PLAN_VERB.search(q) and _PLAN_CUE.search(q) and _PLAN_DETAIL.search(q))
 
 
+def plan_review_audit(question):
+    """審計用：'plan'＝會走計畫審查；'near_miss'＝有買賣動詞與審查詞、但缺止損或張數細節而沒走；其餘回 None。"""
+    q = question or ""
+    if is_plan_review(q):
+        return "plan"
+    if not _EXECUTE.search(q) and _PLAN_VERB.search(q) and _PLAN_CUE.search(q):
+        return "near_miss"
+    return None
+
+
 def _take(regex, text):
     found = regex.search(text)
     return (found, text[: found.start()] + " " + text[found.end():]) if found else (None, text)

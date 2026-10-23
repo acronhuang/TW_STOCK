@@ -12,6 +12,12 @@
 t+1..t+20 與 t+1..t+5 只當參考。過濾器（高位警告、同價位多次受阻）比較「基本入場條件成立且被過濾」與「成立但未被過濾」。
 日內同天的事件先平均成一個值再做 t 檢定（同日個股共享同一天的市場）。
 
+前瞻預先登記（2026-10-23，看到任何 2026-10-23 之後的新資料結果之前寫下）：
+  s_stretch（乖離過大）與 s_no_volume_high（無量新高）在開發期與留存期都與「賣出訊號」的假設方向相反（皆為正的超額報酬）。
+  假設：2026-10-23 之後的新訊號仍為正（相對同日同前提基準）。判定：兩個假設各自單尾檢定 p < 0.025（Bonferroni），
+  新資料的反應日 ≥ 60 且事件 ≥ 300，且留存期與前瞻期方向一致。只在 2027-03-01 之後跑一次（--split forward），
+  提早看須加 --exploratory，結果不算判定、不寫結果檔。
+
 限制（報告一律照列）：資料庫是否含已下市個股會造成存活者偏誤；等權指數含訊號個股自身；未計滑價與流動性衝擊；
 12 個假設中即使全無效也預期有 1~2 個偶然顯著，所以看 FDR 結果而不是個別 t 值。
 
@@ -35,7 +41,10 @@ sys.path.insert(0, str(ROOT))
 from src.analysis import signal_rules as sr  # noqa: E402
 from src.analysis import signal_study as ss  # noqa: E402
 
-SPLITS = {"dev": (datetime(2013, 6, 1), datetime(2019, 12, 31)), "holdout": (datetime(2020, 1, 1), datetime(2026, 9, 18))}
+SPLITS = {"dev": (datetime(2013, 6, 1), datetime(2019, 12, 31)), "holdout": (datetime(2020, 1, 1), datetime(2026, 9, 18)),
+          "forward": (datetime(2026, 10, 23), None)}  # 前瞻：結束日取最新資料往前推一個最長窗口
+FORWARD_RULES = ("s_stretch", "s_no_volume_high")
+FORWARD_EARLIEST = datetime(2027, 3, 1)
 LOAD_SINCE = datetime(2012, 6, 1)
 OUT = ROOT / "logs" / "signal_rules"
 MIN_VALUE, MIN_PRICE = 2e7, 10.0  # 近 20 日平均成交值與股價的下限，避開成交稀疏與低價股
@@ -121,6 +130,7 @@ def coverage(data):
 def run_split(split, data, masks, universe, windows):
     start, end = SPLITS[split]
     dates = data["dates"]
+    end = end if end is not None else dates[-(max(b for _, b in ss.WINDOWS.values()) + 1)]
     in_range = (dates >= np.datetime64(start)) & (dates <= np.datetime64(end))
     live = universe & in_range[:, None]
 
@@ -162,7 +172,9 @@ def pct(value):
 
 
 def render(split, results, cover):
-    lines = [f"# 訊號規則驗證（{split}，{SPLITS[split][0]:%Y-%m-%d} ~ {SPLITS[split][1]:%Y-%m-%d}）",
+    last = SPLITS[split][1]
+    span = f"{SPLITS[split][0]:%Y-%m-%d} ~ " + (f"{last:%Y-%m-%d}" if last else "最新（保留最長窗口）")
+    lines = [f"# 訊號規則驗證（{split}，{span}）",
              f"資料：{cover['symbols']} 檔四位數代號個股、{cover['days']} 個交易日（{cover['first']} ~ {cover['last']}）；"
              f"其中 {cover['ended_before_last_30_days']} 檔在最後 30 個交易日前就沒有價格（若資料庫不含已下市個股，存活者偏誤會讓進場訊號看起來較好）。",
              f"主要窗口 t+{ss.PRIMARY.replace('..', '..t+')} 累計超額報酬；基準＝同日同前提個股的同窗口平均；成本 {ss.COST * 100:.3f}% 只供對照。",
@@ -190,6 +202,11 @@ def verdicts(dev, hold):
     return table
 
 
+def forward_verdicts(prev, fwd):
+    """前瞻判定：只看預先登記的兩條規則；假設為正，單尾 p < 0.025，樣本與方向由 decide 檢查。"""
+    return {name: ss.decide(prev[name], fwd[name], +1, bool(ss.one_sided_positive_p(fwd[name]) < ss.FORWARD_ALPHA)) for name in FORWARD_RULES}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--split", choices=sorted(SPLITS), required=True)
@@ -197,6 +214,8 @@ def main():
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--limit-symbols", type=int, default=0)
     parser.add_argument("--force-holdout", action="store_true")
+    parser.add_argument("--exploratory", action="store_true", help="提早看前瞻結果：不寫結果檔、不算判定")
+    parser.add_argument("--force-forward", action="store_true")
     parser.add_argument("--min-index-stocks", type=int, default=ss.MIN_INDEX_STOCKS, help="等權指數當天至少要有幾檔有價（冒煙測試用）")
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -206,6 +225,16 @@ def main():
             sys.exit("尚未有開發期結果（result_dev.json），不能跑留存期。")
         if lock.exists() and not args.force_holdout:
             sys.exit(f"留存期已經跑過（{lock}）；為避免反覆看結果調整，不重跑。若確定要重跑須加 --force-holdout 並在報告註明。")
+
+    hold_file, forward_lock = OUT / "result_holdout.json", OUT / "forward_done.json"
+    if args.split == "forward":
+        if not hold_file.exists():
+            sys.exit("尚未有留存期結果（result_holdout.json），不能做前瞻驗證。")
+        if datetime.now() < FORWARD_EARLIEST and not args.exploratory:
+            sys.exit(f"預先登記的判定日是 {FORWARD_EARLIEST:%Y-%m-%d} 之後；提早看只能加 --exploratory（不算判定）。")
+        if forward_lock.exists() and not args.force_forward and not args.exploratory:
+            sys.exit(f"前瞻驗證已經跑過（{forward_lock}）；不重跑。若確定要重跑須加 --force-forward 並在報告註明。")
+        args.refresh = True  # 需要最新資料，不用舊快取
 
     data = get_prices(args.cache, args.refresh, args.limit_symbols)
     cover = coverage(data)
@@ -221,8 +250,17 @@ def main():
     if args.limit_symbols:
         print(report, "\n（--limit-symbols 只是冒煙測試，不寫結果檔、不算正式結果）")
         return 0
+    if args.split == "forward" and args.exploratory:
+        print(report, "\n（探索性：不寫結果檔、不算判定）")
+        return 0
     (OUT / f"result_{args.split}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(report)
+    if args.split == "forward":
+        prev = json.loads(hold_file.read_text(encoding="utf-8"))["results"]
+        table = forward_verdicts(prev, payload["results"])
+        forward_lock.write_text(json.dumps({"ran": payload["generated"], "force": args.force_forward}), encoding="utf-8")
+        (OUT / "verdict_forward.json").write_text(json.dumps(table, ensure_ascii=False, indent=2), encoding="utf-8")
+        print("\n## 前瞻判定（預先登記的兩個假設）\n" + "\n".join(f"- {name}: {verdict}" for name, verdict in table.items()))
     if args.split == "holdout":
         dev = json.loads(dev_file.read_text(encoding="utf-8"))["results"]
         table = verdicts(dev, payload["results"])
