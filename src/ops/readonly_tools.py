@@ -1,8 +1,10 @@
 """給 Hermes Agent 用的唯讀工具：只能對本機分析 API 發出固定白名單內的 GET。"""
 
 import ast
+import importlib.util
 import json
 import operator
+from pathlib import Path
 from decimal import Decimal, InvalidOperation
 import re
 import urllib.error
@@ -105,6 +107,26 @@ TOOLS = [
             "type": "object",
             "properties": {"kind": {"type": "string", "enum": list(PORTFOLIO_KINDS)}},
             "required": ["kind"],
+        },
+    },
+    {
+        "name": "plan_review",
+        "description": "審查使用者陳述的買賣計畫（唯讀，不下單）：檢查止損、單筆風險、倉位占比、是否攤平、是否追高；賣出則檢查持有數量。"
+        "只檢查風控是否完整，不預測漲跌。價格與資金單位是元；shares 單位是股、lots 單位是張（只給一個）；"
+        "stop 止損價與 stop_pct 止損幅度(%)只給一個。回答只能逐項引用本工具回傳的內容。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "股票代號，例如 2330"},
+                "action": {"type": "string", "enum": ["買進", "加碼", "賣出", "減碼"]},
+                "entry": {"type": "number", "description": "預計進場或賣出價（元）；省略就用現價"},
+                "stop": {"type": "number", "description": "止損價（元）"},
+                "stop_pct": {"type": "number", "description": "止損幅度（%），例如 5"},
+                "shares": {"type": "integer", "description": "股數（股）"},
+                "lots": {"type": "integer", "description": "張數（張）；1 張＝1000 股"},
+                "capital": {"type": "number", "description": "總資金（元）"},
+            },
+            "required": ["symbol", "action"],
         },
     },
 ]
@@ -210,7 +232,43 @@ def build_url(name, args):
     return None, f"未知的工具：{name}"
 
 
+def _analysis_module(name):
+    """Hermes 外掛以檔案路徑載入本模組，沒有 src 套件可 import，所以分析模組也用路徑載入。"""
+    path = Path(__file__).resolve().parent.parent / "analysis" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"_twstock_{name}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _get_json(name, args, fetch):
+    """取得並解析 JSON；任何失敗回 None，由計畫審查標成資料不足，不猜。"""
+    url, _ = build_url(name, args)
+    try:
+        status, body = fetch(url)
+        return json.loads(body) if status == 200 else None
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
+def _plan_review(args, fetch):
+    review = _analysis_module("plan_review")
+    plan, error = review.normalize(args)
+    if plan is None:
+        return error, True
+    symbol = plan["symbol"]
+    result = review.review(
+        plan,
+        _get_json("stock_data", {"kind": "risk", "symbol": symbol}, fetch),
+        _get_json("stock_data", {"kind": "factors", "symbol": symbol}, fetch),
+        _get_json("portfolio_data", {"kind": "positions"}, fetch),
+    )
+    return review.render(result), False
+
+
 def call_tool(name, args, fetch=default_fetch):
+    if name == "plan_review":
+        return _plan_review(args, fetch)
     if name == "calc":
         return calculate(args.get("expression") if isinstance(args, dict) else None)
     if name == "convert_unit":

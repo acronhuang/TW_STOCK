@@ -459,3 +459,32 @@ def test_a_listing_with_share_counts_gets_no_warning(plugin):
 def test_the_omission_warnings_carry_the_warning_sign(plugin):
     assert "\n⚠️ 回答漏列了持倉：" in turn(plugin, "我的持倉有哪些", [HELD], "00679B 25000 股")
     assert "\n⚠️ 下列持倉的回答沒有寫出股數：" in turn(plugin, "列出持倉的股數", [HELD], "00679B\n1229")
+
+
+REVIEW = "計畫審查（只檢查風控）\n結論：不通過\n1. 止損：不通過 —— 沒有止損價"
+
+
+def review_turn(plugin, answer, failed=False, session="r1"):
+    plugin._prefetch = lambda question: ([("plan_review", {"symbol": "2330"}, REVIEW, failed)], "ctx")
+    plugin.on_pre_llm_call(session_id=session, user_message="我打算買 3 張 2330，停損 2300")
+    return plugin.on_transform_llm_output(response_text=answer, session_id=session)
+
+
+def test_a_plan_review_is_answered_with_the_tool_text_not_the_models_paraphrase(plugin):
+    assert review_turn(plugin, "不合理。單筆風險資料不足，現價 3810.5") == REVIEW
+
+
+def test_a_failed_plan_review_keeps_the_models_answer_and_the_usual_checks(plugin):
+    out = review_turn(plugin, "資料有誤，現價 3810.5 元", failed=True)
+    assert out.startswith("資料有誤，現價 3810.5 元") and "找不到出處" in out
+
+
+def test_ordinary_questions_are_not_replaced(plugin):
+    plugin._prefetch = lambda question: ([("stock_data", {"kind": "price", "symbol": "2330"}, TOOL, False)], TOOL)
+    plugin.on_pre_llm_call(session_id="o1", user_message="2330 估值？")
+    assert plugin.on_transform_llm_output(response_text="現價 2540.0，DCF 公平價 942.5。", session_id="o1") is None
+
+
+def test_the_review_text_is_used_once_and_state_is_cleared(plugin):
+    assert review_turn(plugin, "x") == REVIEW
+    assert "r1" not in plugin._turns

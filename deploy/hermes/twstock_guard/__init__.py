@@ -116,15 +116,16 @@ def on_pre_llm_call(session_id="", user_message="", **kwargs):
     except Exception as error:  # noqa: BLE001 - 卸載失敗只會變慢，不能擋住對話
         print(f"[twstock-guard] 卸載擋路模型失敗：{error}", file=sys.stderr)
     question = _text(user_message)
-    texts, context = [], ""
+    texts, context, verbatim = [], "", None
     try:
         results, context = _prefetch(question)
         texts = [context] if results else []
+        verbatim = next((text for name, _, text, failed in results if name == "plan_review" and not failed), None)
     except Exception as error:  # noqa: BLE001 - 預查失效時照舊讓模型自己查，但要看得見
         print(f"[twstock-guard] 預先查詢失敗：{error}", file=sys.stderr)
         context = ""
     with _lock:
-        _turns[session_id] = {"question": question, "tools": texts}
+        _turns[session_id] = {"question": question, "tools": texts, "verbatim": verbatim}
         _last[0] = session_id
         while len(_turns) > _MAX_TURNS:
             _turns.pop(next(iter(_turns)))
@@ -187,6 +188,8 @@ def on_transform_llm_output(response_text="", session_id="", **kwargs):
         turn = _turns.pop(key, None)
         if _last[0] == key:
             _last[0] = None
+    if turn is not None and turn.get("verbatim"):
+        return turn["verbatim"]  # 計畫審查的結論由程式算好；小模型轉述時會改錯狀態，所以直接以原文作答
     context = "\n".join([turn["question"], *turn["tools"]]) if turn else ""
     try:
         flagged = _unsupported_numbers()(response_text, context)

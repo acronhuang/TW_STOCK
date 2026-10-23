@@ -200,8 +200,9 @@ def test_glossary_adds_no_digits_so_it_cannot_launder_numbers():
 
 def test_every_glossary_kind_is_a_kind_the_tool_accepts():
     kinds = ro.TOOLS[0]["inputSchema"]["properties"]["kind"]["enum"]
-    portfolio_kinds = ro.TOOLS[-1]["inputSchema"]["properties"]["kind"]["enum"]
-    assert ro.TOOLS[-1]["name"] == "portfolio_data" and portfolio_kinds == list(ro.PORTFOLIO_KINDS)
+    portfolio = next(tool for tool in ro.TOOLS if tool["name"] == "portfolio_data")
+    portfolio_kinds = portfolio["inputSchema"]["properties"]["kind"]["enum"]
+    assert portfolio_kinds == list(ro.PORTFOLIO_KINDS)
     assert set(hr.GLOSSARY) - {"portfolio"} <= set(kinds) and "portfolio" in hr.GLOSSARY
 
 
@@ -682,3 +683,79 @@ def test_how_many_shares_is_also_a_question_about_shares():
 
 def test_a_number_that_only_ends_with_the_share_count_after_a_decimal_point_does_not_count():
     assert hr.omitted_shares("列出持倉的股數", "00679B 均價 30.25000；1229 15000 股", HELD_CONTEXT) == ["00679B"]
+
+
+# ---- 計畫審查 ----
+PLAN_Q = "我打算買 3 張台積電，停損設在 2300，資金 100 萬，合理嗎"
+
+
+@pytest.mark.parametrize("question", [
+    PLAN_Q, "我準備攤平 2330，買 5 張，可以嗎", "預計賣出 2 張 2317，停損 5%，幫我看看", "我想加碼 2330 3 張，評估一下",
+])
+def test_a_stated_plan_with_review_words_is_a_plan_review(question):
+    assert hr.is_plan_review(question)
+
+
+@pytest.mark.parametrize("question", [
+    "幫我買進 1000 股 2330", "下單 2330", "掛單賣出 2 張 2330", "幫我買 3 張 2330，可以嗎", "替我賣 2 張 2330，停損 5%",
+    "把持倉全部賣出 1000 股 2330", "買 3 張 2330", "2330 可以買嗎", "該不該買進 2330？", "外資買超 3000 張，合理嗎",
+    "外資買賣超 3000 張", "2330 的買進批次", "分批買進策略是什麼", "", None,
+])
+def test_orders_and_ordinary_questions_are_not_plan_reviews(question):
+    assert not hr.is_plan_review(question)
+
+
+def test_plan_extraction_picks_each_number_once_and_does_not_mistake_the_stock_code_for_a_price():
+    assert hr.extract_plan(PLAN_Q.replace("台積電", "2330"), "2330") == {
+        "symbol": "2330", "action": "買進", "stop": 2300.0, "capital": 1_000_000.0, "lots": 3.0}
+    assert hr.extract_plan(PLAN_Q, "2330", "台積電") == {
+        "symbol": "2330", "action": "買進", "stop": 2300.0, "capital": 1_000_000.0, "lots": 3.0}
+
+
+def test_plan_extraction_handles_percent_stop_entry_price_shares_and_commas():
+    got = hr.extract_plan("預計在 2,385 元賣出 1,500 股 2330，停損 5%", "2330")
+    assert got == {"symbol": "2330", "action": "賣出", "stop_pct": 5.0, "shares": 1500.0, "entry": 2385.0}
+
+
+@pytest.mark.parametrize("text, action", [
+    ("我打算攤平 2330 3 張", "加碼"), ("準備加碼 2330 3 張", "加碼"), ("打算減碼 2330 3 張", "減碼"),
+    ("打算賣 2330 3 張", "賣出"), ("買進後停損賣出 2330 3 張，打算", "買進"),
+])
+def test_plan_extraction_action_is_the_first_verb(text, action):
+    assert hr.extract_plan(text, "2330")["action"] == action
+
+
+def test_plan_routes_a_review_to_plan_review_with_the_extracted_arguments():
+    assert hr.plan(PLAN_Q, NAMES, ro.INDUSTRIES) == [
+        ("plan_review", {"symbol": "2330", "action": "買進", "stop": 2300.0, "capital": 1_000_000.0, "lots": 3.0})]
+
+
+def test_plan_review_needs_a_stock_otherwise_nothing_is_prefetched():
+    assert hr.plan("我打算買 3 張，停損 5%，合理嗎", NAMES, ro.INDUSTRIES) == []
+
+
+def test_order_requests_are_still_refused_with_plan_words():
+    assert hr.plan("幫我買 3 張 2330，停損 2300，可以嗎", NAMES, ro.INDUSTRIES) == []
+    assert hr.plan("我打算下單買 3 張 2330", NAMES, ro.INDUSTRIES) == []
+
+
+def test_the_context_for_a_plan_review_carries_the_hint_and_no_glossary():
+    results = [("plan_review", {"symbol": "2330", "action": "買進"}, "計畫審查...\n結論：警告", False)]
+    context = hr.format_context(results, NAMES)
+    assert "計畫審查：逐項照錄" in context and "不預測漲跌、不保證報酬" in context and "欄位用語" not in context
+    assert "計畫審查：逐項照錄" not in hr.format_context([("stock_data", {"kind": "price", "symbol": "2330"}, "[]", False)], NAMES)
+
+
+def test_the_stock_code_is_not_mistaken_for_the_entry_price():
+    assert hr.extract_plan("我打算在2330買3張，停損 2300", "2330") == {"symbol": "2330", "action": "買進", "stop": 2300.0, "lots": 3.0}
+
+
+@pytest.mark.parametrize("question", ["我打算買 2330", "我準備買台積電，合理嗎", "我想賣 2330"])
+def test_a_plan_without_any_stop_or_quantity_is_an_ordinary_question(question):
+    assert not hr.is_plan_review(question)
+
+
+def test_a_plan_review_never_gets_the_calculation_hint_even_though_the_question_has_the_word_suan():
+    results = [("plan_review", {"symbol": "2330", "action": "買進"}, "計畫審查...", False)]
+    assert "本題需要運算" not in hr.format_context(results, NAMES, calc_hint=True)
+    assert "本題需要運算" in hr.format_context([("stock_data", {"kind": "price", "symbol": "2330"}, "[]", False)], NAMES, calc_hint=True)

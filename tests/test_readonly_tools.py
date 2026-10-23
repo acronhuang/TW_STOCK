@@ -29,7 +29,7 @@ class Recorder:
 
 def test_exactly_these_tools_with_the_allowed_kinds():
     tools = {t["name"]: t for t in ro.TOOLS}
-    assert set(tools) == {"stock_data", "market_data", "industry_data", "calc", "convert_unit", "portfolio_data"}
+    assert set(tools) == {"stock_data", "market_data", "industry_data", "calc", "convert_unit", "portfolio_data", "plan_review"}
     assert tools["portfolio_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.PORTFOLIO_KINDS)
     assert tools["stock_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.STOCK_KINDS)
     assert tools["market_data"]["inputSchema"]["properties"]["kind"]["enum"] == list(ro.MARKET_KINDS)
@@ -183,7 +183,7 @@ def test_script_speaks_mcp_over_stdio_without_network():
     )
     replies = [json.loads(line) for line in done.stdout.splitlines()]
     assert done.returncode == 0 and [r["id"] for r in replies] == [1, 2]
-    assert [t["name"] for t in replies[1]["result"]["tools"]] == ["stock_data", "market_data", "industry_data", "calc", "convert_unit", "portfolio_data"]
+    assert [t["name"] for t in replies[1]["result"]["tools"]] == ["stock_data", "market_data", "industry_data", "calc", "convert_unit", "portfolio_data", "plan_review"]
 
 
 @pytest.mark.parametrize(
@@ -329,3 +329,54 @@ def test_bad_portfolio_kind_is_rejected_without_a_request(kind):
     fetch = Recorder()
     text, is_error = ro.call_tool("portfolio_data", {"kind": kind}, fetch)
     assert is_error and "允許清單" in text and fetch.urls == []
+
+
+class Routes:
+    """依網址回傳固定內容的假取數函式。"""
+
+    def __init__(self, routes):
+        self.routes, self.urls = routes, []
+
+    def __call__(self, url, timeout=30):
+        self.urls.append(url)
+        value = self.routes.get(url.replace(ro.BASE, ""))
+        if isinstance(value, Exception):
+            raise value
+        return (200, json.dumps(value, ensure_ascii=False)) if value is not None else (404, "")
+
+
+PLAN_ROUTES = {
+    "/api/risk/2330": {"current_price": 100.0, "position_sizing": {"max_position_pct": 3.9}, "atr": {"n": 2.0, "stop_2n": 96.0}},
+    "/api/factors/2330": {"close": 100.0, "ma_bias_20": 1.0, "rsi_14": 50.0, "return_1m": 2.0},
+    "/api/portfolio/positions": [],
+}
+
+
+def test_plan_review_reads_three_get_endpoints_and_returns_the_rendered_review():
+    fetch = Routes(PLAN_ROUTES)
+    text, is_error = ro.call_tool("plan_review", {"symbol": "2330", "action": "買進", "entry": 100, "stop": 96, "lots": 1, "capital": 1000000}, fetch)
+
+    assert not is_error and text.startswith("計畫審查") and "結論：" in text and "1. 止損：通過" in text
+    assert sorted(url.replace(ro.BASE, "") for url in fetch.urls) == sorted(PLAN_ROUTES)
+
+
+def test_plan_review_marks_unavailable_sources_as_missing_data_instead_of_guessing():
+    fetch = Routes({"/api/risk/2330": None, "/api/factors/2330": urllib.error.URLError("down"), "/api/portfolio/positions": None})
+    text, is_error = ro.call_tool("plan_review", {"symbol": "2330", "action": "買進", "stop": 96, "lots": 1, "capital": 1000000}, fetch)
+
+    assert not is_error and "資料不足" in text and "追高：資料不足" in text and "攤平：資料不足" in text
+
+
+def test_plan_review_rejects_bad_arguments_without_any_request():
+    fetch = Routes(PLAN_ROUTES)
+    for args in ({"symbol": "../x", "action": "買進"}, {"symbol": "2330", "action": "下單"}, {"symbol": "2330", "action": "買進", "entry": -1}, None):
+        text, is_error = ro.call_tool("plan_review", args, fetch)
+        assert is_error and text
+    assert fetch.urls == []
+
+
+def test_plan_review_only_issues_get_requests_to_the_allowed_endpoints():
+    fetch = Routes(PLAN_ROUTES)
+    ro.call_tool("plan_review", {"symbol": "2330", "action": "賣出", "lots": 1}, fetch)
+    assert all(url.startswith(ro.BASE + "/api/") for url in fetch.urls)
+    assert not any("predict" in url or "scan" in url for url in fetch.urls)

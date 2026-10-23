@@ -163,8 +163,71 @@ def find_industry(question, industries):
     return None
 
 
+# 計畫審查：使用者陳述自己的買賣計畫並請你審查（不是要你下單）。明講下單或代買代賣的仍一律拒絕。
+_EXECUTE = re.compile(r"下單|掛單|幫我(?:買|賣|下)|替我|代我|幫忙(?:買|賣)|直接(?:買|賣)|立刻(?:買|賣)|馬上(?:買|賣)")
+_PLAN_VERB = re.compile(r"買進|買入|買(?![賣超])|加碼|加倉|攤平|補倉|賣出|賣(?!超)|減碼|減倉")
+_PLAN_CUE = re.compile(r"計畫|計劃|打算|準備|預計|想|審查|檢查|評估|合理|可行|有沒有問題|行不行|可以嗎|好嗎|幫我看|OK", re.IGNORECASE)
+_PLAN_DETAIL = re.compile(r"停損|止損|\d[\d,]*\s*(?:張|股)|攤平|補倉")
+_VERB_ACTION = {
+    "買進": "買進", "買入": "買進", "買": "買進", "加碼": "加碼", "加倉": "加碼", "攤平": "加碼", "補倉": "加碼",
+    "賣出": "賣出", "賣": "賣出", "減碼": "減碼", "減倉": "減碼",
+}
+_NUM = r"(\d[\d,]*(?:\.\d+)?)"
+_STOP_RE = re.compile(r"(?:停損|止損)(?:價|點|位)?\s*(?:設在|設定在|設為|設|定在|放在|在|為|於)?\s*[:：]?\s*" + _NUM + r"\s*(%|％|元)?")
+_CAPITAL_RE = re.compile(r"(?:資金|本金|總資產|資產|帳戶)\s*(?:有|約|大約|共|是|為|：|:)?\s*" + _NUM + r"\s*(億|萬|千)?")
+_LOTS_RE = re.compile(_NUM + r"\s*張")
+_SHARES_RE = re.compile(_NUM + r"\s*股")
+_ENTRY_RE = re.compile(r"(?:在|於|以|價位|價格|進場價|買進價|成本|買在|賣在)\s*" + _NUM + r"|" + _NUM + r"\s*元")
+_UNIT = {"億": 100_000_000, "萬": 10_000, "千": 1_000}
+_PLAN_HINT = "【計畫審查：逐項照錄各檢查的狀態與說明，結論照原文；只檢查風控，不預測漲跌、不保證報酬，也不代為下單。】"
+
+
+def is_plan_review(question):
+    q = question or ""
+    return bool(not _EXECUTE.search(q) and _PLAN_VERB.search(q) and _PLAN_CUE.search(q) and _PLAN_DETAIL.search(q))
+
+
+def _take(regex, text):
+    found = regex.search(text)
+    return (found, text[: found.start()] + " " + text[found.end():]) if found else (None, text)
+
+
+def _number(text):
+    return float(text.replace(",", ""))
+
+
+def extract_plan(question, symbol, name=""):
+    """從問題取出計畫的各個數字；取不到的欄位不放，由審查標成資料不足。數字會原樣回顯在審查結果的「我理解的計畫」。"""
+    text = question
+    for token in (symbol, name):
+        if token:
+            text = text.replace(token, " ")
+    verb = _PLAN_VERB.search(text)
+    args = {"symbol": symbol, "action": _VERB_ACTION[verb.group(0)]}
+    found, text = _take(_STOP_RE, text)
+    if found:
+        args["stop_pct" if found.group(2) in ("%", "％") else "stop"] = _number(found.group(1))
+    found, text = _take(_CAPITAL_RE, text)
+    if found:
+        args["capital"] = _number(found.group(1)) * _UNIT.get(found.group(2), 1)
+    found, text = _take(_LOTS_RE, text)
+    if found:
+        args["lots"] = _number(found.group(1))
+    else:
+        found, text = _take(_SHARES_RE, text)
+        if found:
+            args["shares"] = _number(found.group(1))
+    found = _ENTRY_RE.search(text)
+    if found:
+        args["entry"] = _number(found.group(1) or found.group(2))
+    return args
+
+
 def plan(question, names=None, industries=()):
     """回 [(工具名, 參數)]；下單類問題、查不出對象的問題回空清單。"""
+    if question and is_plan_review(question):
+        found = find_symbols(question, names)
+        return [("plan_review", extract_plan(question, *found[0]))] if found else []
     if not question or is_order_request(question):
         return []
     kinds = wanted_kinds(question)
@@ -285,10 +348,13 @@ def format_context(results, names=None, calc_hint=False, convert_hint=False, con
     if conversions:
         lines.append(_CONVERTED_HEAD)
         lines.extend(conversions)
-    if calc_hint:
+    reviewing = any(call[0] == "plan_review" for call in results)
+    if calc_hint and not reviewing:  # 「打算」「計算」的算字不代表要運算
         lines.append(_CALC_HINT)
     if convert_hint:
         lines.append(_CONVERT_HINT)
+    if reviewing:
+        lines.append(_PLAN_HINT)
     return "\n".join(lines)
 
 
