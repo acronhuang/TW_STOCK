@@ -455,3 +455,84 @@ def test_source_sync_cli_refuses_concurrent_apply_before_capture(tmp_path, monke
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         assert quant_source_sync.main(["--collect", "--apply"]) == 2
     assert json.loads(capsys.readouterr().err)["error"] == "BlockingIOError"
+
+
+@pytest.fixture
+def stored_source_snapshot(tmp_path, finmind_receipts):
+    import copy
+    from types import SimpleNamespace
+
+    from src.research_workflow.persistence import persist_snapshot
+    from src.research_workflow.sources import import_finmind
+
+    class Collection:
+        document = None
+
+        def update_one(self, query, update, upsert):
+            self.document = copy.deepcopy(update["$setOnInsert"])
+            return SimpleNamespace(upserted_id=query["_id"])
+
+        def find_one(self, query):
+            return copy.deepcopy(self.document) if query == {"_id": self.document["_id"]} else None
+
+    directory = tmp_path / "stored"
+    import_finmind(directory, finmind_receipts(), "2014-01-01", "2026-09-18")
+    collection = Collection()
+    db = {"quant_source_evidence": collection}
+    result = persist_snapshot(directory, db=db, apply=True)
+    return db, result["snapshot_id"]
+
+
+def test_snapshot_reader_selects_explicit_version_symbols_and_dates_without_eligibility(stored_source_snapshot):
+    from src.research_workflow.persistence import load_snapshot
+
+    db, snapshot_id = stored_source_snapshot
+    evidence = load_snapshot(snapshot_id, ["0050", "1230"], "2020-01-01", "2026-09-18", db=db)
+    assert [row["symbol"] for row in evidence["reference_events"]] == ["0050"]
+    assert [row["symbol"] for row in evidence["delisting_facts"]] == ["1230"]
+    assert not evidence["membership"] and not evidence["tradability"] and not evidence["coverage"]
+    assert evidence["source_snapshot"]["id"] == snapshot_id
+    assert evidence["source_snapshot"]["observed_at"] == "2026-10-26T12:00:00+00:00"
+    assert evidence["source_snapshot"]["certified_complete"] is False
+    narrowed = load_snapshot(snapshot_id, ["0050"], "2026-01-01", "2026-09-18", db=db)
+    assert not narrowed["reference_events"] and not narrowed["delisting_facts"]
+
+
+@pytest.mark.parametrize("defect", ["tamper", "missing", "outside", "id"])
+def test_snapshot_reader_rejects_untrusted_or_unavailable_versions(stored_source_snapshot, defect):
+    from src.research_workflow.persistence import load_snapshot
+
+    db, snapshot_id = stored_source_snapshot
+    start, end = "2014-01-01", "2026-09-18"
+    if defect == "tamper":
+        db["quant_source_evidence"].document["evidence"]["reference_events"][0]["after_price"] = 999
+    elif defect == "missing":
+        snapshot_id = "0" * 64
+    elif defect == "outside":
+        end = "2026-10-26"
+    else:
+        snapshot_id = "latest"
+    with pytest.raises(ValueError):
+        load_snapshot(snapshot_id, ["0050"], start, end, db=db)
+
+
+def test_snapshot_export_keeps_audit_blocked_and_preserves_selected_source_evidence(tmp_path, stored_source_snapshot, monkeypatch, capsys):
+    import json
+
+    import pandas as pd
+
+    from scripts.quant_workflow import main
+    from src import config
+
+    db, snapshot_id = stored_source_snapshot
+    monkeypatch.setattr(config, "get_db", lambda **kwargs: db)
+    prices = tmp_path / "prices.csv"
+    pd.DataFrame({"date": ["2025-06-18"], "symbol": ["0050"], "open": [47.16], "close": [48.0], "volume": [1000]}).to_csv(prices, index=False)
+    output = tmp_path / "export.csv"
+    assert main(["export", "--prices", str(prices), "--snapshot", snapshot_id, "--out", str(output)]) == 2
+    audit = json.loads(capsys.readouterr().out)
+    assert audit["status"] == "blocked" and audit["source_snapshot"]["id"] == snapshot_id
+    evidence = json.loads(output.with_suffix(".evidence.json").read_text(encoding="utf-8"))
+    assert evidence["reference_events"][0]["symbol"] == "0050"
+    assert evidence["reference_events"][0]["date"] == "2025-06-18"
+    assert not evidence["actions"] and not evidence["coverage"]

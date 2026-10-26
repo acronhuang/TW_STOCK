@@ -1,5 +1,6 @@
 import json
-from datetime import UTC, datetime
+import re
+from datetime import UTC, date, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -8,11 +9,51 @@ from bson import BSON
 
 from src.ops.finmind_usage import fetch_usage
 
+from .data import validate_symbols
 from .registry import digest, file_hash, save_new
 from .sources import import_finmind
 
 DATASETS = ("TaiwanStockDelisting", "TaiwanStockSplitPrice", "TaiwanStockParValueChange")
 COLLECTION = "quant_source_evidence"
+
+
+def load_snapshot(snapshot_id, symbols, start, end, db=None):
+    if not isinstance(snapshot_id, str) or re.fullmatch(r"[0-9a-f]{64}", snapshot_id) is None:
+        raise ValueError("explicit content-addressed snapshot ID required")
+    validate_symbols(symbols)
+    start, end = date.fromisoformat(start), date.fromisoformat(end)
+    if start > end:
+        raise ValueError("ordered snapshot selection dates required")
+    if db is None:
+        from src.config import get_db
+
+        db = get_db(serverSelectionTimeoutMS=10000)
+    document = db[COLLECTION].find_one({"_id": snapshot_id})
+    if document is None:
+        raise ValueError("source snapshot not found")
+    payload = {key: value for key, value in document.items() if key not in {"_id", "stored_at"}}
+    if document["_id"] != snapshot_id or digest(payload) != snapshot_id:
+        raise ValueError("source snapshot content hash mismatch")
+    if document.get("schema_version") != 1 or document.get("certified_complete") is not False:
+        raise ValueError("unsupported source snapshot schema or completeness claim")
+    manifest, evidence = document["manifest"], document["evidence"]
+    if manifest.get("certified_complete") is not False:
+        raise ValueError("source observations do not certify complete evidence")
+    if not date.fromisoformat(manifest["start"]) <= start <= end <= date.fromisoformat(manifest["end"]):
+        raise ValueError("requested dates exceed source snapshot scope")
+    for name in ("actions", "coverage", "membership", "tradability"):
+        if evidence.get(name) != []:
+            raise ValueError("reference snapshot cannot supply executable entitlements or eligibility")
+    selected = {name: [] for name in ("actions", "coverage", "membership", "tradability")}
+    for name, field in (("delisting_facts", "delisted_on"), ("reference_events", "date"), ("unresolved", "date")):
+        selected[name] = [row for row in evidence[name] if row["symbol"] in symbols
+                          and start <= date.fromisoformat(row[field]) <= end]
+    selected["source_snapshot"] = {"id": snapshot_id, "certified_complete": False,
+        "observed_at": manifest["observed_at"], "snapshot_start": manifest["start"], "snapshot_end": manifest["end"],
+        "selection_start": start.isoformat(), "selection_end": end.isoformat(),
+        "selected_delisting_facts": len(selected["delisting_facts"]),
+        "selected_reference_events": len(selected["reference_events"]), "selected_unresolved": len(selected["unresolved"])}
+    return selected
 
 
 def capture_finmind(output, token, session=None, usage_fn=fetch_usage):

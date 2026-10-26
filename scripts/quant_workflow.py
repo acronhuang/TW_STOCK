@@ -37,7 +37,9 @@ def parser():
     for name in ("audit", "export"):
         command = commands.add_parser(name)
         command.add_argument("--prices", type=Path)
-        command.add_argument("--evidence", type=Path)
+        evidence_source = command.add_mutually_exclusive_group()
+        evidence_source.add_argument("--evidence", type=Path)
+        evidence_source.add_argument("--snapshot", help="指定正式來源快照 ID；唯讀且不自動解除資料阻擋")
         command.add_argument("--symbols", default="2330,2317")
         command.add_argument("--start", default="2026-01-01")
         command.add_argument("--end", default="2026-09-18")
@@ -84,15 +86,28 @@ def main(argv=None):
         if args.command in ("audit", "export"):
             frame = (pd.read_csv(args.prices, dtype={"symbol": str}) if args.prices
                      else mongo_prices(args.symbols.split(","), args.start, args.end))
+            evidence = None
             if args.evidence:
-                frame = enrich(frame, json.loads(args.evidence.read_text(encoding="utf-8")))
+                evidence = json.loads(args.evidence.read_text(encoding="utf-8"))
+            elif args.snapshot:
+                from src.research_workflow.persistence import load_snapshot
+
+                if frame.empty:
+                    raise ValueError("cannot select snapshot evidence for empty prices")
+                dates = pd.to_datetime(frame["date"], errors="raise")
+                evidence = load_snapshot(args.snapshot, sorted(frame["symbol"].astype(str).unique()),
+                                         dates.min().date().isoformat(), dates.max().date().isoformat())
+            if evidence is not None:
+                frame = enrich(frame, evidence)
             result = audit(frame)
+            if args.snapshot:
+                result["source_snapshot"] = evidence["source_snapshot"]
             if args.command == "export":
                 args.out.parent.mkdir(parents=True, exist_ok=True)
                 frame.to_csv(args.out, mode="x", index=False)
                 save_new(args.out.with_suffix(".audit.json"), result)
-                if args.evidence:
-                    save_new(args.out.with_suffix(".evidence.json"), json.loads(args.evidence.read_text(encoding="utf-8")))
+                if evidence is not None:
+                    save_new(args.out.with_suffix(".evidence.json"), evidence)
             print(canonical(result))
             return 0 if result["status"] == "ready_for_input_validation" else 2
         if args.command == "init":

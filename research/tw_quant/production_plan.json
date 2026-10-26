@@ -11,9 +11,18 @@
     {"task": "Run focused checks and the standard regression gate", "status": "complete"},
     {"task": "Back up cron and source collection; dry-run, apply, and verify idempotency", "status": "complete"},
     {"task": "Install matching cron entry and verify drift", "status": "complete"},
-    {"task": "Review exact staged paths, commit, push, and verify remote revision", "status": "in_progress"}
+    {"task": "Review exact staged paths, commit, push, and verify remote revision", "status": "complete"}
   ],
   "verification": ["Positive and negative receipt fixtures", "No API or database writes in dry-run", "Quota and permission failures stop safely", "Immutable write and repeat-import checks", "pytest -m 'not integration and not slow' -q", "Cron drift and syntax checks", "Remote commit equals pushed main"],
+  "followup": {
+    "task": "Read explicit verified production snapshots in research audit/export without enabling strategy eligibility",
+    "status": "verified",
+    "snapshot": "523b5bd1aa485f46c66580e87cd38ba0e4ab8739e04f0fbae2e38d777cd543b3",
+    "focused_tests": "39 source tests passed; six new cases observed failing before implementation",
+    "standard_gate": "Lint passed; 1927 passed, 13 skipped, 107 deselected",
+    "live_export": {"rows": 686, "selected_reference_events": 1, "selected_unresolved": 1, "audit_status": "blocked"},
+    "issuer_check": "Yuanta announcement search returned no matching rows; no entitlement or event type inferred."
+  },
   "progress": [
     "33 source tests passed; ten new safety cases were observed failing before implementation.",
     "Lint passed; standard gate: 1921 passed, 13 skipped, 107 deselected.",
