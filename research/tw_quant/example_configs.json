@@ -1,0 +1,11 @@
+[
+  {
+    "factor": "momentum",
+    "window": 20,
+    "hold": 20,
+    "slots": 10,
+    "rebalance": 20,
+    "reverse": false,
+    "threshold": 0.05
+  }
+]

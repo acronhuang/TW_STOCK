@@ -1,0 +1,1 @@
+"""Isolated Taiwan equity research; no production writes or notifications."""

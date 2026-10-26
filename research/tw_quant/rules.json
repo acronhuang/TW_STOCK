@@ -1,0 +1,50 @@
+{
+  "name": "tw_quant_workflow_v1",
+  "reference": "https://github.com/frank-quant/ai-trading-videos/tree/main/EP010_zcode-quant-workflow",
+  "historical_research": true,
+  "search": ["2014-01-01", "2022-12-31"],
+  "validation": ["2023-01-01", "2024-12-31"],
+  "evaluation": ["2025-01-01", "2026-09-18"],
+  "cutoff": "2026-09-18",
+  "earliest_evaluation": "2026-10-26",
+  "initial_cash": 1000000,
+  "max_positions": 10,
+  "lot_size": 1000,
+  "slippage_bps": 10,
+  "annual_days": 250,
+  "strict_tradability": true,
+  "industry_neutral": false,
+  "core": {
+    "enabled": false,
+    "risk_symbol": "0050",
+    "defensive_symbol": "00635U",
+    "window": 200,
+    "weight": 0.6,
+    "tax_rate": 0.001
+  },
+  "min_listing_bars": 250,
+  "min_value_20": 20000000,
+  "random_seeds": [43, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  "rounds": 6,
+  "configs_per_round": 100,
+  "requirements": {
+    "registration": "研究設定、資料與程式指紋固定；歷史探索不得稱為未知盲測。",
+    "execution": "收盤訊號次日開盤成交；沿用台股成本與滑價；整股、現金、停牌與漲跌停限制。",
+    "ledger": "成功、失敗、鄰域與重試全部追加記帳；不刪除舊紀錄。",
+    "funnel": "八層累計篩選；未完成與無資料不得算通過；不強行補足候選。",
+    "controls": "固定種子，同零件與配置預算；不同組全域去重。",
+    "evidence": "無公司行動缺省值需完整覆蓋證明；價格還原 ratio 不等於股數權利；現金股息需實際發放日。",
+    "industry": "產業內百分位去均值只用訊號時已知分類；缺失不補最新分類。",
+    "diagnostics": "IC 與十分層使用與回測相同股票池及當期資料；僅診斷，不冒充可成交績效或新增門檻。",
+    "core": "60/40 啟用前需登記兩腿 ETF 與費稅；200 日均線收盤訊號次日開盤成交，衛星以實際 40% 資金分配撮合。",
+    "evaluation": "候選及組合先鎖定，評估只執行一次；既有前瞻訊號研究不變。",
+    "isolation": "不寫正式資料庫、不發 LINE、不改評分、不新增排程。"
+  },
+  "implementation_plan": [
+    {"task": "登記、指紋、追加帳本與漏斗", "check": "tests/test_quant_workflow.py"},
+    {"task": "台股成交、因子與截斷測試", "check": "tests/test_quant_workflow.py"},
+    {"task": "CLI、搜尋、鄰域、隨機對照、鎖定與評估", "check": "tests/test_quant_workflow.py"},
+    {"task": "歷史證據、產業中性化、IC 分層與實際資金 60/40", "check": "tests/test_quant_workflow.py"},
+    {"task": "既有資料唯讀匯出、真實資料檢查及正式迴歸閘", "check": "scripts/quant_workflow.py audit"}
+  ]
+}

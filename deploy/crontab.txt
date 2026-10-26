@@ -95,3 +95,4 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 50 23 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/wiki_raw_capture.py capture >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_wiki_raw.log 2>&1
 55 23 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/macro_news_capture.py capture >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_macro_news.log 2>&1
 */2 * * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/gpu_sample.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_gpu_sample.log 2>&1
+35 4 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/quant_source_sync.py --collect --apply >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quant_source_sync.log 2>&1  # quant_source_sync

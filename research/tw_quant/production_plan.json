@@ -1,0 +1,26 @@
+{
+  "goal": "Publish the isolated research platform, persist source evidence, and schedule daily source collection.",
+  "authorized": ["commit_and_push_research_code", "persist_source_evidence", "schedule_source_collection"],
+  "constraints": ["No production price, scoring, strategy, or forward-study changes", "No subscription purchase", "No service restart", "No Markdown additions", "Tests must not write production MongoDB"],
+  "collection": "quant_source_evidence",
+  "write_policy": "Content-addressed immutable snapshots using insert-only upserts; apply flag required.",
+  "schedule": "04:35 Asia/Taipei daily; source capture only, reserve shared FinMind quota and use a process lock.",
+  "steps": [
+    {"task": "Add failing persistence and collection safety tests", "status": "complete"},
+    {"task": "Implement evidence persistence and daily collection", "status": "complete"},
+    {"task": "Run focused checks and the standard regression gate", "status": "complete"},
+    {"task": "Back up cron and source collection; dry-run, apply, and verify idempotency", "status": "complete"},
+    {"task": "Install matching cron entry and verify drift", "status": "complete"},
+    {"task": "Review exact staged paths, commit, push, and verify remote revision", "status": "in_progress"}
+  ],
+  "verification": ["Positive and negative receipt fixtures", "No API or database writes in dry-run", "Quota and permission failures stop safely", "Immutable write and repeat-import checks", "pytest -m 'not integration and not slow' -q", "Cron drift and syntax checks", "Remote commit equals pushed main"],
+  "progress": [
+    "33 source tests passed; ten new safety cases were observed failing before implementation.",
+    "Lint passed; standard gate: 1921 passed, 13 skipped, 107 deselected.",
+    "Pre-change cron and empty target collection backed up on server and Windows.",
+    "Historical snapshot stored; repeated import returned already_present without increasing count.",
+    "Scheduled command completed a live three-request capture and stored a second snapshot.",
+    "Both production snapshots verified by content hash; both remain partial_evidence with certified_complete=false.",
+    "Daily 04:35 Asia/Taipei entry installed; drift check passed with 72 active lines."
+  ]
+}
