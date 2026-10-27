@@ -25,7 +25,7 @@ print(f"防呆後有效事件: {len(valid):,}")
 print(f"跳過統計: {skip}")
 
 cur = [(d["stock_id"], d["ex_date"]) for d in
-       db.adjustment_factors.find({}, {"_id": 0, "stock_id": 1, "ex_date": 1})]
+       db.adjustment_factors.find({"source": {"$not": {"$regex": "^TWSE_"}}}, {"_id": 0, "stock_id": 1, "ex_date": 1})]
 stale = [k for k in cur if k not in valid]
 print(f"庫內共 {len(cur):,} 筆,其中已失效 {len(stale):,} 筆")
 

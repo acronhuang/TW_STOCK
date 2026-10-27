@@ -97,3 +97,4 @@ PATH=/home/mdsadmin/Stock/.venv/bin:/usr/bin:/bin
 */2 * * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/gpu_sample.py >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_gpu_sample.log 2>&1
 35 4 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/quant_source_sync.py --collect --apply >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_quant_source_sync.log 2>&1  # quant_source_sync
 35 7 * * 2-6  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/price_coverage_audit.py --alert >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_price_coverage.log 2>&1
+45 1 * * *  cd /home/mdsadmin/Stock/tw-stock-analysis && /home/mdsadmin/Stock/.venv/bin/python3 scripts/fill_exright_factors.py --days 45 --apply >> /home/mdsadmin/Stock/tw-stock-analysis/logs/cron_exright_factors.log 2>&1
