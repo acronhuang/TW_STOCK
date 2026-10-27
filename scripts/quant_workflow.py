@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.research_workflow import workflow
 from src.research_workflow.data import audit, mongo_prices, source_inventory
-from src.research_workflow.evidence import enrich
+from src.research_workflow.evidence import enrich, merge_evidence
 from src.research_workflow.registry import canonical, save_new
 
 
@@ -30,6 +30,23 @@ def parser():
     command.add_argument("--start", default="2026-01-01")
     command.add_argument("--end", default="2026-09-18")
     command.add_argument("--out", type=Path, required=True)
+    command = commands.add_parser("tradability", help="以官方漲跌停表驗證規則後，為 ETF 推導開盤可成交旗標；部分證據")
+    command.add_argument("--symbols", required=True)
+    command.add_argument("--start", default="2014-01-01")
+    command.add_argument("--end", default="2026-09-18")
+    command.add_argument("--out", type=Path, required=True)
+    command = commands.add_parser("splits", help="取得 TWSE 官方 ETF 分割/反分割表並選用發行人公告核對；部分證據")
+    command.add_argument("--symbols", required=True)
+    command.add_argument("--announcement", action="append", default=[], metavar="SYMBOL=URL")
+    command.add_argument("--start", default="2014-01-01")
+    command.add_argument("--end", default="2026-09-18")
+    command.add_argument("--out", type=Path, required=True)
+    command = commands.add_parser("membership", help="以 ISIN 上市日與下市名單推導 listed_on 與 eligible；部分證據")
+    command.add_argument("--symbols", required=True)
+    command.add_argument("--snapshot", required=True, help="正式來源快照 ID（取下市事實）")
+    command.add_argument("--start", default="2014-01-01")
+    command.add_argument("--end", default="2026-09-18")
+    command.add_argument("--out", type=Path, required=True)
     command = commands.add_parser("sources")
     command.add_argument("--symbols", default="2330,2317,0050,00635U")
     command.add_argument("--start", default="2014-01-01")
@@ -38,7 +55,7 @@ def parser():
         command = commands.add_parser(name)
         command.add_argument("--prices", type=Path)
         evidence_source = command.add_mutually_exclusive_group()
-        evidence_source.add_argument("--evidence", type=Path)
+        evidence_source.add_argument("--evidence", type=Path, action="append", help="可重複指定；清單欄位串接、衝突的單值欄位拒絕")
         evidence_source.add_argument("--snapshot", help="指定正式來源快照 ID；唯讀且不自動解除資料阻擋")
         command.add_argument("--symbols", default="2330,2317")
         command.add_argument("--start", default="2026-01-01")
@@ -80,6 +97,22 @@ def main(argv=None):
 
             print(canonical(collect(args.out, args.symbols.split(","), args.start, args.end)))
             return 2
+        if args.command == "tradability":
+            from src.research_workflow.tradability import collect_tradability
+
+            print(canonical(collect_tradability(args.out, args.symbols.split(","), args.start, args.end)))
+            return 2
+        if args.command == "splits":
+            from src.research_workflow.splits import collect_splits
+
+            notices = dict(item.split("=", 1) for item in args.announcement)
+            print(canonical(collect_splits(args.out, args.symbols.split(","), args.start, args.end, announcements=notices)))
+            return 2
+        if args.command == "membership":
+            from src.research_workflow.membership import collect_membership
+
+            print(canonical(collect_membership(args.out, args.symbols.split(","), args.start, args.end, args.snapshot)))
+            return 2
         if args.command == "sources":
             print(canonical(source_inventory(args.symbols.split(","), args.start, args.end)))
             return 2
@@ -88,7 +121,7 @@ def main(argv=None):
                      else mongo_prices(args.symbols.split(","), args.start, args.end))
             evidence = None
             if args.evidence:
-                evidence = json.loads(args.evidence.read_text(encoding="utf-8"))
+                evidence = merge_evidence([json.loads(path.read_text(encoding="utf-8")) for path in args.evidence])
             elif args.snapshot:
                 from src.research_workflow.persistence import load_snapshot
 

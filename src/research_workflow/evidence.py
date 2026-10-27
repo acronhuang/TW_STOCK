@@ -4,6 +4,19 @@ import pandas as pd
 from .registry import digest
 
 
+def merge_evidence(parts):
+    merged = {}
+    for part in parts:
+        for key, value in part.items():
+            if key not in merged:
+                merged[key] = list(value) if isinstance(value, list) else value
+            elif isinstance(value, list) and isinstance(merged[key], list):
+                merged[key].extend(value)
+            elif merged[key] != value or isinstance(value, list):
+                raise ValueError(f"conflicting evidence field: {key}")
+    return merged
+
+
 def enrich(prices, evidence):
     result = prices.copy()
     result["symbol"] = result["symbol"].astype(str)
