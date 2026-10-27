@@ -16,11 +16,17 @@ TLS：兩個端點皆使用**正常憑證驗證**，請勿加回 `verify=False`�
 """
 import argparse
 import sys
+import time
 from datetime import datetime
+from pathlib import Path
 
 import requests
 from bson.decimal128 import Decimal128
 from pymongo import MongoClient, UpdateOne
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.data_gap.codes import is_letter_etf, is_price_code  # noqa: E402
 
 
 
@@ -58,7 +64,7 @@ def fetch_twse(date_str: str):
         if len(row) < 10:
             continue
         code = str(row[0]).strip()
-        if not code.isdigit():
+        if not is_price_code(code):
             continue
         close = _to_dec(row[8])
         if close is None:
@@ -163,7 +169,7 @@ def fetch_tpex(date_str: str):
         if len(row) < 10:
             continue
         code = str(row[0]).strip()
-        if not code.isdigit():
+        if not is_price_code(code):
             continue
         close = _to_dec(row[2])
         if close is None:
@@ -193,6 +199,28 @@ def upsert(db, recs):
     return res.upserted_count, res.modified_count
 
 
+def backfill_letter_etfs(db, start: str, end: str, apply: bool = False, twse=fetch_twse, tpex=fetch_tpex,
+                         pause: float = 1.0) -> dict:
+    """結尾帶字母的 ETF 區間回補。只新增缺的列（$setOnInsert），不改既有價格與還原價；來源失敗記錄後繼續。"""
+    first, last = (datetime.strptime(v, "%Y%m%d").date().isoformat() for v in (start, end))
+    days = sorted(row["date"] for row in db["trading_dates"].find({"date": {"$gte": first, "$lte": last}}, {"_id": 0, "date": 1}))
+    operations, failures = [], []
+    for day in days:
+        compact = day.replace("-", "")
+        for market, fetch in (("twse", twse), ("tpex", tpex)):
+            try:
+                found = fetch(compact)
+            except Exception as exc:  # noqa: BLE001 - 單一來源失敗不中止整段回補
+                failures.append({"date": day, "market": market, "error": str(exc)})
+                continue
+            operations += [UpdateOne({"stock_id": rec["stock_id"], "date": rec["date"]}, {"$setOnInsert": rec}, upsert=True)
+                           for rec in found if is_letter_etf(rec["stock_id"])]
+            time.sleep(pause)
+    if apply and operations:
+        db["stock_price"].bulk_write(operations, ordered=False)
+    return {"days": len(days), "inserted_candidates": len(operations), "failures": failures, "applied": apply}
+
+
 def run(date_str: str, market: str = "both", apply: bool = False,
         db=None) -> dict:
     """程式化入口（供 --heal 呼叫）。回 {twse, tpex, upserted, modified, applied}。"""
@@ -212,12 +240,20 @@ def run(date_str: str, market: str = "both", apply: bool = False,
 
 def main():
     ap = argparse.ArgumentParser(description="按日期回補 stock_price")
-    ap.add_argument("--date", required=True, help="YYYYMMDD")
+    ap.add_argument("--date", help="YYYYMMDD")
+    ap.add_argument("--letter-etfs", nargs=2, metavar=("START", "END"),
+                    help="只補結尾帶字母的 ETF 缺列（YYYYMMDD YYYYMMDD，含頭尾），不改既有列")
     ap.add_argument("--market", choices=["twse", "tpex", "both"], default="both")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--refresh-tpex-totals", action="store_true",
                     help="只把既有 TPEX_OTC 列的成交量/額/筆數改成全日值（含零股），不動價格")
     args = ap.parse_args()
+    if args.letter_etfs:
+        db = MongoClient("mongodb://localhost:27017")["tw_stock_analysis"]
+        print(backfill_letter_etfs(db, *args.letter_etfs, apply=args.apply))
+        return
+    if not args.date:
+        ap.error("--date 或 --letter-etfs 擇一")
     if args.refresh_tpex_totals:
         print(refresh_tpex_totals(args.date, args.apply))
         return

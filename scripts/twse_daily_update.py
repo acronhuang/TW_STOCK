@@ -48,6 +48,7 @@ sys.path.insert(0, str(_PROJECT_ROOT / 'src'))
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 from src.chip_analysis import inst_buysell  # noqa: E402
+from src.data_gap.codes import is_price_code  # noqa: E402
 
 
 # ── ROC 日期轉換 ────────────────────────────────────────────────────────────────
@@ -117,7 +118,7 @@ def fetch_twse() -> List[Dict]:
             continue
 
         stock_id = str(row.get('Code', '')).strip()
-        if not stock_id or not stock_id.isdigit():
+        if not stock_id or not is_price_code(stock_id):
             continue
 
         close  = _to_dec(row.get('ClosingPrice'))
@@ -188,7 +189,7 @@ def fetch_tpex() -> List[Dict]:
             continue
 
         stock_id = str(row.get('SecuritiesCompanyCode', '')).strip()
-        if not stock_id or not stock_id.isdigit():
+        if not stock_id or not is_price_code(stock_id):
             continue
 
         close  = _to_dec(row.get('Close'))
