@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from src.data_gap.codes import is_price_code
 from src.data_gap.coverage import missing_rows
+from src.data_gap.etf_splits import missing_actions
 
 
 def run(records, db):
@@ -28,24 +29,40 @@ def run(records, db):
     return False, f"官方當日有收盤價但價格表沒有 {len(gaps)} 檔（{gaps[0][0]}）：{sample}"
 
 
+def run_splits(events, db):
+    existing = {(row["symbol"], row["event_date"]) for row in db["corporate_actions"].find(
+        {"type": {"$in": ["分割", "反分割"]}}, {"_id": 0, "symbol": 1, "event_date": 1})}
+    gaps = missing_actions(events, existing)
+    if not gaps:
+        return True, f"官方 ETF 分割事件 {len(events)} 筆都已在 corporate_actions"
+    sample = "、".join(f"{event['symbol']}({event['event_date']:%Y-%m-%d})" for event in gaps[:10])
+    return False, f"官方 ETF 分割事件缺 corporate_actions {len(gaps)} 筆：{sample}"
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--alert", action="store_true")
     args = parser.parse_args(argv)
+    import collect_corporate_actions as cca
+    import requests
     import twse_daily_update as tdu
 
     from src.config import get_db
 
     try:
         records = tdu.fetch_twse() + tdu.fetch_tpex()
+        splits = cca.fetch_etf_splits(requests.Session())
     except Exception as exc:  # noqa: BLE001 - 官方來源暫時失敗不等於資料缺漏
-        print(f"FAIL 官方行情抓取失敗：{exc}")
+        print(f"FAIL 官方資料抓取失敗：{exc}")
         return 2
     db = get_db()
     ok, message = run(records, db)
     print(("OK  " if ok else "FAIL ") + message)
-    if ok:
+    split_ok, split_message = run_splits(splits, db)
+    print(("OK  " if split_ok else "FAIL ") + split_message)
+    if ok and split_ok:
         return 0
+    message = "；".join(text for passed, text in ((ok, message), (split_ok, split_message)) if not passed)
     if args.alert:
         from src.ops.alert_dedup import insert_once
         written = insert_once(db["schedule_alerts"], {"ts": datetime.now(), "level": "warning", "source": "price_coverage",

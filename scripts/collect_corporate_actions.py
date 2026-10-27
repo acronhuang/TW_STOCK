@@ -22,15 +22,15 @@ from pymongo import MongoClient
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from src.data_gap.etf_splits import TWTCAU, parse_split_table  # noqa: E402
+
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 TWTAUU = "https://www.twse.com.tw/rwd/zh/reducation/TWTAUU"
 # TPEX 上櫃減資恢復買賣參考價(只給未來~3天滾動窗,故需每日捕捉)
 TPEX_REVIVT = "https://www.tpex.org.tw/www/zh-tw/bulletin/revivt"
 
-# ETF 受益權單位分割/反分割(公開事件,少數;比例從實際相鄰交易日收盤算,避免斷層)
+# 官方 ETF 分割表（TWTCAU）最早事件為 2024-12-11；更早的事件只能手動列，比例從實際相鄰交易日收盤算
 ETF_SPLITS = [
-    ("0050", "2025-06-18"),   # 1:4 分割
-    ("0052", "2025-11-26"),
     ("00887", "2024-10-14"),
 ]
 
@@ -168,6 +168,15 @@ def build_etf_splits(db):
     return out
 
 
+def fetch_etf_splits(session, today=None):
+    """TWSE 官方 ETF 分割/反分割恢復買賣參考價表，整段歷史一次取得。"""
+    today = today or datetime.now()
+    reply = session.get(TWTCAU, params={"response": "json", "startDate": "20110101", "endDate": today.strftime("%Y%m%d")},
+                        headers={"User-Agent": UA}, timeout=30)
+    reply.raise_for_status()
+    return parse_split_table(reply.json())
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-year", type=int, default=2015)
@@ -187,6 +196,14 @@ def main():
     tpex = fetch_tpex_reduction(session)
     events.extend(tpex)
     print(f"  TPEX 上櫃減資(當前窗): {len(tpex)} 筆" + (f" {[(e['symbol'], e['ratio']) for e in tpex]}" if tpex else ""))
+
+    # ETF 分割/反分割(官方表,單一請求,每日都抓；失敗時保留既有事件)
+    try:
+        official = fetch_etf_splits(session)
+        events.extend(official)
+        print(f"  ETF 分割/反分割(官方表): {len(official)} 筆")
+    except Exception as e:  # noqa: BLE001
+        print(f"  ETF 官方分割表失敗,保留既有事件: {e}")
 
     if not args.tpex_only:
         tpex_hist = fetch_tpex_reduction_history(session)
